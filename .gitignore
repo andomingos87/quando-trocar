@@ -1,5 +1,34 @@
+# Reference material (not part of deploy)
 copy.md
 design-system.md
 *.docx
 *.pdf
 *.xlsx
+*.~lock*
+
+# Next.js
+/node_modules
+/.next/
+/out/
+/build
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

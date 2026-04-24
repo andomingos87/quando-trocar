@@ -1,0 +1,323 @@
+@import "tailwindcss";
+
+@theme {
+  /* warm, editorial palette */
+  --color-ink: #0f0f0f;
+  --color-ink-soft: #1c1b19;
+  --color-paper: #fdfcfa;
+  --color-paper-soft: #f5f2ec;
+  --color-line: #e8e4dc;
+  --color-line-soft: #f0ece4;
+  --color-muted: #6b6760;
+
+  --color-brand: #f7931e;
+  --color-brand-dark: #d17410;
+  --color-brand-deep: #8e4c0a;
+  --color-brand-soft: #fef2dc;
+
+  --color-wa-bg: #e5ddd3;
+  --color-wa-me: #d9fdd3;
+  --color-wa-them: #ffffff;
+  --color-wa-head: #075e54;
+  --color-wa-green: #25d366;
+
+  --font-sans:
+    var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* type scale shortcuts */
+  --tracking-tight: -0.02em;
+  --tracking-tighter: -0.035em;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  html,
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings:
+      "ss01" on,
+      "ss02" on,
+      "cv11" on;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: var(--color-brand);
+    color: #fff;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-sans);
+    font-feature-settings:
+      "ss01" on,
+      "ss02" on;
+    letter-spacing: var(--tracking-tighter);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  /* subtle paper grain — newsprint feel */
+  .bg-grain {
+    background-image:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+  }
+
+  /* blueprint / technical drawing grid for orange CTA */
+  .bg-blueprint {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 48px 48px;
+    background-position: -1px -1px;
+  }
+
+  .bg-blueprint-fade {
+    mask-image: radial-gradient(
+      ellipse 80% 90% at 50% 40%,
+      #000 45%,
+      transparent 100%
+    );
+  }
+
+  /* dot grid */
+  .bg-dots {
+    background-image: radial-gradient(
+      currentColor 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+  }
+
+  /* chat dots (whatsapp pattern) */
+  .chat-dots {
+    background-image: radial-gradient(
+      rgba(0, 0, 0, 0.04) 1.5px,
+      transparent 1.5px
+    );
+    background-size: 14px 14px;
+  }
+
+  /* soft radial glow */
+  .glow-brand {
+    background: radial-gradient(
+      ellipse 70% 80% at 50% 50%,
+      color-mix(in srgb, var(--color-brand) 18%, transparent) 0%,
+      transparent 70%
+    );
+  }
+
+  /* pulsing status dot */
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* typing bounce */
+  @keyframes typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+  .animate-typing-bounce {
+    animation: typing-bounce 1.3s ease-in-out infinite;
+  }
+
+  /* rotating conic glow border — for stat card on dark sections */
+  @property --border-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+  @keyframes border-spin {
+    to {
+      --border-angle: 360deg;
+    }
+  }
+  .glow-border {
+    position: relative;
+    isolation: isolate;
+    background: #141311;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .glow-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(
+      from var(--border-angle),
+      transparent 0deg 275deg,
+      color-mix(in srgb, var(--color-brand) 30%, transparent) 295deg,
+      color-mix(in srgb, var(--color-brand) 70%, transparent) 330deg,
+      #ffd29a 350deg,
+      #ffffff 354deg,
+      #ffd29a 358deg,
+      color-mix(in srgb, var(--color-brand) 70%, transparent) 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: border-spin 6s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+    filter: drop-shadow(0 0 6px rgba(247, 147, 30, 0.55));
+  }
+
+  /* soft diagonal stripes — for layered texture */
+  .bg-stripes-soft {
+    background-image: repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.025) 0 1px,
+      transparent 1px 10px
+    );
+  }
+
+  /* pulsing brand glow — very subtle */
+  @keyframes glow-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+  .animate-glow-pulse {
+    animation: glow-pulse 4s ease-in-out infinite;
+  }
+
+  /* accordion */
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  .underline-brand {
+    background: linear-gradient(
+      transparent 65%,
+      var(--color-brand-soft) 65%
+    );
+    padding: 0 4px;
+  }
+
+  .underline-brand-dark {
+    background: linear-gradient(
+      transparent 65%,
+      color-mix(in srgb, var(--color-brand) 28%, transparent) 65%
+    );
+    padding: 0 4px;
+  }
+
+  /* reveal-on-scroll (CSS-only, IntersectionObserver sets data-revealed) */
+  .reveal {
+    opacity: 0;
+    transition-property: opacity, transform;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  .reveal[data-reveal="up"] { transform: translateY(24px); }
+  .reveal[data-reveal="down"] { transform: translateY(-24px); }
+  .reveal[data-reveal="left"] { transform: translateX(24px); }
+  .reveal[data-reveal="right"] { transform: translateX(-24px); }
+  .reveal[data-reveal="scale"] { transform: scale(0.96); }
+  .reveal[data-reveal="fade"] { transform: none; }
+  .reveal[data-revealed="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .reveal-item {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal-stagger[data-revealed="true"] .reveal-item {
+    opacity: 1;
+    transform: none;
+  }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(1) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 0); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(2) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 1); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(3) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 2); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(4) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 3); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(5) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 4); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(6) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 5); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(7) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 6); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(8) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 7); }
+  .reveal-stagger[data-revealed="true"] .reveal-item:nth-child(9) { transition-delay: calc(var(--reveal-delay, 0s) + var(--reveal-stagger, 0.1s) * 8); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal, .reveal-item {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+  }
+
+  /* hairline divider */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-line),
+      transparent
+    );
+  }
+
+  .hairline-dark {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(255, 255, 255, 0.12),
+      transparent
+    );
+  }
+}
