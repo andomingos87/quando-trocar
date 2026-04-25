@@ -1,0 +1,1396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Quando Trocar — Apresentação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Archivo+Narrow:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e0d0b;
+    --bg-2:#1a1814;
+    --paper:#f4f1e8;
+    --paper-2:#ecebe5;
+    --ink:#0b0a08;
+    --ink-2:#2a2824;
+    --muted:#7a7770;
+    --muted-2:#a8a59c;
+    --line:#dcd8cc;
+    --orange:#F7931E;
+    --orange-deep:#cf7a14;
+    --orange-soft:#fbe6c4;
+    --green:#1f7a4d;
+    --wa-bg:#e6ddc6;
+    --wa-me:#d8f0c8;
+    --wa-them:#ffffff;
+    --display:'Archivo', system-ui, sans-serif;
+    --condensed:'Archivo Narrow', 'Archivo', sans-serif;
+    --ui:'Inter', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html, body{ margin:0; background:#000; }
+
+  section.slide{
+    width:100%; height:100%;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--ui);
+    padding: 80px 100px;
+    display:flex; flex-direction:column;
+    position: relative;
+    overflow: hidden;
+  }
+  section.slide.dark{ background: var(--bg); color:#fff;}
+  section.slide.paper{ background: var(--paper);}
+  section.slide.image{ background:#000; color:#fff; padding: 0;}
+  section.slide.orange{ background: var(--orange); color: var(--ink);}
+
+  /* ===== full-bleed image bg ===== */
+  .bg-img{
+    position:absolute; inset:0;
+    background-size: cover; background-position: center;
+    z-index:0;
+  }
+  .bg-img.kenburns{ animation: kenburns 14s ease-out forwards; transform-origin: center;}
+  @keyframes kenburns{
+    from{ transform: scale(1.0);}
+    to  { transform: scale(1.08);}
+  }
+  .bg-scrim{
+    position:absolute; inset:0; z-index:1;
+    background: linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.35) 35%, rgba(0,0,0,.85) 100%);
+  }
+  .bg-scrim.left{
+    background: linear-gradient(90deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 40%, rgba(0,0,0,.15) 70%, rgba(0,0,0,0) 100%);
+  }
+  .bg-scrim.right{
+    background: linear-gradient(270deg, rgba(0,0,0,.8) 0%, rgba(0,0,0,.4) 40%, rgba(0,0,0,.1) 80%);
+  }
+  .bg-scrim.duotone{
+    background:
+      linear-gradient(120deg, rgba(247,147,30,.35), rgba(0,0,0,.55) 60%),
+      linear-gradient(180deg, rgba(0,0,0,.4), rgba(0,0,0,.7));
+    mix-blend-mode: multiply;
+  }
+  .layer{ position: relative; z-index: 2; height: 100%; display:flex; flex-direction:column;}
+  .pad{ padding: 80px 100px; height: 100%; display:flex; flex-direction:column;}
+
+  /* ===== TOPBAR / PAGENUM ===== */
+  .topbar{
+    position:absolute; top:36px; left:100px; right:100px; z-index: 5;
+    display:flex; justify-content:space-between; align-items:center;
+    font-family: var(--display);
+    font-size:12px; color: var(--muted);
+    letter-spacing:.18em; text-transform: uppercase; font-weight: 700;
+  }
+  .topbar .brand{ display:flex; align-items:center; gap:10px; color: var(--ink-2);}
+  .topbar .brand .logo{
+    height: 26px; width: auto; display:block; object-fit: contain;
+  }
+  section.dark .topbar .brand .logo, section.image .topbar .brand .logo{
+    filter: brightness(0) invert(1);
+  }
+  section.dark .topbar, section.image .topbar{ color: rgba(255,255,255,.5);}
+  section.dark .topbar .brand, section.image .topbar .brand{ color: rgba(255,255,255,.95);}
+  section.orange .topbar{ color: rgba(0,0,0,.55);}
+  section.orange .topbar .brand{ color: var(--ink);}
+  section.image .topbar{ left: 60px; right: 60px; top: 32px;}
+
+  .pagenum{
+    position:absolute; bottom:36px; right:100px; z-index: 5;
+    font-family: var(--display);
+    font-size:11px; color: var(--muted-2); font-variant-numeric: tabular-nums;
+    letter-spacing:.18em; font-weight: 700;
+  }
+  .pagenum b{ color: var(--ink-2); font-weight:800;}
+  section.dark .pagenum, section.image .pagenum{ color: rgba(255,255,255,.4);}
+  section.dark .pagenum b, section.image .pagenum b{ color: #fff;}
+  section.orange .pagenum{ color: rgba(0,0,0,.4);}
+  section.orange .pagenum b{ color: var(--ink);}
+  section.image .pagenum{ right: 60px; bottom: 32px;}
+
+  /* ===== TYPE ===== */
+  .eyebrow{
+    font-family: var(--display);
+    font-size:12px; font-weight:800; letter-spacing:.22em; text-transform: uppercase;
+    color: var(--orange-deep);
+    display:inline-flex; align-items:center; gap:12px;
+  }
+  .eyebrow::before{
+    content:""; width:36px; height:2px; background: currentColor; display:inline-block;
+  }
+  section.dark .eyebrow, section.image .eyebrow{ color: var(--orange);}
+  section.orange .eyebrow{ color: var(--ink);}
+
+  h1.headline{
+    font-family: var(--display); font-weight:900;
+    font-size: 130px; line-height: .9; letter-spacing:-.04em;
+    margin: 18px 0 0; color: var(--ink); text-transform: uppercase;
+  }
+  h1.headline em{ font-style: normal; color: var(--orange);}
+
+  h2.title{
+    font-family: var(--display); font-weight:800; letter-spacing:-.03em;
+    font-size: 72px; line-height:.98; margin: 14px 0 0; text-transform: uppercase;
+  }
+  h2.title em{ font-style: normal; color: var(--orange-deep);}
+  section.dark h2.title em, section.image h2.title em{ color: var(--orange);}
+
+  .lede{
+    font-family: var(--ui);
+    font-size:22px; line-height:1.4; color: var(--ink-2); margin-top: 18px; max-width: 920px;
+    font-weight: 400;
+  }
+  section.dark .lede, section.image .lede{ color: rgba(255,255,255,.8);}
+
+  /* ===== ANIMATION HELPERS ===== */
+  .fade-up{ opacity: 1; transform: translateY(0); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.8,.2,1);}
+  .slide.anim .fade-up{ opacity: 0; transform: translateY(24px);}
+  .slide.anim.active .fade-up{ opacity:1; transform: translateY(0);}
+  .slide.anim.active .fade-up.d1{ transition-delay: .1s;}
+  .slide.anim.active .fade-up.d2{ transition-delay: .25s;}
+  .slide.anim.active .fade-up.d3{ transition-delay: .4s;}
+  .slide.anim.active .fade-up.d4{ transition-delay: .55s;}
+  .slide.anim.active .fade-up.d5{ transition-delay: .7s;}
+  .slide.anim.active .fade-up.d6{ transition-delay: .85s;}
+  .slide.anim.active .fade-up.d7{ transition-delay: 1s;}
+
+  .fade-in{ opacity: 1; transition: opacity 1s ease;}
+  .slide.anim .fade-in{ opacity: 0;}
+  .slide.anim.active .fade-in{ opacity:1;}
+
+  .draw-line{
+    transform: scaleX(1); transform-origin: left center;
+    transition: transform 1.2s cubic-bezier(.2,.8,.2,1) .2s;
+  }
+  .slide.anim .draw-line{ transform: scaleX(0);}
+  .slide.anim.active .draw-line{ transform: scaleX(1);}
+
+  .pop{ opacity:1; transform: scale(1); transition: opacity .6s, transform .6s cubic-bezier(.2,1.4,.4,1);}
+  .slide.anim .pop{ opacity:0; transform: scale(.8);}
+  .slide.anim.active .pop{ opacity:1; transform: scale(1);}
+  .slide.anim.active .pop.d1{ transition-delay:.3s;}
+  .slide.anim.active .pop.d2{ transition-delay:.5s;}
+  .slide.anim.active .pop.d3{ transition-delay:.7s;}
+  .slide.anim.active .pop.d4{ transition-delay:.9s;}
+
+  /* ===== UTIL ===== */
+  .row{ display:flex; gap: 32px;}
+  .col{ flex:1; min-width:0;}
+  .grow{ flex-grow:1;}
+
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family: var(--display);
+    font-size:11px; font-weight:800; padding: 6px 14px;
+    border-radius: 999px; background: rgba(0,0,0,.06); color: var(--ink-2);
+    letter-spacing:.16em; text-transform: uppercase;
+  }
+  .pill.orange{ background: var(--orange); color: var(--ink);}
+  .pill.dark{ background: var(--ink); color: var(--orange);}
+  .pill.ghost{ background: transparent; border:1px solid currentColor; color: rgba(255,255,255,.85);}
+
+  .small{ font-size:13px;} .muted{ color: var(--muted);}
+
+  /* ============= 1 — COVER ============= */
+  .cover .bg-img{
+    background-image: url('https://images.unsplash.com/photo-1632823469850-1b7b1e8b7e6e?w=2400&q=80'),
+      url('https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=2400&q=80');
+    background-image: url('https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=2400&q=80');
+  }
+  .cover .cover-stack{ margin-top: auto; margin-bottom: 0;}
+  .cover h1.headline{
+    color: #fff; font-size: 240px; line-height: .82;
+    text-shadow: 0 2px 30px rgba(0,0,0,.4);
+  }
+  .cover h1.headline em{ display:block;}
+  .cover .lede{ color: rgba(255,255,255,.78); font-size: 22px; max-width: 720px; margin-top: 36px;}
+  .cover .meta{
+    margin-top: 40px; display:flex; gap: 28px; align-items:center;
+    font-family: var(--display);
+    font-size:11px; color: rgba(255,255,255,.55); letter-spacing:.18em; text-transform: uppercase; font-weight: 700;
+  }
+  .cover .meta b{ color:#fff; font-weight:800;}
+  .cover .meta .sep{ width:1px; height:18px; background: rgba(255,255,255,.2);}
+
+  /* ============= 2 — VAZAMENTO ============= */
+  .leak .bg-img{
+    background-image: url('https://images.unsplash.com/photo-1632823471565-1ecdf5c6da77?w=2400&q=80');
+    filter: grayscale(.7);
+  }
+  .leak .bg-scrim{
+    background:
+      linear-gradient(135deg, rgba(247,147,30,.18), rgba(0,0,0,.7) 60%),
+      linear-gradient(0deg, rgba(0,0,0,.85), rgba(0,0,0,.5));
+  }
+  .leak h2.title{ color:#fff; max-width: 1100px;}
+  .leak h2.title em{ color: var(--orange);}
+  .leak-flow{
+    margin-top: 60px; display:grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+    border-top: 1px solid rgba(255,255,255,.15);
+  }
+  .leak-step{
+    padding: 28px 26px 28px 0;
+    border-right: 1px solid rgba(255,255,255,.12);
+    position: relative;
+  }
+  .leak-step:last-child{ border-right: 0;}
+  .leak-step .day{
+    font-family: var(--display); font-weight:900;
+    font-size: 56px; line-height:1; color: var(--orange); letter-spacing:-.03em;
+  }
+  .leak-step.last .day{ color: #fff;}
+  .leak-step h3{
+    margin: 14px 0 8px; font-family: var(--display); font-weight:800;
+    font-size: 22px; letter-spacing:-.01em; color: #fff; text-transform: uppercase;
+  }
+  .leak-step p{ margin:0; color: rgba(255,255,255,.65); font-size:15px; line-height:1.4;}
+
+  .leak-quote{
+    margin-top: auto; padding: 24px 32px; border-left: 4px solid var(--orange);
+    background: rgba(0,0,0,.4); backdrop-filter: blur(4px);
+    font-family: var(--display); font-weight:700; font-size: 26px; line-height:1.25; color:#fff;
+    max-width: 900px;
+  }
+  .leak-quote b{
+    font-weight:900; display:block; font-size:11px; letter-spacing:.2em; text-transform: uppercase;
+    margin-bottom: 8px; color: var(--orange);
+  }
+
+  /* ============= 3 — PROMESSA ============= */
+  .promise{ background: var(--paper);}
+  .promise-grid{ margin-top: 50px; display:grid; grid-template-columns: 1.2fr 1fr; gap: 56px; align-items:flex-start;}
+  .promise-stmt h2{
+    font-family: var(--display); font-weight: 900;
+    font-size: 110px; line-height: .92; letter-spacing:-.04em; color: var(--ink);
+    text-transform: uppercase; margin: 0;
+  }
+  .promise-stmt h2 em{ font-style: normal; color: var(--orange-deep);}
+  .promise-stmt .marker{
+    margin-top: 28px;
+    font-family: var(--display); font-weight: 700;
+    font-size: 13px; color: var(--muted); letter-spacing:.16em; text-transform: uppercase;
+  }
+  .promise-cards{ display:flex; flex-direction:column; gap: 14px; margin-top: 8px;}
+  .promise-card{
+    background: #fff; border:1px solid var(--line); border-radius: 16px;
+    padding: 22px 24px; display:grid; grid-template-columns: auto 1fr; gap: 18px; align-items:center;
+    box-shadow: 0 6px 20px -12px rgba(0,0,0,.1);
+  }
+  .promise-card .pcav{
+    width: 52px; height: 52px; border-radius: 14px;
+    background: var(--ink); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--display); font-weight: 900; font-size: 22px;
+  }
+  .promise-card.feature .pcav{ background: var(--orange); color: var(--ink);}
+  .promise-card .pchead{
+    font-family: var(--display); font-weight:800;
+    font-size: 12px; color: var(--orange-deep); letter-spacing:.14em; text-transform: uppercase;
+  }
+  .promise-card .pcbody{
+    font-family: var(--display); font-weight: 600;
+    font-size: 18px; color: var(--ink); margin-top: 4px; line-height:1.3;
+  }
+
+  /* ============= 4 — FLUXO ============= */
+  section.slide.flow{ background: var(--bg); color:#fff;}
+  .flow .bg-img{
+    background-image: url('https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=2400&q=80');
+    opacity: .15; filter: grayscale(.8);
+  }
+  .flow h2.title{ color:#fff;}
+  .flow h2.title em{ color: var(--orange);}
+  .flow .lede{ color: rgba(255,255,255,.7);}
+
+  .flow-board{
+    margin-top: 50px; position: relative;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+  }
+  .flow-rail{
+    position: absolute; left: 5%; right: 5%; top: 50%;
+    height: 3px; background: var(--orange); transform: translateY(-50%);
+    z-index: 0;
+  }
+  .flow-node{
+    position: relative; z-index: 2;
+    background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(8px);
+    border-radius: 16px; padding: 22px 22px 24px;
+    min-height: 220px; display:flex; flex-direction:column;
+  }
+  .flow-node .num{
+    position:absolute; top:-16px; left:24px; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--orange); color: var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--display); font-weight: 900; font-size: 14px;
+  }
+  .flow-node .ico{
+    color: var(--orange);
+    margin-bottom: 12px;
+  }
+  .flow-node h4{
+    margin: 4px 0 8px; font-family: var(--display); font-weight: 800;
+    font-size: 19px; letter-spacing:-.01em; text-transform: uppercase; color:#fff;
+  }
+  .flow-node p{ margin:0; font-size: 13px; color: rgba(255,255,255,.6); line-height:1.4;}
+  .flow-node .mode{
+    margin-top: auto; padding-top: 14px;
+    font-family: var(--display); font-weight: 800;
+    font-size: 10px; letter-spacing:.18em; text-transform: uppercase; color: var(--orange);
+  }
+  .flow-divider{
+    margin-top: 36px; padding: 22px 28px;
+    background: var(--orange); color: var(--ink); border-radius: 14px;
+    font-family: var(--display); font-weight: 700; font-size: 22px; text-align:center;
+    letter-spacing:-.01em;
+  }
+  .flow-divider b{ font-weight: 900; text-transform: uppercase;}
+
+  /* ============= PHONE ============= */
+  .phone{
+    width: 320px; flex: none;
+    background: #1f1d19; border-radius: 38px; padding: 12px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,.45), 0 8px 20px -6px rgba(0,0,0,.25);
+    border: 1px solid #2a2722;
+  }
+  .phone-screen{
+    background: var(--wa-bg);
+    border-radius: 28px; overflow: hidden;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(0,0,0,.04) 1px, transparent 1px),
+      radial-gradient(circle at 70% 70%, rgba(0,0,0,.03) 1px, transparent 1px);
+    background-size: 40px 40px, 30px 30px;
+    min-height: 480px; display:flex; flex-direction:column;
+  }
+  .wa-head{
+    background: #075e54; color:#fff; padding: 18px 16px 14px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .wa-head .ava{
+    width: 30px; height:30px; border-radius:50%; background: var(--orange); color: var(--ink);
+    display:flex; align-items:center; justify-content:center; font-family: var(--display); font-weight: 900; font-size:11px;
+  }
+  .wa-head .who{ font-family: var(--display); font-size: 13px; font-weight:700;}
+  .wa-head .who small{ display:block; opacity:.7; font-size:10px; font-weight:400; margin-top:1px;}
+  .wa-msgs{ padding: 14px 12px; display:flex; flex-direction:column; gap: 6px; flex:1; }
+  .wa-bubble{
+    max-width: 80%; padding: 7px 10px; border-radius: 8px;
+    font-size: 13px; line-height: 1.35; position:relative;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04);
+    opacity: 1; transform: translateY(0) scale(1);
+    transition: opacity .35s, transform .35s cubic-bezier(.2,1.2,.4,1);
+  }
+  .slide.anim .wa-bubble{ opacity:0; transform: translateY(8px) scale(.96);}
+  .slide.anim.active .wa-bubble{ opacity:1; transform: translateY(0) scale(1);}
+  .wa-bubble.them{ background: var(--wa-them); border-radius: 0 8px 8px 8px; align-self:flex-start;}
+  .wa-bubble.me{ background: var(--wa-me); border-radius: 8px 0 8px 8px; align-self:flex-end;}
+  .wa-bubble .time{ font-size:9px; color: rgba(0,0,0,.4); float: right; margin: 4px 0 -2px 8px;}
+  .wa-typing{
+    background: var(--wa-them); border-radius: 0 8px 8px 8px; align-self:flex-start;
+    padding: 10px 14px; display:flex; gap:4px;
+    opacity: 1; transition: opacity .3s;
+  }
+  .slide.anim .wa-typing{ opacity: 0;}
+  .slide.anim.active .wa-typing{ opacity: 1;}
+  .wa-typing span{
+    width:6px; height:6px; border-radius:50%; background: rgba(0,0,0,.3);
+    animation: typing 1.2s infinite;
+  }
+  .wa-typing span:nth-child(2){ animation-delay: .15s;}
+  .wa-typing span:nth-child(3){ animation-delay: .3s;}
+  @keyframes typing{ 0%,80%,100%{transform:translateY(0); opacity:.3;} 40%{transform:translateY(-4px); opacity:1;}}
+
+  /* sequenced bubble delays via class */
+  .wa-bubble.b1{ transition-delay: .3s;}
+  .wa-bubble.b2{ transition-delay: .8s;}
+  .wa-bubble.b3{ transition-delay: 1.4s;}
+  .wa-bubble.b4{ transition-delay: 1.9s;}
+  .wa-bubble.b5{ transition-delay: 2.4s;}
+
+  /* ============= 5 — LANDING ============= */
+  .landing{ background: var(--paper);}
+  .landing-row{ margin-top: 40px; display:grid; grid-template-columns: 1.3fr 1fr; gap: 56px; align-items:center;}
+  .laptop-frame{
+    position: relative; padding: 18px 22px 22px;
+    background: linear-gradient(180deg, #2c2924, #1a1814);
+    border-radius: 18px 18px 6px 6px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,.35);
+  }
+  .laptop-frame::after{
+    content:""; position:absolute; left: -3%; right: -3%; bottom: -10px;
+    height: 14px; background: linear-gradient(180deg, #1a1814, #0a0907);
+    border-radius: 0 0 14px 14px;
+  }
+  .landing-mock{
+    background: #fff; border-radius: 8px; padding: 36px 40px;
+    min-height: 380px; display:flex; flex-direction:column;
+  }
+  .lm-bar{
+    display:flex; align-items:center; gap:6px; margin: -20px -24px 24px; padding: 10px 16px;
+    border-bottom: 1px solid var(--line); background: var(--paper-2); border-radius: 6px 6px 0 0;
+  }
+  .lm-bar .dot{ width:10px; height:10px; border-radius:50%; background:#e0533f;}
+  .lm-bar .dot:nth-child(2){ background:#f7c63d;}
+  .lm-bar .dot:nth-child(3){ background:#5dc862;}
+  .lm-bar .url{
+    margin-left: 12px; flex:1; background:#fff; padding: 3px 12px; border-radius: 5px;
+    font-family: var(--ui); font-size: 11px; color: var(--muted);
+  }
+  .lm-brand{
+    font-family: var(--display); font-weight:900;
+    font-size:11px; letter-spacing:.2em; color: var(--orange-deep); text-transform: uppercase;
+  }
+  .lm-headline{
+    font-family: var(--display); font-weight: 900;
+    font-size: 56px; line-height: .95; letter-spacing:-.03em;
+    margin: 16px 0 0; color: var(--ink); text-transform: uppercase;
+  }
+  .lm-headline em{ font-style: normal; color: var(--orange-deep);}
+  .lm-sub{ margin-top: 20px; font-size: 16px; color: var(--ink-2); line-height:1.45; max-width: 460px;}
+  .lm-cta{
+    margin-top: 26px; display:inline-flex; align-items:center; gap:10px;
+    background: #25D366; color:#fff; padding: 14px 22px; border-radius: 12px;
+    font-family: var(--display); font-weight:800; font-size: 15px;
+  }
+
+  /* ============= 7 — STATUS ============= */
+  .status{ background: var(--paper);}
+  .status-row{ margin-top: 60px; display:grid; grid-template-columns: 1fr auto 1fr; gap: 28px; align-items:center;}
+  .status-card{
+    background: #fff; border:1px solid var(--line); border-radius: 16px;
+    padding: 32px 36px; min-height: 180px;
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  .status-card .lab{
+    font-family: var(--display); font-weight:800;
+    font-size: 11px; color: var(--muted); letter-spacing:.2em; text-transform: uppercase;
+  }
+  .status-card .code{
+    margin-top: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 38px; font-weight: 700; color: var(--ink); letter-spacing:-.02em;
+  }
+  .status-card.after{ background: var(--ink); color:#fff; border-color: var(--ink);}
+  .status-card.after .lab{ color: rgba(255,255,255,.55);}
+  .status-card.after .code{ color: var(--orange);}
+  .status-arrow{
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--orange); color: var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 12px 28px -8px rgba(247,147,30,.6);
+  }
+  .slide.active .status-arrow svg{ animation: nudge 1.4s ease-in-out infinite;}
+  @keyframes nudge{ 0%,100%{transform: translateX(0);} 50%{transform: translateX(4px);}}
+
+  .db-card{
+    margin-top: 40px; background: #fff; border:1px solid var(--line); border-radius: 16px;
+    padding: 24px 28px;
+  }
+  .db-card .lab{
+    font-family: var(--display); font-weight:800;
+    font-size: 11px; color: var(--muted); letter-spacing:.18em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .db-grid{ display:grid; grid-template-columns: repeat(5, 1fr); gap: 14px;}
+  .db-cell{
+    background: var(--paper-2); border-radius: 10px; padding: 12px 14px;
+    border-left: 3px solid var(--orange);
+  }
+  .db-cell .k{
+    font-family: var(--display); font-weight:800;
+    font-size: 10px; color: var(--muted); letter-spacing:.1em; text-transform: uppercase;
+  }
+  .db-cell .v{
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 4px;
+  }
+  .db-cell.ok{ border-left-color: var(--green);}
+  .db-cell.ok .v{ color: var(--green);}
+
+  /* ============= 8 — MODE ============= */
+  .mode{ background: var(--paper);}
+  .mode-grid{
+    margin-top: 50px; display:grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    position: relative;
+  }
+  .mode-card{
+    border-radius: 18px; padding: 40px 40px;
+    background: #fff; border:1px solid var(--line);
+    min-height: 360px; display:flex; flex-direction:column;
+    overflow: hidden; position: relative;
+  }
+  .mode-card.after{ background: var(--ink); color:#fff; border-color: var(--ink);}
+  .mode-card .stage-lab{
+    font-family: var(--display); font-weight:800;
+    font-size: 11px; letter-spacing:.2em; text-transform: uppercase; color: var(--orange-deep);
+  }
+  .mode-card.after .stage-lab{ color: var(--orange);}
+  .mode-card h3{
+    font-family: var(--display); font-weight: 900;
+    font-size: 64px; line-height: .95; letter-spacing:-.03em; margin: 18px 0 26px;
+    text-transform: uppercase;
+  }
+  .mode-card.after h3{ color:#fff;}
+  .mode-card .actions{ display:flex; flex-wrap:wrap; gap:10px; margin-top: auto;}
+  .mode-card .act{
+    padding: 8px 14px; border-radius: 999px;
+    font-family: var(--display); font-weight: 700; font-size: 13px;
+    background: var(--paper-2); color: var(--ink-2); border:1px solid var(--line);
+  }
+  .mode-card.after .act{
+    background: rgba(255,255,255,.06); color:#fff; border-color: rgba(255,255,255,.16);
+  }
+  .mode-arrow{
+    position:absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 72px; height: 72px; border-radius: 50%;
+    background: var(--orange); color: var(--ink);
+    display:flex; align-items:center; justify-content:center; z-index: 5;
+    box-shadow: 0 12px 32px -8px rgba(247,147,30,.65);
+  }
+
+  /* ============= 9 / 6 / 10 — phone + content ============= */
+  .pc-row{
+    margin-top: 40px; display:grid; grid-template-columns: 320px 1fr; gap: 56px;
+    align-items: flex-start;
+  }
+  .pc-content .blocks{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 24px;
+  }
+  .pc-block{
+    background: #fff; border:1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+  }
+  section.dark .pc-block, section.image .pc-block{
+    background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1); color:#fff;
+  }
+  .pc-block h5{
+    margin: 0 0 6px;
+    font-family: var(--display); font-weight: 800;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--orange-deep);
+  }
+  section.dark .pc-block h5, section.image .pc-block h5{ color: var(--orange);}
+  .pc-block p{ margin:0; font-size: 15px; line-height: 1.4; color: var(--ink-2);}
+  section.dark .pc-block p, section.image .pc-block p{ color: rgba(255,255,255,.8);}
+  .pc-banner{
+    margin-top: 22px; padding: 18px 22px; background: var(--ink); color:#fff; border-radius: 12px;
+    display:flex; align-items:center; gap: 18px;
+  }
+  .pc-banner .lab{
+    font-family: var(--display); font-weight:800;
+    font-size: 11px; letter-spacing:.18em; text-transform: uppercase; color: var(--orange);
+  }
+  .pc-banner .obj{ font-size: 16px; color: rgba(255,255,255,.85);}
+
+  /* slide 6 background */
+  .seller .bg-img{
+    background-image: url('https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=2400&q=80');
+    opacity: .12; filter: grayscale(.7);
+  }
+  section.slide.seller{ background: var(--bg); color:#fff;}
+  .seller h2.title{ color:#fff;}
+  .seller .lede{ color: rgba(255,255,255,.75);}
+
+  /* slide 9 background — registry */
+  .registry{ background: var(--paper);}
+  .registry .bg-img{
+    background-image: url('https://images.unsplash.com/photo-1632823469850-1b7b1e8b7e6e?w=2400&q=80');
+    opacity: .08;
+  }
+
+  /* slide 10 background — reminder */
+  section.slide.reminder{ background: var(--bg); color:#fff;}
+  .reminder .bg-img{
+    background-image: url('https://images.unsplash.com/photo-1550355291-bbee04a92027?w=2400&q=80');
+    opacity: .18; filter: grayscale(.6);
+  }
+  .reminder h2.title{ color:#fff;}
+  .reminder .lede{ color: rgba(255,255,255,.75);}
+
+  .pipe-row{
+    margin-top: 24px; display:flex; gap: 8px; align-items:center; flex-wrap:wrap;
+  }
+  .pipe-row svg{ color: rgba(255,255,255,.4);}
+
+  /* ============= 11 — RECEITA ============= */
+  .receita{ background: var(--paper);}
+  .metric-grid{ margin-top: 32px; display:grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 14px;}
+  .metric-card{
+    background: #fff; border:1px solid var(--line); border-radius: 16px;
+    padding: 28px 28px; min-height: 220px;
+    display:flex; flex-direction:column; justify-content: space-between;
+  }
+  .metric-card.feature{ background: var(--ink); color:#fff; border-color: var(--ink);}
+  .metric-card .lab{
+    font-family: var(--display); font-weight: 800;
+    font-size: 11px; color: var(--muted); letter-spacing:.16em; text-transform: uppercase;
+  }
+  .metric-card.feature .lab{ color: rgba(255,255,255,.55);}
+  .metric-card .val{
+    font-family: var(--display); font-weight: 900;
+    font-size: 84px; line-height: .9; letter-spacing:-.04em; color: var(--ink);
+  }
+  .metric-card.feature .val{ color: var(--orange);}
+  .metric-card.feature .val .currency{ font-size: 30px; vertical-align: top; margin-right: 6px; opacity:.7;}
+  .metric-card .delta{
+    font-family: var(--display); font-weight: 700;
+    font-size: 12px; color: var(--green); margin-top: 6px; letter-spacing:.04em;
+  }
+  .metric-card.feature .delta{ color: rgba(255,255,255,.65);}
+
+  /* ============= 12 — ARQUITETURA ============= */
+  section.slide.arch{ background: var(--bg); color:#fff;}
+  .arch h2.title{ color:#fff;}
+  .arch h2.title em{ color: var(--orange);}
+  .arch .lede{ color: rgba(255,255,255,.7);}
+  .arch-row{ margin-top: 50px; display:grid; grid-template-columns: repeat(5, 1fr); gap: 14px;}
+  .arch-card{
+    background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+    border-radius: 16px; padding: 24px 22px; min-height: 220px;
+    display:flex; flex-direction:column; gap: 10px;
+    position: relative;
+  }
+  .arch-card.feature{ background: var(--orange); color: var(--ink); border-color: var(--orange);}
+  .arch-card .ico{
+    width: 44px; height: 44px; border-radius: 12px;
+    background: rgba(255,255,255,.08); display:flex; align-items:center; justify-content:center;
+    color: var(--orange);
+  }
+  .arch-card.feature .ico{ background: var(--ink); color: var(--orange);}
+  .arch-card h4{
+    margin: 6px 0 0;
+    font-family: var(--display); font-weight: 900;
+    font-size: 18px; letter-spacing:-.01em; text-transform: uppercase;
+  }
+  .arch-card p{ margin:0; font-size: 13px; color: rgba(255,255,255,.6); line-height:1.4;}
+  .arch-card.feature p{ color: rgba(0,0,0,.7);}
+  .arch-card .num{
+    position: absolute; top: 18px; right: 22px;
+    font-family: var(--display); font-weight: 900; font-size: 14px;
+    color: rgba(255,255,255,.3); letter-spacing:.04em;
+  }
+  .arch-card.feature .num{ color: rgba(0,0,0,.4);}
+
+  .arch-quote{
+    margin-top: 32px; padding: 24px 32px; border-left: 4px solid var(--orange);
+    background: rgba(255,255,255,.04);
+    font-family: var(--display); font-weight: 700;
+    font-size: 24px; line-height: 1.3; color: rgba(255,255,255,.85);
+  }
+  .arch-quote b{ color: var(--orange);}
+
+  /* ============= 13 — RESUMO ============= */
+  section.slide.summary{
+    background: var(--orange); color: var(--ink);
+    background-image:
+      radial-gradient(800px 400px at 90% 10%, rgba(255,255,255,.18), transparent 60%),
+      radial-gradient(600px 400px at 10% 90%, rgba(0,0,0,.06), transparent 60%);
+  }
+  .summary-stack{ margin-top: auto; margin-bottom: 0;}
+  .summary .label{
+    font-family: var(--display); font-weight: 800;
+    font-size: 13px; letter-spacing:.22em; text-transform: uppercase; color: var(--ink);
+    display:inline-flex; align-items:center; gap:12px;
+  }
+  .summary .label::before{ content:""; width:36px; height:2px; background: currentColor;}
+  .summary h1{
+    font-family: var(--display); font-weight: 900;
+    font-size: 120px; line-height: .9; letter-spacing:-.04em; margin: 16px 0 0;
+    color: var(--ink); text-transform: uppercase; max-width: 1500px;
+  }
+  .summary h1 em{ font-style: normal; background: var(--ink); color: var(--orange); padding: 0 16px;}
+  .summary .steps{
+    margin-top: 40px; display:grid; grid-template-columns: repeat(5, 1fr); gap: 0;
+    border-top: 1px solid rgba(0,0,0,.18);
+  }
+  .summary .step{
+    padding: 22px 18px;
+    border-right: 1px solid rgba(0,0,0,.12);
+    display:flex; flex-direction:column; gap: 6px;
+  }
+  .summary .step:last-child{ border-right:0;}
+  .summary .step .n{
+    font-family: var(--display); font-weight: 900;
+    font-size: 32px; line-height:1; color: var(--ink); opacity: .35;
+  }
+  .summary .step h4{
+    margin: 0;
+    font-family: var(--display); font-weight: 900;
+    font-size: 24px; letter-spacing:-.01em; color: var(--ink); text-transform: uppercase;
+  }
+  .summary .step p{ margin:0; font-size: 13px; color: rgba(0,0,0,.6); line-height:1.4;}
+  .summary .footer-line{
+    margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(0,0,0,.18);
+    font-family: var(--display); font-weight: 800;
+    font-size: 18px; color: var(--ink); letter-spacing:.04em; text-transform: uppercase;
+  }
+  .summary .footer-line em{ font-style: normal; background: var(--ink); color: var(--orange); padding: 2px 10px;}
+
+  /* counter span (data-target) animation hook */
+  .num-counter{ font-variant-numeric: tabular-nums;}
+
+</style>
+</head>
+<body>
+
+<deck-stage>
+
+  <!-- ============= 1 — COVER ============= -->
+  <section class="slide image cover" data-screen-label="01 Capa">
+    <div class="bg-img kenburns" style="background-image: url('https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=2400&q=80');"></div>
+    <div class="bg-scrim"></div>
+    <div class="layer pad">
+      <div class="topbar">
+        <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+        <div>WhatsApp · IA · Recorrência</div>
+      </div>
+      <div class="cover-stack">
+        <div class="eyebrow fade-up">Fluxo comercial + operacional</div>
+        <h1 class="headline fade-up d1">Quando<em>Trocar.</em></h1>
+        <div class="lede fade-up d2">A máquina de recorrência da oficina via WhatsApp. Um único agente vende, registra e opera o ciclo de retorno do cliente.</div>
+        <div class="meta fade-up d3">
+          <span><b>Apresentação interna</b></span>
+          <span class="sep"></span>
+          <span>Versão 1.0</span>
+          <span class="sep"></span>
+          <span>2026</span>
+        </div>
+      </div>
+      <div class="pagenum"><b>01</b> / 13</div>
+    </div>
+  </section>
+
+  <!-- ============= 2 — VAZAMENTO ============= -->
+  <section class="slide image leak" data-screen-label="02 Vazamento de receita">
+    <div class="bg-img kenburns" style="background-image: url('https://images.unsplash.com/photo-1632823471565-1ecdf5c6da77?w=2400&q=80');"></div>
+    <div class="bg-scrim"></div>
+    <div class="layer pad">
+      <div class="topbar">
+        <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+        <div>O Problema</div>
+      </div>
+      <div class="eyebrow fade-up" style="margin-top: 20px;">O problema é operacional</div>
+      <h2 class="title fade-up d1">O <em>vazamento</em><br>de receita.</h2>
+      <div class="lede fade-up d2">Depois da troca, o cliente some — se ninguém lembrar.</div>
+
+      <div class="leak-flow">
+        <div class="leak-step fade-up d3">
+          <div class="day">Dia 0</div>
+          <h3>Troca hoje</h3>
+          <p>Cliente sai satisfeito. Tudo certo na oficina.</p>
+        </div>
+        <div class="leak-step fade-up d4">
+          <div class="day">+90</div>
+          <h3>Silêncio</h3>
+          <p>Ninguém chama. O cliente também não lembra.</p>
+        </div>
+        <div class="leak-step fade-up d5">
+          <div class="day">+120</div>
+          <h3>Concorrente</h3>
+          <p>Cliente troca em outro lugar. Geralmente o mais próximo.</p>
+        </div>
+        <div class="leak-step last fade-up d6">
+          <div class="day">↘</div>
+          <h3>Receita perdida</h3>
+          <p>A oficina nem percebe quanto saiu pela porta.</p>
+        </div>
+      </div>
+
+      <div class="leak-quote fade-up d7">
+        <b>Sem gatilho, sem retorno</b>
+        O motor da operação é simples — só falta alguém apertar o botão na hora certa.
+      </div>
+      <div class="pagenum"><b>02</b> / 13</div>
+    </div>
+  </section>
+
+  <!-- ============= 3 — PROMESSA ============= -->
+  <section class="slide promise" data-screen-label="03 Promessa">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>A Promessa</div>
+    </div>
+    <div class="eyebrow fade-up" style="margin-top: 20px;">A promessa</div>
+
+    <div class="promise-grid">
+      <div class="promise-stmt">
+        <h2 class="fade-up d1">A gente <em>lembra</em><br>o cliente <em>na hora certa</em><br>pra ele voltar.</h2>
+        <div class="marker fade-up d2">— uma frase, três audiências.</div>
+      </div>
+      <div class="promise-cards">
+        <div class="promise-card feature fade-up d3">
+          <div class="pcav">A</div>
+          <div>
+            <div class="pchead">Para a oficina</div>
+            <div class="pcbody">Cadastra a troca hoje. O sistema chama depois.</div>
+          </div>
+        </div>
+        <div class="promise-card fade-up d4">
+          <div class="pcav">B</div>
+          <div>
+            <div class="pchead">Para o representante</div>
+            <div class="pcbody">Explica em 3 minutos e vende recorrência.</div>
+          </div>
+        </div>
+        <div class="promise-card fade-up d5">
+          <div class="pcav">C</div>
+          <div>
+            <div class="pchead">Para o cliente final</div>
+            <div class="pcbody">Recebe WhatsApp no momento de trocar óleo.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pagenum"><b>03</b> / 13</div>
+  </section>
+
+  <!-- ============= 4 — FLUXO ============= -->
+  <section class="slide image flow" data-screen-label="04 Fluxo completo">
+    <div class="bg-img" style="background-image: url('https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=2400&q=80');"></div>
+    <div class="bg-scrim"></div>
+    <div class="layer pad">
+      <div class="topbar">
+        <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+        <div>Visão Geral</div>
+      </div>
+      <div class="eyebrow fade-up" style="margin-top: 20px;">Visão geral</div>
+      <h2 class="title fade-up d1">Fluxo completo <em>do negócio.</em></h2>
+      <div class="lede fade-up d2">Do clique na landing até a receita contabilizada no dashboard.</div>
+
+      <div class="flow-board">
+        <div class="flow-rail draw-line"></div>
+        <div class="flow-node pop d1">
+          <div class="num">1</div>
+          <div class="ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
+          </div>
+          <h4>Landing</h4>
+          <p>Promessa em 5 segundos. CTA leva pro WhatsApp.</p>
+          <div class="mode">aquisição</div>
+        </div>
+        <div class="flow-node pop d2">
+          <div class="num">2</div>
+          <div class="ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          </div>
+          <h4>Agente vendedor</h4>
+          <p>Explica, qualifica, calcula ROI, fecha.</p>
+          <div class="mode">venda</div>
+        </div>
+        <div class="flow-node pop d3">
+          <div class="num">3</div>
+          <div class="ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <h4>Oficina cliente</h4>
+          <p>Status muda. O agente troca de modo.</p>
+          <div class="mode">conversão</div>
+        </div>
+        <div class="flow-node pop d4">
+          <div class="num">4</div>
+          <div class="ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h4>Lembretes</h4>
+          <p>Scheduler dispara. WhatsApp chama o cliente.</p>
+          <div class="mode">operação</div>
+        </div>
+        <div class="flow-node pop d4">
+          <div class="num">5</div>
+          <div class="ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+          </div>
+          <h4>Retorno</h4>
+          <p>Cliente volta. Dashboard mostra receita.</p>
+          <div class="mode">resultado</div>
+        </div>
+      </div>
+
+      <div class="flow-divider fade-up d6">
+        O mesmo agente <b>primeiro vende.</b> Depois <b>opera</b> a recorrência.
+      </div>
+      <div class="pagenum"><b>04</b> / 13</div>
+    </div>
+  </section>
+
+  <!-- ============= 5 — LANDING ============= -->
+  <section class="slide landing" data-screen-label="05 Landing">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>Etapa 1 · Landing</div>
+    </div>
+    <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 1 · Landing page</div>
+    <h2 class="title fade-up d1">A oficina <em>entende</em> e entra no WhatsApp.</h2>
+
+    <div class="landing-row">
+      <div class="laptop-frame fade-up d2">
+        <div class="landing-mock">
+          <div class="lm-bar">
+            <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            <div class="url">quandotrocar.com</div>
+          </div>
+          <div class="lm-brand">Quando Trocar</div>
+          <div class="lm-headline">Clientes voltando<br><em>sem você lembrar</em><br>na mão.</div>
+          <div class="lm-sub">Cadastre a troca hoje. A gente chama o cliente daqui 90 dias pelo WhatsApp.</div>
+          <a class="lm-cta">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.2-1.8-.9-2-1s-.5-.2-.7.1c-.2.3-.9 1-1 1.2-.2.2-.4.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.2-.2.2-.3.3-.5 0-.1 0-.4-.1-.6l-.7-1.7c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.5 0-.7.3-.2.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.2 5.1 4.5 2.5 1.1 3 .9 3.6.8.5-.1 1.6-.7 1.9-1.3.2-.6.2-1.2.2-1.3-.1-.1-.3-.2-.7-.4zM12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.6 1.4 5.1L2 22l4.9-1.3c1.5.8 3.3 1.3 5.1 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+            Quero testar
+          </a>
+        </div>
+      </div>
+      <div class="fade-up d3">
+        <div class="pill orange" style="margin-bottom: 18px;">Objetivo</div>
+        <h3 style="font-family: var(--display); font-weight:900; font-size: 44px; line-height: .98; letter-spacing:-.03em; margin:0; text-transform: uppercase;">Promessa em 5 segundos.<br>Conversa em 1 toque.</h3>
+        <p style="font-size: 16px; line-height: 1.5; margin-top: 18px; color: var(--muted);">Sem cadastro, sem login, sem download. O dono não tem paciência pra formulário — então a landing entrega valor antes de pedir qualquer coisa.</p>
+      </div>
+    </div>
+    <div class="pagenum"><b>05</b> / 13</div>
+  </section>
+
+  <!-- ============= 6 — AGENTE VENDEDOR ============= -->
+  <section class="slide image seller" data-screen-label="06 Agente vendedor">
+    <div class="bg-img" style="background-image: url('https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=2400&q=80');"></div>
+    <div class="bg-scrim"></div>
+    <div class="layer pad">
+      <div class="topbar">
+        <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+        <div>Etapa 2 · Venda</div>
+      </div>
+      <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 2 · Agente vendedor</div>
+      <h2 class="title fade-up d1">Atende, explica, <em>fecha.</em></h2>
+
+      <div class="pc-row">
+        <div class="phone fade-up d2">
+          <div class="phone-screen">
+            <div class="wa-head">
+              <div class="ava">QT</div>
+              <div class="who">Agente Quando Trocar<small>online · IA</small></div>
+            </div>
+            <div class="wa-msgs">
+              <div class="wa-bubble me b1">Vi o site. Como funciona?<span class="time">10:14</span></div>
+              <div class="wa-bubble them b2">Você cadastra a troca de óleo. Depois de 90 dias eu chamo o cliente pra voltar.<span class="time">10:14</span></div>
+              <div class="wa-bubble me b3">Tenho que mandar manual?<span class="time">10:15</span></div>
+              <div class="wa-bubble them b4">Não. A máquina roda sozinha — e te mostra retorno e receita.<span class="time">10:15</span></div>
+              <div class="wa-bubble me b5">Quanto custa pra testar?<span class="time">10:16</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="pc-content">
+          <div class="lede fade-up d3" style="margin: 0 0 4px;">Do "como funciona?" ao "quero testar" — sem sair do zap.</div>
+          <div class="blocks">
+            <div class="pc-block fade-up d4"><h5>Explica</h5><p>Produto em linguagem simples. Sem jargão técnico.</p></div>
+            <div class="pc-block fade-up d4"><h5>Qualifica</h5><p>Coleta volume, ticket médio, cidade e responsável.</p></div>
+            <div class="pc-block fade-up d5"><h5>Calcula ROI</h5><p>Mostra quanto retorno paga a mensalidade.</p></div>
+            <div class="pc-block fade-up d5"><h5>Fecha</h5><p>Conduz pra teste, plano ou cadastro direto.</p></div>
+          </div>
+          <div class="pc-banner fade-up d6">
+            <span class="lab">Modo: vendas</span>
+            <span class="obj">Transformar interesse em contratação.</span>
+          </div>
+        </div>
+      </div>
+      <div class="pagenum"><b>06</b> / 13</div>
+    </div>
+  </section>
+
+  <!-- ============= 7 — STATUS ============= -->
+  <section class="slide status" data-screen-label="07 Status muda">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>Etapa 3 · Conversão</div>
+    </div>
+    <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 3 · Oficina vira cliente</div>
+    <h2 class="title fade-up d1">Quando aceita, <em>o status muda.</em></h2>
+
+    <div class="status-row">
+      <div class="status-card fade-up d2">
+        <span class="lab">Antes</span>
+        <span class="code">lead_oficina</span>
+      </div>
+      <div class="status-arrow pop d3">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </div>
+      <div class="status-card after fade-up d4">
+        <span class="lab">Depois</span>
+        <span class="code">cliente_oficina</span>
+      </div>
+    </div>
+
+    <div class="db-card fade-up d5">
+      <div class="lab">↳ banco grava</div>
+      <div class="db-grid">
+        <div class="db-cell"><div class="k">oficina_id</div><div class="v">#48F2A1</div></div>
+        <div class="db-cell"><div class="k">nome_oficina</div><div class="v">Auto Center Silva</div></div>
+        <div class="db-cell"><div class="k">responsável</div><div class="v">João S.</div></div>
+        <div class="db-cell"><div class="k">whatsapp</div><div class="v">41999990000</div></div>
+        <div class="db-cell ok"><div class="k">status</div><div class="v">ativa</div></div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top: 24px; align-items:center;">
+      <div class="pill orange fade-up d6">conversão reconhecida</div>
+      <div class="muted small fade-up d6">O agente sabe que a oficina já não é lead — e muda de modo automaticamente.</div>
+    </div>
+    <div class="pagenum"><b>07</b> / 13</div>
+  </section>
+
+  <!-- ============= 8 — MODE ============= -->
+  <section class="slide mode" data-screen-label="08 Agente muda de modo">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>Etapa 4 · Modo</div>
+    </div>
+    <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 4 · O agente muda de modo</div>
+    <h2 class="title fade-up d1">Mesma conversa. <em>Outro objetivo.</em></h2>
+    <div class="lede fade-up d2">A mesma janela do WhatsApp muda de papel conforme o status da oficina.</div>
+
+    <div class="mode-grid">
+      <div class="mode-card fade-up d3">
+        <span class="stage-lab">Antes da contratação</span>
+        <h3>Vender<br>para a<br>oficina</h3>
+        <div class="actions">
+          <span class="act">Explicar</span>
+          <span class="act">Qualificar</span>
+          <span class="act">Responder objeções</span>
+          <span class="act">Fechar</span>
+        </div>
+      </div>
+      <div class="mode-card after fade-up d4">
+        <span class="stage-lab">Depois da contratação</span>
+        <h3>Trabalhar<br>pela<br>oficina</h3>
+        <div class="actions">
+          <span class="act">Registrar</span>
+          <span class="act">Agendar lembretes</span>
+          <span class="act">Acompanhar retorno</span>
+          <span class="act">Reportar receita</span>
+        </div>
+      </div>
+      <div class="mode-arrow pop d5">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </div>
+    </div>
+    <div class="pagenum"><b>08</b> / 13</div>
+  </section>
+
+  <!-- ============= 9 — REGISTRO ============= -->
+  <section class="slide registry" data-screen-label="09 Registro de trocas">
+    <div class="bg-img" style="background-image: url('https://images.unsplash.com/photo-1632823469850-1b7b1e8b7e6e?w=2400&q=80');"></div>
+    <div style="position:absolute; inset:0; background: rgba(244,241,232,.85);"></div>
+    <div class="layer pad">
+      <div class="topbar">
+        <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+        <div>Etapa 5 · Registro</div>
+      </div>
+      <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 5 · Registro de trocas</div>
+      <h2 class="title fade-up d1">Cada troca <em>vira gatilho.</em></h2>
+
+      <div class="pc-row">
+        <div class="phone fade-up d2">
+          <div class="phone-screen">
+            <div class="wa-head">
+              <div class="ava">QT</div>
+              <div class="who">Agente Quando Trocar<small>online · IA</small></div>
+            </div>
+            <div class="wa-msgs">
+              <div class="wa-bubble me b1" style="max-width:90%;">Registrar João, Civic 2018, troca de óleo hoje, 41999990000<span class="time">14:02</span></div>
+              <div class="wa-bubble them b2">Cliente cadastrado ✅<br>Próximo lembrete em 90 dias.<span class="time">14:02</span></div>
+              <div class="wa-bubble them b3" style="background:#fff8e7; border:1px solid #f0d9b6;">
+                📋 João Silva · Civic 2018<br>
+                <small style="color:#9a5a00;">Próximo: 24/07/2026</small>
+                <span class="time">14:02</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="pc-content">
+          <div class="lede fade-up d3" style="margin: 0 0 4px;">A oficina cadastra pelo painel <b style="color:var(--ink);">ou</b> falando com o agente — o que for mais rápido naquela hora.</div>
+          <div class="db-card fade-up d4" style="margin-top: 24px;">
+            <div class="lab">↳ registro no banco</div>
+            <div class="db-grid" style="grid-template-columns: repeat(2, 1fr);">
+              <div class="db-cell"><div class="k">cliente</div><div class="v">João Silva</div></div>
+              <div class="db-cell"><div class="k">veículo</div><div class="v">Civic 2018</div></div>
+              <div class="db-cell"><div class="k">serviço</div><div class="v">Troca de óleo</div></div>
+              <div class="db-cell"><div class="k">data_troca</div><div class="v">25/04/2026</div></div>
+              <div class="db-cell ok" style="grid-column: 1 / -1;"><div class="k">próximo_lembrete</div><div class="v">24/07/2026</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pagenum"><b>09</b> / 13</div>
+    </div>
+  </section>
+
+  <!-- ============= 10 — LEMBRETE ============= -->
+  <section class="slide image reminder" data-screen-label="10 Lembrete automático">
+    <div class="bg-img" style="background-image: url('https://images.unsplash.com/photo-1550355291-bbee04a92027?w=2400&q=80');"></div>
+    <div class="bg-scrim"></div>
+    <div class="layer pad">
+      <div class="topbar">
+        <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+        <div>Etapa 6 · Lembrete</div>
+      </div>
+      <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 6 · Lembrete automático</div>
+      <h2 class="title fade-up d1">No prazo certo. <em>Sem você apertar nada.</em></h2>
+
+      <div class="pc-row">
+        <div class="phone fade-up d2">
+          <div class="phone-screen">
+            <div class="wa-head">
+              <div class="ava">QT</div>
+              <div class="who">Quando Trocar · Auto Silva<small>online</small></div>
+            </div>
+            <div class="wa-msgs">
+              <div class="wa-bubble them b2" style="max-width:88%;">Oi João, aqui é da Auto Center Silva 👋<br>Já está na hora da próxima troca de óleo do Civic. Quer agendar?<span class="time">09:30</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pc-content">
+          <div class="lede fade-up d3" style="margin: 0 0 4px;">O scheduler encontra quem venceu. O WhatsApp chama. A oficina não toca em nada.</div>
+
+          <div class="pipe-row fade-up d4">
+            <div class="pill ghost"><b>Banco</b></div>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            <div class="pill ghost"><b>Scheduler</b></div>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            <div class="pill orange"><b>WhatsApp</b></div>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            <div class="pill ghost"><b>Cliente</b></div>
+          </div>
+
+          <div class="pc-banner fade-up d5">
+            <span class="lab">Pendente → Enviado</span>
+            <span class="obj">O valor está no gatilho automático, não no painel.</span>
+          </div>
+        </div>
+      </div>
+      <div class="pagenum"><b>10</b> / 13</div>
+    </div>
+  </section>
+
+  <!-- ============= 11 — RECEITA ============= -->
+  <section class="slide receita" data-screen-label="11 Retorno e receita">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>Etapa 7 · Receita</div>
+    </div>
+    <div class="eyebrow fade-up" style="margin-top: 20px;">Etapa 7 · Retorno e receita</div>
+    <h2 class="title fade-up d1">O dashboard <em>vende o resultado</em> pra oficina.</h2>
+
+    <div class="metric-grid">
+      <div class="metric-card feature fade-up d2">
+        <div class="lab">Receita gerada por lembretes · jun</div>
+        <div>
+          <div class="val"><span class="currency">R$</span><span class="num-counter" data-target="8250" data-prefix="">0</span></div>
+          <div class="delta">↑ R$ 2.140 vs maio</div>
+        </div>
+      </div>
+      <div class="metric-card fade-up d3">
+        <div class="lab">Clientes na base</div>
+        <div>
+          <div class="val"><span class="num-counter" data-target="128">0</span></div>
+          <div class="delta">+12 este mês</div>
+        </div>
+      </div>
+      <div class="metric-card fade-up d4">
+        <div class="lab">Lembretes enviados</div>
+        <div>
+          <div class="val"><span class="num-counter" data-target="42">0</span></div>
+          <div class="delta">automáticos · 0 manuais</div>
+        </div>
+      </div>
+      <div class="metric-card fade-up d5">
+        <div class="lab">Retornos confirmados</div>
+        <div>
+          <div class="val"><span class="num-counter" data-target="11">0</span></div>
+          <div class="delta" style="color:var(--orange-deep);">26% de conversão</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top: 28px; gap: 24px;">
+      <div class="phone fade-up d6" style="width: 280px;">
+        <div class="phone-screen" style="min-height: 240px;">
+          <div class="wa-head">
+            <div class="ava">QT</div>
+            <div class="who">Auto Silva<small>online</small></div>
+          </div>
+          <div class="wa-msgs">
+            <div class="wa-bubble them b1">Já está na hora da próxima troca. Quer agendar?<span class="time">09:30</span></div>
+            <div class="wa-bubble me b2">Opa, pode ser quinta 14h?<span class="time">09:32</span></div>
+            <div class="wa-bubble them b3">Combinado. Te esperamos quinta às 14h ✅<span class="time">09:32</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="grow fade-up d7">
+        <div style="background:#fff; border:1px solid var(--line); border-radius: 16px; padding: 28px 32px; height:100%; display:flex; flex-direction:column; justify-content:center;">
+          <div class="pill orange" style="margin-bottom: 14px; align-self: flex-start;">Retorno → Receita</div>
+          <h3 style="margin:0; font-family: var(--display); font-weight: 900; font-size: 32px; line-height:1.05; letter-spacing:-.02em; text-transform: uppercase;">Quando o cliente volta, a oficina informa o valor — e a receita aparece no dashboard.</h3>
+          <p style="font-size: 15px; line-height:1.5; margin-top: 14px; color: var(--muted);">Cada retorno fecha o ciclo: reforça que o produto funciona — e dá ao representante a próxima conversa de upsell.</p>
+        </div>
+      </div>
+    </div>
+    <div class="pagenum"><b>11</b> / 13</div>
+  </section>
+
+  <!-- ============= 12 — ARQUITETURA ============= -->
+  <section class="slide arch" data-screen-label="12 Arquitetura">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>Arquitetura</div>
+    </div>
+    <div class="eyebrow fade-up" style="margin-top: 20px;">Por baixo do capô</div>
+    <h2 class="title fade-up d1">Arquitetura <em>simples.</em></h2>
+    <div class="lede fade-up d2">Cinco peças. Cada uma com uma responsabilidade clara.</div>
+
+    <div class="arch-row">
+      <div class="arch-card pop d1">
+        <span class="num">i</span>
+        <div class="ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.2-1.8-.9-2-1s-.5-.2-.7.1c-.2.3-.9 1-1 1.2-.2.2-.4.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.2-.2.2-.3.3-.5 0-.1 0-.4-.1-.6l-.7-1.7c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.5 0-.7.3-.2.3-1 1-1 2.4s1.1 2.8 1.2 3c.1.2 2.1 3.2 5.1 4.5 2.5 1.1 3 .9 3.6.8.5-.1 1.6-.7 1.9-1.3.2-.6.2-1.2.2-1.3-.1-.1-.3-.2-.7-.4zM12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.6 1.4 5.1L2 22l4.9-1.3c1.5.8 3.3 1.3 5.1 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/></svg>
+        </div>
+        <h4>WhatsApp</h4>
+        <p>Canal único de conversa — onde o dono e o cliente já estão.</p>
+      </div>
+      <div class="arch-card feature pop d2">
+        <span class="num">ii</span>
+        <div class="ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
+        </div>
+        <h4>Agente IA</h4>
+        <p>Interpreta intenção e conduz — vende ou opera, conforme o status.</p>
+      </div>
+      <div class="arch-card pop d2">
+        <span class="num">iii</span>
+        <div class="ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+        </div>
+        <h4>Banco</h4>
+        <p>Guarda estados, dados e histórico. Fonte única da verdade.</p>
+      </div>
+      <div class="arch-card pop d3">
+        <span class="num">iv</span>
+        <div class="ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <h4>Scheduler</h4>
+        <p>Procura quem venceu. Dispara os gatilhos no prazo certo.</p>
+      </div>
+      <div class="arch-card pop d4">
+        <span class="num">v</span>
+        <div class="ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+        </div>
+        <h4>Dashboard</h4>
+        <p>Mostra o resultado pra oficina. Vende o produto a cada login.</p>
+      </div>
+    </div>
+
+    <div class="arch-quote fade-up d6">
+      A arquitetura existe pra sustentar um <b>ciclo de negócio simples</b>: cadastrar, lembrar, converter e medir.
+    </div>
+    <div class="pagenum"><b>12</b> / 13</div>
+  </section>
+
+  <!-- ============= 13 — RESUMO ============= -->
+  <section class="slide summary" data-screen-label="13 Resumo">
+    <div class="topbar">
+      <div class="brand"><img class="logo" src="public/logo.png" alt="Quando Trocar"></div>
+      <div>Resumo Final</div>
+    </div>
+    <div class="summary-stack" style="margin-top: 60px;">
+      <div class="label fade-up">Resumo final</div>
+      <h1 class="fade-up d1">O mesmo agente <em>vende,</em><br>cadastra <em>e opera</em><br>a recorrência.</h1>
+
+      <div class="steps">
+        <div class="step fade-up d2">
+          <div class="n">i</div>
+          <h4>Atrair</h4>
+          <p>Landing + WhatsApp.</p>
+        </div>
+        <div class="step fade-up d3">
+          <div class="n">ii</div>
+          <h4>Fechar</h4>
+          <p>Agente vendedor.</p>
+        </div>
+        <div class="step fade-up d4">
+          <div class="n">iii</div>
+          <h4>Registrar</h4>
+          <p>Trocas no banco.</p>
+        </div>
+        <div class="step fade-up d5">
+          <div class="n">iv</div>
+          <h4>Lembrar</h4>
+          <p>Scheduler + zap.</p>
+        </div>
+        <div class="step fade-up d6">
+          <div class="n">v</div>
+          <h4>Retornar</h4>
+          <p>Receita medida.</p>
+        </div>
+      </div>
+
+      <div class="footer-line fade-up d7">
+        Resultado: <em>cliente volta</em> e a oficina <em>vê</em> receita.
+      </div>
+    </div>
+    <div class="pagenum"><b>13</b> / 13</div>
+  </section>
+
+</deck-stage>
+
+<script src="deck-stage.js"></script>
+<script>
+  // Activate the slide that becomes visible so its entrance animations play.
+  // deck-stage hides non-active slides; we listen to its slidechange event.
+  (function(){
+    function activate(slide){
+      if(!slide) return;
+      // Re-trigger animations even if same slide (force reflow)
+      slide.classList.remove('active');
+      void slide.offsetWidth;
+      slide.classList.add('active');
+
+      // Animated counters
+      slide.querySelectorAll('.num-counter').forEach(el => {
+        const target = parseInt(el.dataset.target, 10);
+        const dur = 1400;
+        const start = performance.now();
+        function step(t){
+          const p = Math.min(1, (t - start) / dur);
+          const eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = Math.round(target * eased).toLocaleString('pt-BR');
+          if(p < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      });
+    }
+
+    function init(){
+      const stage = document.querySelector('deck-stage');
+      if(!stage){ return; }
+      // Animate-in only after first user navigation, so the deck still
+      // looks complete on initial paint (and screenshot tools work).
+      stage.addEventListener('slidechange', (e) => {
+        const s = e.detail.slide;
+        if(!s) return;
+        if(e.detail.reason !== 'init'){
+          s.classList.add('anim');
+        }
+        activate(s);
+      });
+      // safety: activate first slide if event already fired before listener
+      const slides = document.querySelectorAll('section.slide');
+      if(slides[0] && !document.querySelector('section.slide.active')){
+        activate(slides[0]);
+      }
+    }
+
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', init);
+    } else { init(); }
+  })();
+</script>
+</body>
+</html>

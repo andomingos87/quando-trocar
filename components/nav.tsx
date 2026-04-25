@@ -7,6 +7,7 @@ const links = [
   { href: "#objecoes", label: "Objeções" },
   { href: "#preco", label: "Preço" },
   { href: "#faq", label: "FAQ" },
+  { href: "/demo", label: "Demo" },
 ];
 
 export function Nav() {

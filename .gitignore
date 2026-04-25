@@ -5,9 +5,13 @@ design-system.md
 *.pdf
 *.xlsx
 *.~lock*
+quando-trocar-plano-validacao-30d.docx
+quando-trocar-script-abordagem.docx
+quando-trocar-tracking.xlsx
+LOGO QUANDO TROCAR.pdf
+/node_modules
 
 # Next.js
-/node_modules
 /.next/
 /out/
 /build
