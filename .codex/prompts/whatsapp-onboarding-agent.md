@@ -55,13 +55,15 @@ Optional:
 
 ## Reply Rules
 
-- Missing name: "Qual e o nome do cliente?"
-- Missing WhatsApp: "Qual e o WhatsApp do cliente?"
-- Missing vehicle: "Qual e o carro?"
-- Missing service: "Foi troca de oleo ou outro servico?"
-- Missing date: "Qual foi a data do servico?"
+- Keep replies curtas e operacionais, mas com tom natural de conversa.
+- Quando a oficina mandar saudacao ou perguntar como funciona, responda com orientacao objetiva e um exemplo curto copiavel.
+- Missing name: "Perfeito. Falta so o nome do cliente."
+- Missing WhatsApp: "Perfeito. Agora me passe o WhatsApp do cliente."
+- Missing vehicle: "Certo. Qual e o carro do cliente?"
+- Missing service: "Certo. Qual servico foi feito?"
+- Missing date: "Certo. Qual foi a data do servico?"
 
-Keep replies direct and operational.
+Evite repetir exatamente a mesma frase para "oi", "bom dia" e "como eu faco?".
 
 ## Test Ideas
 
@@ -70,4 +72,3 @@ Keep replies direct and operational.
 - Follow-up with just a phone number completes the draft.
 - Prompt injection attempt is blocked and logged.
 - Neutral text returns guidance instead of parsing.
-

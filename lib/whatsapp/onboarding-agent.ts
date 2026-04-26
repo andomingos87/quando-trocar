@@ -190,12 +190,16 @@ function missingFieldForDraft(draft: ServiceDraft): MissingField | null {
   return null;
 }
 
+function registrationExample() {
+  return "Exemplo: Joao Silva, Civic 2018, troca de oleo, hoje, 41999990000.";
+}
+
 function questionForMissingField(field: MissingField) {
-  if (field === "nome_cliente") return "Qual é o nome do cliente?";
-  if (field === "whatsapp_cliente") return "Qual é o WhatsApp do cliente?";
-  if (field === "veiculo") return "Qual é o carro?";
-  if (field === "servico") return "Foi troca de óleo ou outro serviço?";
-  return "Qual foi a data do serviço?";
+  if (field === "nome_cliente") return "Perfeito. Falta so o nome do cliente.";
+  if (field === "whatsapp_cliente") return "Perfeito. Agora me passe o WhatsApp do cliente.";
+  if (field === "veiculo") return "Certo. Qual e o carro do cliente?";
+  if (field === "servico") return "Certo. Qual servico foi feito?";
+  return "Certo. Qual foi a data do servico?";
 }
 
 function draftToRegisterInput(
@@ -251,8 +255,24 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
 }
 
 function neutralReply(message: string): OnboardingAgentReply {
+  const normalized = normalizeText(message);
+  const isGreeting =
+    /\b(oi|ola|olá|bom dia|boa tarde|boa noite)\b/.test(normalized) ||
+    /\bcomo eu faco\b/.test(normalized) ||
+    /\bcomo faco\b/.test(normalized);
+
   return {
-    body: "Certo. Para registrar uma troca, me envie nome, carro, serviço, data e WhatsApp do cliente.",
+    body: isGreeting
+      ? [
+          "Bom dia. Posso registrar a troca por aqui.",
+          "Me envie em uma mensagem: nome do cliente, carro, servico, data e WhatsApp.",
+          registrationExample(),
+        ].join("\n")
+      : [
+          "Posso registrar por aqui.",
+          "Me envie nome do cliente, carro, servico, data e WhatsApp.",
+          registrationExample(),
+        ].join("\n"),
     context: {},
     registerServiceInput: null,
     nextAgentMode: null,
@@ -269,7 +289,7 @@ function neutralReply(message: string): OnboardingAgentReply {
 function blockedPromptInjectionReply(message: string): OnboardingAgentReply {
   return {
     body:
-      "Não consigo ajudar com esse tipo de solicitação. Para registrar uma troca, envie nome, carro, serviço, data e WhatsApp do cliente.",
+      "Nao consigo ajudar com esse tipo de solicitacao. Para registrar uma troca, envie nome do cliente, carro, servico, data e WhatsApp.",
     context: {},
     registerServiceInput: null,
     nextAgentMode: null,

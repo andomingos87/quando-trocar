@@ -37,7 +37,7 @@ describe("WhatsappOnboardingAgent", () => {
       today: "2026-04-25",
     });
 
-    expect(result.body).toBe("Qual é o WhatsApp do cliente?");
+    expect(result.body).toBe("Perfeito. Agora me passe o WhatsApp do cliente.");
     expect(result.registerServiceInput).toBeNull();
     expect(result.context).toEqual({
       pending_action: "registrar_primeira_troca",
@@ -97,7 +97,7 @@ describe("WhatsappOnboardingAgent", () => {
       today: "2026-04-25",
     });
 
-    expect(result.body).toBe("Qual foi a data do serviço?");
+    expect(result.body).toBe("Certo. Qual foi a data do servico?");
     expect(result.registerServiceInput).toBeNull();
     expect(result.context.missing_field).toBe("data_servico");
   });
@@ -145,7 +145,11 @@ describe("WhatsappOnboardingAgent", () => {
       },
     ]);
     expect(result.body).toBe(
-      "Certo. Para registrar uma troca, me envie nome, carro, serviço, data e WhatsApp do cliente.",
+      [
+        "Posso registrar por aqui.",
+        "Me envie nome do cliente, carro, servico, data e WhatsApp.",
+        "Exemplo: Joao Silva, Civic 2018, troca de oleo, hoje, 41999990000.",
+      ].join("\n"),
     );
   });
 
@@ -177,7 +181,7 @@ describe("WhatsappOnboardingAgent", () => {
       },
     ]);
     expect(result.body).toBe(
-      "Não consigo ajudar com esse tipo de solicitação. Para registrar uma troca, envie nome, carro, serviço, data e WhatsApp do cliente.",
+      "Nao consigo ajudar com esse tipo de solicitacao. Para registrar uma troca, envie nome do cliente, carro, servico, data e WhatsApp.",
     );
   });
 
@@ -204,7 +208,7 @@ describe("WhatsappOnboardingAgent", () => {
     });
 
     expect(result.registerServiceInput).toBeNull();
-    expect(result.body).toBe("Qual é o carro?");
+    expect(result.body).toBe("Certo. Qual e o carro do cliente?");
     expect(result.context).toEqual(context);
   });
 });
