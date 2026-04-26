@@ -75,6 +75,7 @@ export type ConversationContext = {
     | "servico"
     | "data_servico";
   service_draft?: ServiceDraft;
+  lastReminderId?: string;
 };
 
 export type RegisterServiceInput = {
@@ -98,12 +99,24 @@ export type RegisteredService = {
 export type InboundWhatsappMessage = {
   providerEventId: string;
   whatsappMessageId: string;
+  contextWhatsappMessageId?: string | null;
   from: string;
   normalizedFrom: string;
   contactName: string | null;
   body: string;
   timestamp: Date | null;
   rawMessage: Record<string, unknown>;
+};
+
+export type WhatsappStatusEvent = {
+  providerEventId: string;
+  whatsappMessageId: string;
+  status: "sent" | "delivered" | "read" | "failed";
+  timestamp: string | null;
+  recipientId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  rawStatus: Record<string, unknown>;
 };
 
 export type SavedWhatsappEvent = {
@@ -160,6 +173,10 @@ export type WhatsappRepository = {
   getConversationByWhatsapp?(input: {
     whatsapp: string;
   }): Promise<SavedConversation | null>;
+  findReminderConversationByWhatsapp?(input: {
+    whatsapp: string;
+    contextWhatsappMessageId?: string | null;
+  }): Promise<SavedConversation | null>;
   upsertSalesLeadConversation?(input: {
     leadId: string | null;
     whatsapp: string;
@@ -174,6 +191,16 @@ export type WhatsappRepository = {
     conversationId: string;
     agentMode?: ConversationAgentMode;
     context?: ConversationContext;
+  }): Promise<void>;
+  upsertClienteFinalConversation?(input: {
+    oficinaId: string;
+    clienteId: string;
+    whatsapp: string;
+    context?: ConversationContext;
+  }): Promise<SavedConversation>;
+  markConversationHandoff?(input: {
+    conversationId: string;
+    reason: string;
   }): Promise<void>;
   convertLeadToOficina?(input: {
     leadId: string;
@@ -208,6 +235,8 @@ export type WhatsappRepository = {
   saveAgentToolCall(input: {
     conversationId: string;
     leadId: string | null;
+    oficinaId?: string | null;
+    clienteId?: string | null;
     toolName: string;
     input: Record<string, unknown>;
     output: Record<string, unknown>;
@@ -241,10 +270,83 @@ export type WhatsappRepository = {
     outboundMessageId: string;
     errorMessage: string;
   }): Promise<void>;
+  updateClienteFinalStatus?(input: {
+    clienteId: string;
+    status: "ativo" | "opt_out" | "numero_errado";
+    optOutAt?: string | null;
+  }): Promise<void>;
+  cancelFutureRemindersForCliente?(input: {
+    clienteId: string;
+  }): Promise<number>;
+  updateReminderStatus?(input: {
+    reminderId: string;
+    status: "pendente" | "enfileirado" | "enviado" | "respondido" | "agendado" | "sem_resposta" | "cancelado" | "erro_envio";
+    whatsappMessageId?: string | null;
+    providerStatus?: string | null;
+    providerErrorCode?: string | null;
+    lastError?: string | null;
+  }): Promise<void>;
+  updateMessageStatusByWhatsappMessageId?(input: {
+    whatsappMessageId: string;
+    providerStatus: string;
+    providerErrorCode: string | null;
+    providerErrorMessage: string | null;
+    rawStatus: unknown;
+  }): Promise<void>;
+  updateOutboundStatusByWhatsappMessageId?(input: {
+    whatsappMessageId: string;
+    providerStatus: "sent" | "delivered" | "read" | "failed";
+    providerErrorCode: string | null;
+    providerErrorMessage: string | null;
+    rawStatus: unknown;
+  }): Promise<void>;
+  updateReminderDeliveryStatusByWhatsappMessageId?(input: {
+    whatsappMessageId: string;
+    providerStatus: "sent" | "delivered" | "read" | "failed";
+    providerErrorCode: string | null;
+    providerErrorMessage: string | null;
+    rawStatus: unknown;
+  }): Promise<void>;
+  dequeueReminderQueueMessages?(input: {
+    batchSize: number;
+    visibilityTimeoutSeconds: number;
+  }): Promise<
+    Array<{
+      queueMessageId: number;
+      outboundMessageId: string;
+      lembreteId: string;
+      conversaId: string;
+      oficinaId: string;
+      clienteId: string;
+      toWhatsapp: string;
+      customerName: string;
+      workshopName: string;
+      vehicleDescription: string;
+      attempts?: number;
+    }>
+  >;
+  archiveReminderQueueMessage?(input: { queueMessageId: number }): Promise<boolean>;
+  markOutboundRetryScheduled?(input: {
+    outboundMessageId: string;
+    attempts: number;
+    nextAttemptAt: string;
+    providerErrorCode: string | null;
+    providerErrorMessage: string | null;
+    response: unknown;
+  }): Promise<void>;
 };
 
 export type WhatsappSender = {
   sendTextMessage(input: { to: string; body: string }): Promise<{
+    whatsappMessageId: string;
+    response?: unknown;
+  }>;
+  sendTemplateMessage?(input: {
+    to: string;
+    templateName: string;
+    languageCode: string;
+    bodyParameters: string[];
+  }): Promise<{
     whatsappMessageId: string;
     response?: unknown;
   }>;
@@ -272,4 +374,34 @@ export type OnboardingAgentReply = {
   registerServiceInput: Omit<RegisterServiceInput, "oficinaId"> | null;
   nextAgentMode: Extract<ConversationAgentMode, "onboarding" | "operacao"> | null;
   toolCalls: ToolCallRecord[];
+};
+
+export type ReminderIntent =
+  | "quer_agendar"
+  | "quer_reagendar"
+  | "pergunta_preco"
+  | "pergunta_horario"
+  | "nao_tem_interesse"
+  | "ja_fez_servico"
+  | "numero_errado"
+  | "mensagem_indefinida"
+  | "opt_out";
+
+export type ReminderAgentReply = {
+  intent: ReminderIntent;
+  confidence: number;
+  handoffRequired: boolean;
+  handoffReason: string | null;
+  lembreteStatus: "respondido" | "cancelado" | "sem_resposta" | "agendado" | null;
+  clienteStatus: "ativo" | "opt_out" | "numero_errado" | null;
+  shouldCancelFutureReminders: boolean;
+  replyBody: string;
+  toolCalls: ToolCallRecord[];
+};
+
+export type ReminderAgent = {
+  generateReply(input: {
+    message: string;
+    conversationContext: ConversationContext;
+  }): Promise<ReminderAgentReply>;
 };

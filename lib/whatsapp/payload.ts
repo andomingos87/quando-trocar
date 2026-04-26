@@ -1,8 +1,9 @@
 import { normalizeWhatsappPhone } from "./sales-agent";
-import type { InboundWhatsappMessage } from "./types";
+import type { InboundWhatsappMessage, WhatsappStatusEvent } from "./types";
 
 type MetaMessage = {
   from?: string;
+  context?: { id?: string };
   id?: string;
   timestamp?: string;
   type?: string;
@@ -19,7 +20,13 @@ type MetaChange = {
   value?: {
     contacts?: MetaContact[];
     messages?: MetaMessage[];
-    statuses?: Array<{ id?: string }>;
+    statuses?: Array<{
+      id?: string;
+      status?: string;
+      timestamp?: string;
+      recipient_id?: string;
+      errors?: Array<{ code?: string | number; title?: string; message?: string }>;
+    }>;
   };
 };
 
@@ -39,7 +46,15 @@ export function extractProviderEventId(payload: unknown) {
   const message = change?.value?.messages?.[0];
   const status = change?.value?.statuses?.[0];
 
-  return message?.id ?? status?.id ?? `${entry?.id ?? "unknown"}:${change?.field ?? "unknown"}`;
+  if (message?.id) {
+    return message.id;
+  }
+
+  if (status?.id && status.status) {
+    return `${status.id}:${status.status}:${status.timestamp ?? "unknown"}`;
+  }
+
+  return `${entry?.id ?? "unknown"}:${change?.field ?? "unknown"}`;
 }
 
 export function extractWhatsappMessageId(payload: unknown) {
@@ -69,6 +84,7 @@ export function extractInboundTextMessages(payload: unknown): InboundWhatsappMes
         messages.push({
           providerEventId: message.id,
           whatsappMessageId: message.id,
+          contextWhatsappMessageId: message.context?.id ?? null,
           from: message.from,
           normalizedFrom: normalizeWhatsappPhone(message.from),
           contactName: contact?.profile?.name ?? null,
@@ -81,4 +97,40 @@ export function extractInboundTextMessages(payload: unknown): InboundWhatsappMes
   }
 
   return messages;
+}
+
+export function extractStatusEvents(payload: unknown): WhatsappStatusEvent[] {
+  const typed = payload as MetaPayload;
+  const events: WhatsappStatusEvent[] = [];
+
+  for (const entry of typed.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      for (const status of change.value?.statuses ?? []) {
+        if (
+          !status.id ||
+          (status.status !== "sent" &&
+            status.status !== "delivered" &&
+            status.status !== "read" &&
+            status.status !== "failed")
+        ) {
+          continue;
+        }
+
+        const firstError = status.errors?.[0];
+
+        events.push({
+          providerEventId: `${status.id}:${status.status}:${status.timestamp ?? "unknown"}`,
+          whatsappMessageId: status.id,
+          status: status.status,
+          timestamp: status.timestamp ?? null,
+          recipientId: status.recipient_id ?? null,
+          errorCode: firstError?.code ? String(firstError.code) : null,
+          errorMessage: firstError?.message ?? firstError?.title ?? null,
+          rawStatus: status as Record<string, unknown>,
+        });
+      }
+    }
+  }
+
+  return events;
 }

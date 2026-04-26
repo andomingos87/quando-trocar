@@ -12,6 +12,8 @@ type Phase2Repository = Pick<
   WhatsappRepository,
   | "getOficinaByWhatsapp"
   | "getConversationByWhatsapp"
+  | "findReminderConversationByWhatsapp"
+  | "upsertClienteFinalConversation"
   | "upsertOficinaConversation"
   | "upsertLead"
   | "upsertConversation"
@@ -23,6 +25,7 @@ export type ResolvedWhatsappConversation = {
   leadId: string | null;
   leadStatus: LeadStatus | null;
   oficinaId: string | null;
+  clienteId: string | null;
   oficinaNome: string | null;
   diasLembretePadrao: number | null;
   participantType: ParticipantType;
@@ -32,7 +35,16 @@ export type ResolvedWhatsappConversation = {
 
 function hasRequiredPhase2Methods(
   repository: Phase2Repository,
-): repository is Required<Phase2Repository> {
+): repository is Phase2Repository &
+  Required<
+    Pick<
+      Phase2Repository,
+      | "getOficinaByWhatsapp"
+      | "getConversationByWhatsapp"
+      | "upsertOficinaConversation"
+      | "upsertSalesLeadConversation"
+    >
+  > {
   return Boolean(
     repository.getOficinaByWhatsapp &&
       repository.getConversationByWhatsapp &&
@@ -53,6 +65,7 @@ export async function resolveWhatsappConversation(input: {
   whatsapp: string;
   contactName: string | null;
   body: string;
+  contextWhatsappMessageId?: string | null;
 }): Promise<ResolvedWhatsappConversation> {
   if (!hasRequiredPhase2Methods(input.repository)) {
     const lead = await input.repository.upsertLead({
@@ -71,6 +84,7 @@ export async function resolveWhatsappConversation(input: {
       leadId: lead.id,
       leadStatus: lead.status,
       oficinaId: null,
+      clienteId: null,
       oficinaNome: null,
       diasLembretePadrao: null,
       participantType: "lead_oficina",
@@ -98,12 +112,45 @@ export async function resolveWhatsappConversation(input: {
       leadId: conversation.leadId ?? null,
       leadStatus: null,
       oficinaId: oficina.id,
+      clienteId: null,
       oficinaNome: oficina.nome,
       diasLembretePadrao: oficina.diasLembretePadrao,
       participantType: "oficina_cliente",
       agentMode: conversation.agentMode ?? agentMode,
       context: conversation.context ?? existingConversation?.context ?? {},
     };
+  }
+
+  if (
+    input.repository.findReminderConversationByWhatsapp &&
+    input.repository.upsertClienteFinalConversation
+  ) {
+    const customerConversation = await input.repository.findReminderConversationByWhatsapp({
+      whatsapp: input.whatsapp,
+      contextWhatsappMessageId: input.contextWhatsappMessageId,
+    });
+
+    if (customerConversation?.clienteId && customerConversation.oficinaId) {
+      const conversation = await input.repository.upsertClienteFinalConversation({
+        oficinaId: customerConversation.oficinaId,
+        clienteId: customerConversation.clienteId,
+        whatsapp: input.whatsapp,
+        context: customerConversation.context ?? {},
+      });
+
+      return {
+        conversationId: conversation.id,
+        leadId: null,
+        leadStatus: null,
+        oficinaId: conversation.oficinaId ?? customerConversation.oficinaId,
+        clienteId: conversation.clienteId ?? customerConversation.clienteId,
+        oficinaNome: null,
+        diasLembretePadrao: null,
+        participantType: "cliente_final",
+        agentMode: "cliente_final_lembrete",
+        context: conversation.context ?? customerConversation.context ?? {},
+      };
+    }
   }
 
   const lead = await input.repository.upsertLead({
@@ -122,6 +169,7 @@ export async function resolveWhatsappConversation(input: {
     leadId: lead.id,
     leadStatus: lead.status,
     oficinaId: null,
+    clienteId: null,
     oficinaNome: null,
     diasLembretePadrao: null,
     participantType: "lead_oficina",
