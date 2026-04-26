@@ -19,6 +19,10 @@ Arquivos por fase:
 3. [Fase 3 - Lembretes reais](./fase-3-lembretes-reais.md)
 4. [Fase 4 - Retorno e dashboard](./fase-4-retorno-dashboard.md)
 
+Resumo consolidado:
+
+- [Fases 1, 2 e 3 - Resumo consolidado da implementacao](./fases-1-2-e-3-resumo-implementacao.md)
+
 Ordem recomendada:
 
 1. Implementar a Fase 1 com webhook, persistencia, lead e agente vendedor simples.
