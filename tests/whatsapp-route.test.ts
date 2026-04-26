@@ -140,6 +140,12 @@ describe("whatsapp webhook handlers", () => {
       saveAgentToolCall: vi.fn(async () => {
         calls.push("tool");
       }),
+      markWhatsappEventProcessed: vi.fn(async () => {
+        calls.push("event-processed");
+      }),
+      markWhatsappEventFailed: vi.fn(async () => {
+        calls.push("event-failed");
+      }),
       updateLeadStatus: vi.fn(async () => {
         calls.push("lead-status");
       }),
@@ -194,6 +200,8 @@ describe("whatsapp webhook handlers", () => {
       upsertConversation: vi.fn(),
       saveInboundMessage: vi.fn(),
       saveAgentToolCall: vi.fn(),
+      markWhatsappEventProcessed: vi.fn(),
+      markWhatsappEventFailed: vi.fn(),
       updateLeadStatus: vi.fn(),
       createOutboundMessage: vi.fn(),
       saveOutboundMessage: vi.fn(),
@@ -222,6 +230,8 @@ describe("whatsapp webhook handlers", () => {
       upsertConversation: vi.fn(async () => ({ id: "conversation-id" })),
       saveInboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "message-id" })),
       saveAgentToolCall: vi.fn(),
+      markWhatsappEventProcessed: vi.fn(),
+      markWhatsappEventFailed: vi.fn(),
       updateLeadStatus: vi.fn(),
       createOutboundMessage: vi.fn(async () => ({ id: "outbound-id" })),
       saveOutboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "outbound-message-id" })),
@@ -259,5 +269,67 @@ describe("whatsapp webhook handlers", () => {
         output: { status: "interessado" },
       }),
     );
+  });
+
+  test("POST persists processing errors when the agent fails", async () => {
+    const repository = {
+      saveWhatsappEvent: vi.fn(async () => ({ duplicate: false, eventId: "event-id" })),
+      upsertLead: vi.fn(async () => ({ id: "lead-id", status: "interessado" as const })),
+      upsertConversation: vi.fn(async () => ({ id: "conversation-id" })),
+      saveInboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "message-id" })),
+      saveAgentToolCall: vi.fn(),
+      markWhatsappEventProcessed: vi.fn(),
+      markWhatsappEventFailed: vi.fn(),
+      updateLeadStatus: vi.fn(),
+      createOutboundMessage: vi.fn(),
+      saveOutboundMessage: vi.fn(),
+      markOutboundSent: vi.fn(),
+      markOutboundFailed: vi.fn(),
+    };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp: { sendTextMessage: vi.fn() },
+      agent: {
+        generateReply: vi.fn(async () => {
+          throw new Error("OpenAI authentication failed");
+        }),
+      },
+    });
+
+    const response = await handlers.POST(signedRequest(inboundPayload, env.WHATSAPP_APP_SECRET));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true,
+      errors: [
+        {
+          whatsappMessageId: "wamid.test-1",
+          errorType: "agent_processing_failed",
+          message: "OpenAI authentication failed",
+        },
+      ],
+    });
+    expect(repository.markWhatsappEventFailed).toHaveBeenCalledWith({
+      eventId: "event-id",
+      errorType: "agent_processing_failed",
+      errorMessage: "OpenAI authentication failed",
+      errorContext: expect.objectContaining({
+        whatsappMessageId: "wamid.test-1",
+        conversationId: "conversation-id",
+        leadId: "lead-id",
+      }),
+    });
+    expect(repository.saveAgentToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "agent_error",
+        output: expect.objectContaining({
+          errorType: "agent_processing_failed",
+          errorMessage: "OpenAI authentication failed",
+        }),
+      }),
+    );
+    expect(repository.createOutboundMessage).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,27 @@ function throwIfError(result: SupabaseResult<unknown>) {
   }
 }
 
+type LeadPersistenceInput = {
+  nome: string | null;
+  origem: "landing_page" | "manual_whatsapp";
+  status: LeadStatus;
+};
+
+export function mergeLeadForInbound(
+  existing: LeadPersistenceInput | null,
+  incoming: LeadPersistenceInput,
+): LeadPersistenceInput {
+  if (!existing) {
+    return incoming;
+  }
+
+  return {
+    nome: incoming.nome ?? existing.nome,
+    origem: existing.origem,
+    status: existing.status,
+  };
+}
+
 export class SupabaseWhatsappRepository implements WhatsappRepository {
   constructor(private readonly supabase: SupabaseClient) {}
 
@@ -49,14 +70,33 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     origem: "landing_page" | "manual_whatsapp";
     status: LeadStatus;
   }) {
+    const existingResult = (await this.supabase
+      .from("leads_oficina")
+      .select("id,nome,origem,status")
+      .eq("whatsapp", input.whatsapp)
+      .maybeSingle()) as SupabaseResult<{
+      id: string;
+      nome: string | null;
+      origem: "landing_page" | "manual_whatsapp";
+      status: LeadStatus;
+    }>;
+
+    throwIfError(existingResult);
+
+    const merged = mergeLeadForInbound(existingResult.data, {
+      nome: input.nome,
+      origem: input.origem,
+      status: input.status,
+    });
+
     const result = (await this.supabase
       .from("leads_oficina")
       .upsert(
         {
           whatsapp: input.whatsapp,
-          nome: input.nome,
-          origem: input.origem,
-          status: input.status,
+          nome: merged.nome,
+          origem: merged.origem,
+          status: merged.status,
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -164,6 +204,41 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       input: input.input,
       output: input.output,
     })) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
+  async markWhatsappEventProcessed(input: { eventId: string }) {
+    const result = (await this.supabase
+      .from("whatsapp_events")
+      .update({
+        processed_at: new Date().toISOString(),
+        processing_status: "processed",
+        processing_error_type: null,
+        processing_error_message: null,
+        processing_error_context: null,
+      })
+      .eq("id", input.eventId)) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
+  async markWhatsappEventFailed(input: {
+    eventId: string;
+    errorType: string;
+    errorMessage: string;
+    errorContext: Record<string, unknown>;
+  }) {
+    const result = (await this.supabase
+      .from("whatsapp_events")
+      .update({
+        processed_at: new Date().toISOString(),
+        processing_status: "failed",
+        processing_error_type: input.errorType,
+        processing_error_message: input.errorMessage,
+        processing_error_context: input.errorContext,
+      })
+      .eq("id", input.eventId)) as SupabaseResult<null>;
 
     throwIfError(result);
   }

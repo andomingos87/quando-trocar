@@ -5,6 +5,7 @@ import {
   classifySalesMessage,
   detectLeadOrigin,
   normalizeWhatsappPhone,
+  WhatsappSalesAgent,
 } from "@/lib/whatsapp/sales-agent";
 
 describe("whatsapp sales utilities", () => {
@@ -40,5 +41,27 @@ describe("whatsapp sales utilities", () => {
     expect(classifySalesMessage("não tenho interesse")).toMatchObject({
       intent: "sem_interesse",
     });
+  });
+
+  test("continues an interested lead conversation when OpenAI classification fails", async () => {
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: {
+        responses: {
+          create: async () => {
+            throw new Error("invalid api key");
+          },
+        },
+      } as never,
+    });
+
+    const reply = await agent.generateReply({
+      message: "Guarulhos",
+      leadStatus: "interessado",
+    });
+
+    expect(reply.status).toBe("interessado");
+    expect(reply.body).toContain("Guarulhos");
+    expect(reply.body).toContain("registrado");
   });
 });

@@ -104,6 +104,15 @@ export type WhatsappRepository = {
     input: Record<string, unknown>;
     output: Record<string, unknown>;
   }): Promise<void>;
+  markWhatsappEventProcessed(input: {
+    eventId: string;
+  }): Promise<void>;
+  markWhatsappEventFailed(input: {
+    eventId: string;
+    errorType: string;
+    errorMessage: string;
+    errorContext: Record<string, unknown>;
+  }): Promise<void>;
   updateLeadStatus(input: {
     leadId: string;
     status: LeadStatus;

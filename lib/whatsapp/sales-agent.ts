@@ -117,7 +117,18 @@ function statusForIntent(intent: SalesIntent): LeadStatus {
   return "em_conversa";
 }
 
-function deterministicReply(classification: SalesClassification): AgentReply {
+function deterministicReply(
+  classification: SalesClassification,
+  context: { message: string; leadStatus: LeadStatus },
+): AgentReply {
+  if (context.leadStatus === "interessado" && classification.intent === "fora_escopo") {
+    return {
+      status: "interessado",
+      body: `Obrigado. "${context.message}" registrado. Um humano segue com os próximos passos por aqui.`,
+      toolCalls: [],
+    };
+  }
+
   if (
     classification.intent === "informa_volume_ticket" &&
     classification.monthlyChanges !== undefined &&
@@ -219,11 +230,11 @@ export class WhatsappSalesAgent {
     const deterministic = classifySalesMessage(input.message);
 
     if (deterministic.confidence >= 0.85) {
-      return deterministicReply(deterministic);
+      return deterministicReply(deterministic, input);
     }
 
     const classification = (await this.classifyWithOpenAI(input.message)) ?? deterministic;
-    return deterministicReply(classification);
+    return deterministicReply(classification, input);
   }
 
   private async classifyWithOpenAI(message: string): Promise<SalesClassification | null> {
@@ -231,57 +242,61 @@ export class WhatsappSalesAgent {
       return null;
     }
 
-    const response = await this.openai.responses.create({
-      model: this.classifierModel,
-      input: [
-        {
-          role: "system",
-          content:
-            "Classifique mensagens comerciais de uma oficina interessada no produto Quando Trocar. Responda apenas JSON compacto com intent, confidence, monthlyChanges e averageTicket quando existirem.",
-        },
-        {
-          role: "user",
-          content: message,
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "sales_classification",
-          strict: true,
-          schema: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              intent: {
-                type: "string",
-                enum: [
-                  "pergunta_funcionamento",
-                  "informa_volume_ticket",
-                  "quer_testar",
-                  "sem_interesse",
-                  "fora_escopo",
-                ],
+    try {
+      const response = await this.openai.responses.create({
+        model: this.classifierModel,
+        input: [
+          {
+            role: "system",
+            content:
+              "Classifique mensagens comerciais de uma oficina interessada no produto Quando Trocar. Responda apenas JSON compacto com intent, confidence, monthlyChanges e averageTicket quando existirem.",
+          },
+          {
+            role: "user",
+            content: message,
+          },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "sales_classification",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                intent: {
+                  type: "string",
+                  enum: [
+                    "pergunta_funcionamento",
+                    "informa_volume_ticket",
+                    "quer_testar",
+                    "sem_interesse",
+                    "fora_escopo",
+                  ],
+                },
+                confidence: { type: "number" },
+                monthlyChanges: { type: ["number", "null"] },
+                averageTicket: { type: ["number", "null"] },
               },
-              confidence: { type: "number" },
-              monthlyChanges: { type: ["number", "null"] },
-              averageTicket: { type: ["number", "null"] },
+              required: ["intent", "confidence", "monthlyChanges", "averageTicket"],
             },
-            required: ["intent", "confidence", "monthlyChanges", "averageTicket"],
           },
         },
-      },
-    });
+      });
 
-    const text = response.output_text;
-    const parsed = parseOpenAIClassification(text);
+      const text = response.output_text;
+      const parsed = parseOpenAIClassification(text);
 
-    if (!parsed) return null;
+      if (!parsed) return null;
 
-    return {
-      ...parsed,
-      monthlyChanges: parsed.monthlyChanges ?? undefined,
-      averageTicket: parsed.averageTicket ?? undefined,
-    };
+      return {
+        ...parsed,
+        monthlyChanges: parsed.monthlyChanges ?? undefined,
+        averageTicket: parsed.averageTicket ?? undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 }

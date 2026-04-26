@@ -23,6 +23,14 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
   return Response.json(body, init);
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown processing error";
+}
+
+function errorStack(error: unknown) {
+  return error instanceof Error ? error.stack ?? null : null;
+}
+
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   return {
     async GET(request: Request) {
@@ -76,6 +84,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
       }
 
       const inboundMessages = extractInboundTextMessages(payload);
+      const processingErrors: Array<{
+        whatsappMessageId: string;
+        errorType: string;
+        message: string;
+      }> = [];
 
       for (const inbound of inboundMessages) {
         const lead = await deps.repository.upsertLead({
@@ -101,67 +114,119 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           continue;
         }
 
-        const reply = await deps.agent.generateReply({
-          message: inbound.body,
-          leadStatus: lead.status,
-        });
-
-        if (reply.status !== lead.status) {
-          await deps.repository.updateLeadStatus({
-            leadId: lead.id,
-            status: reply.status,
-          });
-          await deps.repository.saveAgentToolCall({
-            conversationId: conversation.id,
-            leadId: lead.id,
-            toolName: "update_lead",
-            input: { status: lead.status },
-            output: { status: reply.status },
-          });
-        }
-
-        for (const toolCall of reply.toolCalls) {
-          await deps.repository.saveAgentToolCall({
-            conversationId: conversation.id,
-            leadId: lead.id,
-            toolName: toolCall.toolName,
-            input: toolCall.input,
-            output: toolCall.output,
-          });
-        }
-
-        const outbox = await deps.repository.createOutboundMessage({
-          conversationId: conversation.id,
-          leadId: lead.id,
-          to: inbound.normalizedFrom,
-          body: reply.body,
-        });
-
         try {
-          const sent = await deps.whatsapp.sendTextMessage({
+          const reply = await deps.agent.generateReply({
+            message: inbound.body,
+            leadStatus: lead.status,
+          });
+
+          if (reply.status !== lead.status) {
+            await deps.repository.updateLeadStatus({
+              leadId: lead.id,
+              status: reply.status,
+            });
+            await deps.repository.saveAgentToolCall({
+              conversationId: conversation.id,
+              leadId: lead.id,
+              toolName: "update_lead",
+              input: { status: lead.status },
+              output: { status: reply.status },
+            });
+          }
+
+          for (const toolCall of reply.toolCalls) {
+            await deps.repository.saveAgentToolCall({
+              conversationId: conversation.id,
+              leadId: lead.id,
+              toolName: toolCall.toolName,
+              input: toolCall.input,
+              output: toolCall.output,
+            });
+          }
+
+          const outbox = await deps.repository.createOutboundMessage({
+            conversationId: conversation.id,
+            leadId: lead.id,
             to: inbound.normalizedFrom,
             body: reply.body,
           });
 
-          await deps.repository.markOutboundSent({
-            outboundMessageId: outbox.id,
-            whatsappMessageId: sent.whatsappMessageId,
-            response: sent.response ?? null,
-          });
-          await deps.repository.saveOutboundMessage({
+          try {
+            const sent = await deps.whatsapp.sendTextMessage({
+              to: inbound.normalizedFrom,
+              body: reply.body,
+            });
+
+            await deps.repository.markOutboundSent({
+              outboundMessageId: outbox.id,
+              whatsappMessageId: sent.whatsappMessageId,
+              response: sent.response ?? null,
+            });
+            await deps.repository.saveOutboundMessage({
+              conversationId: conversation.id,
+              leadId: lead.id,
+              whatsappMessageId: sent.whatsappMessageId,
+              body: reply.body,
+              rawMessage: sent.response ?? null,
+              sentAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            await deps.repository.markOutboundFailed({
+              outboundMessageId: outbox.id,
+              errorMessage: errorMessage(error),
+            });
+          }
+        } catch (error) {
+          const message = errorMessage(error);
+          const errorType = "agent_processing_failed";
+          const errorContext = {
+            whatsappMessageId: inbound.whatsappMessageId,
             conversationId: conversation.id,
             leadId: lead.id,
-            whatsappMessageId: sent.whatsappMessageId,
-            body: reply.body,
-            rawMessage: sent.response ?? null,
-            sentAt: new Date().toISOString(),
+            inboundBody: inbound.body,
+            stack: errorStack(error),
+          };
+
+          processingErrors.push({
+            whatsappMessageId: inbound.whatsappMessageId,
+            errorType,
+            message,
           });
-        } catch (error) {
-          await deps.repository.markOutboundFailed({
-            outboundMessageId: outbox.id,
-            errorMessage: error instanceof Error ? error.message : "Unknown WhatsApp send error",
+
+          if (savedEvent.eventId) {
+            await deps.repository.markWhatsappEventFailed({
+              eventId: savedEvent.eventId,
+              errorType,
+              errorMessage: message,
+              errorContext,
+            });
+          }
+
+          await deps.repository.saveAgentToolCall({
+            conversationId: conversation.id,
+            leadId: lead.id,
+            toolName: "agent_error",
+            input: {
+              message: inbound.body,
+              leadStatus: lead.status,
+            },
+            output: {
+              errorType,
+              errorMessage: message,
+              stack: errorContext.stack,
+            },
           });
         }
+      }
+
+      if (savedEvent.eventId && processingErrors.length === 0) {
+        await deps.repository.markWhatsappEventProcessed({
+          eventId: savedEvent.eventId,
+        });
+      }
+
+      if (processingErrors.length > 0) {
+        return jsonResponse({ ok: true, errors: processingErrors });
       }
 
       return jsonResponse({ ok: true });
