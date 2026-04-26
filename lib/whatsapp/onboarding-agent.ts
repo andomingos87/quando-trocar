@@ -13,6 +13,12 @@ import type {
 type MissingField = NonNullable<ConversationContext["missing_field"]>;
 
 const WEEKDAY_PATTERN = /\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/;
+const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
+const SERVICE_PATTERN =
+  /\b(troca|oleo|óleo|revisao|revisão|filtro|pastilha|freio|alinhamento|balanceamento|servico|serviço)\b/;
+const NEUTRAL_PATTERN = /^(ok|okay|obrigado|obrigada|valeu|beleza|bom dia|boa tarde|boa noite|certo)$/;
+const PROMPT_INJECTION_PATTERN =
+  /\b(ignore|ignora|instrucoes|instruções|prompt|sistema|system|developer|delete|apague|drop table|sql|senha|token|segredo)\b/;
 
 function isoDateOffset(today: string, offsetDays: number) {
   const date = new Date(`${today}T12:00:00.000Z`);
@@ -28,6 +34,28 @@ function hasNegativeConsent(message: string) {
     /\bnao pode mandar\b/.test(normalized) ||
     /\bnao quer receber\b/.test(normalized)
   );
+}
+
+function isPromptInjectionAttempt(message: string) {
+  return PROMPT_INJECTION_PATTERN.test(normalizeText(message));
+}
+
+function isNeutralMessage(message: string) {
+  return NEUTRAL_PATTERN.test(normalizeText(message));
+}
+
+function isQuestionLike(message: string) {
+  const normalized = normalizeText(message);
+  return message.includes("?") || /^(qual|como|porque|por que|quando|onde|quem)\b/.test(normalized);
+}
+
+function hasRegistrationSignal(message: string) {
+  const normalized = normalizeText(message);
+  const commaCount = (message.match(/,/g) ?? []).length;
+  const hasPhone = extractPhone(message) !== null;
+  const hasService = SERVICE_PATTERN.test(normalized);
+
+  return (commaCount >= 2 && (hasPhone || hasService)) || (hasPhone && hasService);
 }
 
 function extractPhone(message: string) {
@@ -115,20 +143,32 @@ function applyFollowUp(
   const draft = { ...(context.service_draft ?? {}) };
 
   if (context.missing_field === "whatsapp_cliente") {
-    const phone = extractPhone(message) ?? message;
-    draft.whatsapp_cliente = normalizeWhatsappPhone(phone);
+    const phone = extractPhone(message);
+    if (phone) {
+      const normalizedPhone = normalizeWhatsappPhone(phone);
+      if (E164_PATTERN.test(normalizedPhone)) {
+        draft.whatsapp_cliente = normalizedPhone;
+      }
+    }
   }
 
   if (context.missing_field === "nome_cliente") {
-    draft.nome_cliente = message.trim();
+    if (!isNeutralMessage(message) && !isQuestionLike(message) && message.trim().length >= 2) {
+      draft.nome_cliente = message.trim();
+    }
   }
 
   if (context.missing_field === "veiculo") {
-    draft.veiculo = message.trim();
+    if (!isNeutralMessage(message) && !isQuestionLike(message) && message.trim().length >= 3) {
+      draft.veiculo = message.trim();
+    }
   }
 
   if (context.missing_field === "servico") {
-    draft.servico = cleanServiceText(message);
+    const service = cleanServiceText(message);
+    if (!isNeutralMessage(message) && !isQuestionLike(message) && service.length >= 3) {
+      draft.servico = service;
+    }
   }
 
   if (context.missing_field === "data_servico") {
@@ -210,6 +250,39 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
   }
 }
 
+function neutralReply(message: string): OnboardingAgentReply {
+  return {
+    body: "Certo. Para registrar uma troca, me envie nome, carro, serviço, data e WhatsApp do cliente.",
+    context: {},
+    registerServiceInput: null,
+    nextAgentMode: null,
+    toolCalls: [
+      {
+        toolName: "ignored_operational_message",
+        input: { message },
+        output: { reason: "no_registration_signal" },
+      },
+    ],
+  };
+}
+
+function blockedPromptInjectionReply(message: string): OnboardingAgentReply {
+  return {
+    body:
+      "Não consigo ajudar com esse tipo de solicitação. Para registrar uma troca, envie nome, carro, serviço, data e WhatsApp do cliente.",
+    context: {},
+    registerServiceInput: null,
+    nextAgentMode: null,
+    toolCalls: [
+      {
+        toolName: "blocked_prompt_injection",
+        input: { message },
+        output: { reason: "prompt_injection_signal" },
+      },
+    ],
+  };
+}
+
 export class WhatsappOnboardingAgent implements OnboardingAgent {
   private readonly openai: OpenAI | null;
   private readonly classifierModel: string;
@@ -228,6 +301,14 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     context: ConversationContext;
     today: string;
   }): Promise<OnboardingAgentReply> {
+    if (isPromptInjectionAttempt(input.message)) {
+      return blockedPromptInjectionReply(input.message);
+    }
+
+    if (!input.context.missing_field && !hasRegistrationSignal(input.message)) {
+      return neutralReply(input.message);
+    }
+
     const draft =
       input.context.missing_field && input.context.service_draft
         ? applyFollowUp(input.context, input.message, input.today)
@@ -265,7 +346,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
       return deterministic;
     }
 
-    const aiDraft = await this.extractWithOpenAI(message);
+    const aiDraft = hasRegistrationSignal(message) ? await this.extractWithOpenAI(message) : null;
     return { ...deterministic, ...(aiDraft ?? {}) };
   }
 
