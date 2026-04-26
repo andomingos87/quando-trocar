@@ -44,6 +44,23 @@ export function detectLeadOrigin(message: string): LeadOrigin {
   return LANDING_MESSAGES.includes(normalized) ? "landing_page" : "manual_whatsapp";
 }
 
+function isExplicitLossMessage(message: string) {
+  const normalized = normalizeText(message);
+  return [
+    /\bnao tenho interesse\b/,
+    /\bnao me interessa\b/,
+    /\bsem interesse\b/,
+    /\bnao quero\b/,
+    /\bnao quero mais\b/,
+    /\bpare\b/,
+    /\bparar\b/,
+    /\bcancelar\b/,
+    /\bremover\b/,
+    /\bdescadastrar\b/,
+    /\bnao me chama\b/,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 export function calculateRoi(input: {
   monthlyChanges: number;
   averageTicket: number;
@@ -87,7 +104,7 @@ export function classifySalesMessage(message: string): SalesClassification {
   const normalized = normalizeText(message);
   const volumeAndTicket = extractVolumeAndTicket(message);
 
-  if (/\b(nao|não|sem interesse|pare|parar|cancelar)\b/.test(normalized)) {
+  if (isExplicitLossMessage(message)) {
     return { intent: "sem_interesse", confidence: 0.9 };
   }
 
@@ -175,6 +192,17 @@ function deterministicReply(
   }
 
   if (classification.intent === "sem_interesse") {
+    if (!isExplicitLossMessage(context.message)) {
+      return {
+        status: context.leadStatus,
+        body:
+          context.leadStatus === "interessado"
+            ? `Obrigado. "${context.message}" registrado. Um humano segue com os próximos passos por aqui.`
+            : "Entendi. Vou deixar registrado por aqui. Se quiser saber como funciona ou testar, é só me chamar.",
+        toolCalls: [],
+      };
+    }
+
     return {
       status: "perdido",
       body: "Entendi. Vou deixar registrado por aqui. Se quiser retomar depois, é só chamar.",

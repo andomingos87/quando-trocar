@@ -64,4 +64,45 @@ describe("whatsapp sales utilities", () => {
     expect(reply.body).toContain("Guarulhos");
     expect(reply.body).toContain("registrado");
   });
+
+  test("does not mark an interested lead as lost from a neutral polite message", async () => {
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: {
+        responses: {
+          create: async () => ({
+            output_text: JSON.stringify({
+              intent: "sem_interesse",
+              confidence: 0.91,
+              monthlyChanges: null,
+              averageTicket: null,
+            }),
+          }),
+        },
+      } as never,
+    });
+
+    const reply = await agent.generateReply({
+      message: "Ok obrigado",
+      leadStatus: "interessado",
+    });
+
+    expect(reply.status).toBe("interessado");
+    expect(reply.body).toContain("Ok obrigado");
+    expect(reply.body).not.toContain("Vou deixar registrado");
+  });
+
+  test("marks a lead as lost only when the rejection is explicit", async () => {
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: null,
+    });
+
+    const reply = await agent.generateReply({
+      message: "não tenho interesse",
+      leadStatus: "interessado",
+    });
+
+    expect(reply.status).toBe("perdido");
+  });
 });
