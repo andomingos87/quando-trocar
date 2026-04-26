@@ -36,11 +36,18 @@ export class WhatsAppCloudApiClient implements WhatsappSender {
 
     const body = (await response.json()) as {
       messages?: Array<{ id?: string }>;
-      error?: { message?: string };
+      error?: { message?: string; code?: string | number };
     };
 
     if (!response.ok) {
-      throw new Error(body.error?.message ?? "WhatsApp Cloud API send failed");
+      const error = new Error(body.error?.message ?? "WhatsApp Cloud API send failed");
+      Object.assign(error, {
+        code: body.error?.code ? String(body.error.code) : null,
+        retryable: response.status >= 500 || response.status === 429,
+        providerMessage: body.error?.message ?? null,
+        response: body,
+      });
+      throw error;
     }
 
     const whatsappMessageId = body.messages?.[0]?.id;
@@ -104,6 +111,7 @@ export class WhatsAppCloudApiClient implements WhatsappSender {
         code: body.error?.code ? String(body.error.code) : null,
         retryable: response.status >= 500 || response.status === 429,
         providerMessage: body.error?.message ?? null,
+        response: body,
       });
       throw error;
     }

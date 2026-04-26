@@ -246,4 +246,51 @@ describe("whatsapp webhook phase 3", () => {
       body: "Tudo certo. Vou parar por aqui e nao envio mais lembretes.",
     });
   });
+
+  test("routes ambiguous client final replies to support handoff without creating sales lead", async () => {
+    const repository = phase3Repository({
+      findReminderConversationByWhatsapp: vi.fn(async () => ({
+        id: "ambiguous-customer-conversation",
+        leadId: null,
+        oficinaId: null,
+        clienteId: null,
+        participantType: "contato_desconhecido" as const,
+        agentMode: "suporte" as const,
+        context: { ambiguousReminderLookup: true },
+      })),
+      upsertClienteFinalConversation: vi.fn(),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-support-1" })),
+      sendTemplateMessage: vi.fn(),
+    };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: { generateReply: vi.fn() },
+      reminderAgent: { generateReply: vi.fn() },
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundCustomerPayload("quero falar com alguem", "wamid.sem-contexto-confiavel"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.upsertLead).not.toHaveBeenCalled();
+    expect(repository.markConversationHandoff).toHaveBeenCalledWith({
+      conversationId: "ambiguous-customer-conversation",
+      reason: "cliente_final_ambiguo",
+    });
+    expect(repository.updateClienteFinalStatus).not.toHaveBeenCalled();
+    expect(repository.updateReminderStatus).not.toHaveBeenCalled();
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999990000",
+      body: "Recebi sua mensagem. Vou avisar a oficina para continuar com voce.",
+    });
+  });
 });

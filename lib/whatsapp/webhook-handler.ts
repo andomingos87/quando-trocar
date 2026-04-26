@@ -39,6 +39,21 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown processing error";
 }
 
+function errorDetails(error: unknown) {
+  const typed = error as {
+    code?: string | number;
+    providerMessage?: string;
+    message?: string;
+    response?: unknown;
+  };
+
+  return {
+    message: typed.providerMessage ?? typed.message ?? "Unknown processing error",
+    code: typed.code ? String(typed.code) : null,
+    response: typed.response ?? null,
+  };
+}
+
 function errorStack(error: unknown) {
   return error instanceof Error ? error.stack ?? null : null;
 }
@@ -393,6 +408,19 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             }
 
             replyBody = reminderReply.replyBody;
+          } else if (resolved.agentMode === "suporte") {
+            if (deps.repository.markConversationHandoff) {
+              await deps.repository.markConversationHandoff({
+                conversationId: resolved.conversationId,
+                reason:
+                  resolved.context.supportHandoffReason ??
+                  (resolved.context.ambiguousReminderLookup
+                    ? "cliente_final_ambiguo"
+                    : "mensagem_ambigua"),
+              });
+            }
+
+            replyBody = "Recebi sua mensagem. Vou avisar a oficina para continuar com voce.";
           } else {
             replyBody = "Recebi sua mensagem. Um humano segue com os próximos passos por aqui.";
           }
@@ -426,9 +454,13 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               sentAt: new Date().toISOString(),
             });
           } catch (error) {
+            const outboundError = errorDetails(error);
             await deps.repository.markOutboundFailed({
               outboundMessageId: outbox.id,
-              errorMessage: errorMessage(error),
+              errorMessage: outboundError.message,
+              providerErrorCode: outboundError.code,
+              providerErrorMessage: outboundError.message,
+              response: outboundError.response,
             });
           }
         } catch (error) {

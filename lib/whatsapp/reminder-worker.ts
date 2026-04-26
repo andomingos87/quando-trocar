@@ -11,12 +11,14 @@ function extractProviderError(error: unknown) {
     retryable?: boolean;
     providerMessage?: string;
     message?: string;
+    response?: unknown;
   };
 
   return {
     code: typed.code ? String(typed.code) : null,
     retryable: Boolean(typed.retryable),
     message: typed.providerMessage ?? typed.message ?? "Unknown reminder delivery error",
+    response: typed.response ?? null,
   };
 }
 
@@ -31,6 +33,9 @@ export async function processReminderQueueBatch(input: {
   }
   if (!input.repository.archiveReminderQueueMessage) {
     throw new Error("Reminder queue archive method is not available");
+  }
+  if (!input.repository.requeueReminderQueueMessage) {
+    throw new Error("Reminder queue requeue method is not available");
   }
   if (!input.repository.updateReminderStatus) {
     throw new Error("Reminder update method is not available");
@@ -52,6 +57,17 @@ export async function processReminderQueueBatch(input: {
   let retried = 0;
 
   for (const message of messages) {
+    const attemptStartedAt = new Date().toISOString();
+    await input.repository.updateReminderStatus({
+      reminderId: message.lembreteId,
+      status: "enfileirado",
+      whatsappMessageId: null,
+      providerStatus: null,
+      providerErrorCode: null,
+      lastError: null,
+      lastAttemptAt: attemptStartedAt,
+    });
+
     const renderedBody = renderReminderTemplate({
       customerName: message.customerName,
       workshopName: message.workshopName,
@@ -91,6 +107,7 @@ export async function processReminderQueueBatch(input: {
         providerStatus: "sent",
         providerErrorCode: null,
         lastError: null,
+        lastAttemptAt: attemptStartedAt,
       });
       await input.repository.archiveReminderQueueMessage({
         queueMessageId: message.queueMessageId,
@@ -112,6 +129,25 @@ export async function processReminderQueueBatch(input: {
           providerErrorMessage: providerError.message,
           response: null,
         });
+        await input.repository.updateReminderStatus({
+          reminderId: message.lembreteId,
+          status: "erro_envio",
+          whatsappMessageId: null,
+          providerStatus: "retry_scheduled",
+          providerErrorCode: providerError.code,
+          lastError: providerError.message,
+          lastAttemptAt: attemptStartedAt,
+        });
+        await input.repository.archiveReminderQueueMessage({
+          queueMessageId: message.queueMessageId,
+        });
+        await input.repository.requeueReminderQueueMessage({
+          outboundMessageId: message.outboundMessageId,
+          lembreteId: message.lembreteId,
+          oficinaId: message.oficinaId,
+          clienteId: message.clienteId,
+          delaySeconds: retryDelay,
+        });
         retried += 1;
         continue;
       }
@@ -119,6 +155,10 @@ export async function processReminderQueueBatch(input: {
       await input.repository.markOutboundFailed({
         outboundMessageId: message.outboundMessageId,
         errorMessage: providerError.message,
+        providerErrorCode: providerError.code,
+        providerErrorMessage: providerError.message,
+        response: providerError.response,
+        attempts,
       });
       await input.repository.updateReminderStatus({
         reminderId: message.lembreteId,
@@ -127,6 +167,10 @@ export async function processReminderQueueBatch(input: {
         providerStatus: "failed",
         providerErrorCode: providerError.code,
         lastError: providerError.message,
+        lastAttemptAt: attemptStartedAt,
+      });
+      await input.repository.archiveReminderQueueMessage({
+        queueMessageId: message.queueMessageId,
       });
       failed += 1;
     }

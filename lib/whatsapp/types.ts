@@ -76,6 +76,8 @@ export type ConversationContext = {
     | "data_servico";
   service_draft?: ServiceDraft;
   lastReminderId?: string;
+  ambiguousReminderLookup?: boolean;
+  supportHandoffReason?: string;
 };
 
 export type RegisterServiceInput = {
@@ -177,6 +179,10 @@ export type WhatsappRepository = {
     whatsapp: string;
     contextWhatsappMessageId?: string | null;
   }): Promise<SavedConversation | null>;
+  upsertSupportConversation?(input: {
+    whatsapp: string;
+    context?: ConversationContext;
+  }): Promise<SavedConversation>;
   upsertSalesLeadConversation?(input: {
     leadId: string | null;
     whatsapp: string;
@@ -269,6 +275,10 @@ export type WhatsappRepository = {
   markOutboundFailed(input: {
     outboundMessageId: string;
     errorMessage: string;
+    providerErrorCode?: string | null;
+    providerErrorMessage?: string | null;
+    response?: unknown;
+    attempts?: number;
   }): Promise<void>;
   updateClienteFinalStatus?(input: {
     clienteId: string;
@@ -285,6 +295,7 @@ export type WhatsappRepository = {
     providerStatus?: string | null;
     providerErrorCode?: string | null;
     lastError?: string | null;
+    lastAttemptAt?: string | null;
   }): Promise<void>;
   updateMessageStatusByWhatsappMessageId?(input: {
     whatsappMessageId: string;
@@ -326,6 +337,13 @@ export type WhatsappRepository = {
     }>
   >;
   archiveReminderQueueMessage?(input: { queueMessageId: number }): Promise<boolean>;
+  requeueReminderQueueMessage?(input: {
+    outboundMessageId: string;
+    lembreteId: string;
+    oficinaId: string;
+    clienteId: string;
+    delaySeconds: number;
+  }): Promise<number | null>;
   markOutboundRetryScheduled?(input: {
     outboundMessageId: string;
     attempts: number;

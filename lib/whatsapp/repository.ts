@@ -294,6 +294,22 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
 
     throwIfError(fallback);
 
+    const distinctOffices = new Set(
+      (fallback.data ?? [])
+        .map((row) => row.oficina_id)
+        .filter((value): value is string => Boolean(value)),
+    );
+
+    if (distinctOffices.size > 1) {
+      return this.upsertSupportConversation({
+        whatsapp: input.whatsapp,
+        context: {
+          ambiguousReminderLookup: true,
+          supportHandoffReason: "cliente_final_ambiguo",
+        },
+      });
+    }
+
     const candidate = fallback.data?.[0];
     if (!candidate?.conversa_id || !candidate.oficina_id || !candidate.cliente_id) {
       return null;
@@ -323,6 +339,41 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
           },
         })
       : null;
+  }
+
+  async upsertSupportConversation(input: {
+    whatsapp: string;
+    context?: ConversationContext;
+  }) {
+    const result = (await this.supabase
+      .from("conversas")
+      .upsert(
+        {
+          lead_id: null,
+          oficina_id: null,
+          cliente_id: null,
+          participant_whatsapp: input.whatsapp,
+          participant_type: "contato_desconhecido",
+          agent_mode: "suporte",
+          context: input.context ?? {},
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "participant_whatsapp,agent_mode" },
+      )
+      .select("id,lead_id,oficina_id,cliente_id,participant_type,agent_mode,context")
+      .single()) as SupabaseResult<{
+      id: string;
+      lead_id: string | null;
+      oficina_id: string | null;
+      cliente_id: string | null;
+      participant_type: ParticipantType;
+      agent_mode: ConversationAgentMode;
+      context: ConversationContext | null;
+    }>;
+
+    throwIfError(result);
+    return mapConversation(result.data!);
   }
 
   async upsertOficinaConversation(input: {
@@ -693,6 +744,9 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         status: "sent",
         whatsapp_message_id: input.whatsappMessageId,
         provider_response: input.response,
+        provider_error_code: null,
+        provider_error_message: null,
+        next_attempt_at: null,
         sent_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -701,14 +755,31 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     throwIfError(result);
   }
 
-  async markOutboundFailed(input: { outboundMessageId: string; errorMessage: string }) {
+  async markOutboundFailed(input: {
+    outboundMessageId: string;
+    errorMessage: string;
+    providerErrorCode?: string | null;
+    providerErrorMessage?: string | null;
+    response?: unknown;
+    attempts?: number;
+  }) {
+    const updates: Record<string, unknown> = {
+      status: "failed",
+      error_message: input.errorMessage,
+      provider_error_code: input.providerErrorCode ?? null,
+      provider_error_message: input.providerErrorMessage ?? null,
+      provider_response: input.response ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.attempts !== undefined) {
+      updates.attempts = input.attempts;
+      updates.next_attempt_at = null;
+    }
+
     const result = (await this.supabase
       .from("outbound_messages")
-      .update({
-        status: "failed",
-        error_message: input.errorMessage,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("id", input.outboundMessageId)) as SupabaseResult<null>;
 
     throwIfError(result);
@@ -752,6 +823,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     providerStatus?: string | null;
     providerErrorCode?: string | null;
     lastError?: string | null;
+    lastAttemptAt?: string | null;
   }) {
     const updates: Record<string, unknown> = {
       status: input.status,
@@ -767,6 +839,10 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
 
     if (input.status === "enviado") {
       updates.sent_at = new Date().toISOString();
+    }
+
+    if (input.lastAttemptAt !== undefined) {
+      updates.last_attempt_at = input.lastAttemptAt;
     }
 
     const result = (await this.supabase
@@ -893,6 +969,25 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
 
     throwIfError(result);
     return Boolean(result.data);
+  }
+
+  async requeueReminderQueueMessage(input: {
+    outboundMessageId: string;
+    lembreteId: string;
+    oficinaId: string;
+    clienteId: string;
+    delaySeconds: number;
+  }) {
+    const result = (await this.supabase.rpc("requeue_whatsapp_reminder_message", {
+      p_outbound_message_id: input.outboundMessageId,
+      p_lembrete_id: input.lembreteId,
+      p_oficina_id: input.oficinaId,
+      p_cliente_id: input.clienteId,
+      p_delay_seconds: input.delaySeconds,
+    })) as SupabaseResult<number>;
+
+    throwIfError(result);
+    return result.data ?? null;
   }
 
   async markOutboundRetryScheduled(input: {

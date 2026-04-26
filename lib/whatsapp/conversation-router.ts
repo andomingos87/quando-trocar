@@ -13,6 +13,7 @@ type Phase2Repository = Pick<
   | "getOficinaByWhatsapp"
   | "getConversationByWhatsapp"
   | "findReminderConversationByWhatsapp"
+  | "upsertSupportConversation"
   | "upsertClienteFinalConversation"
   | "upsertOficinaConversation"
   | "upsertLead"
@@ -149,6 +150,21 @@ export async function resolveWhatsappConversation(input: {
         participantType: "cliente_final",
         agentMode: "cliente_final_lembrete",
         context: conversation.context ?? customerConversation.context ?? {},
+      };
+    }
+
+    if (customerConversation?.agentMode === "suporte") {
+      return {
+        conversationId: customerConversation.id,
+        leadId: null,
+        leadStatus: null,
+        oficinaId: null,
+        clienteId: null,
+        oficinaNome: null,
+        diasLembretePadrao: null,
+        participantType: customerConversation.participantType ?? "contato_desconhecido",
+        agentMode: "suporte",
+        context: customerConversation.context ?? {},
       };
     }
   }
