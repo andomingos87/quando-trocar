@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { LeadStatus, WhatsappRepository } from "./types";
+import type {
+  ConversationAgentMode,
+  ConversationContext,
+  LeadStatus,
+  ParticipantType,
+  RegisterServiceInput,
+  RegisteredService,
+  SavedConversation,
+  WhatsappRepository,
+} from "./types";
 
 type SupabaseResult<T> = {
   data: T | null;
@@ -15,6 +24,26 @@ function throwIfError(result: SupabaseResult<unknown>) {
   if (result.error && !isDuplicateError(result.error)) {
     throw new Error(result.error.message);
   }
+}
+
+function mapConversation(row: {
+  id: string;
+  lead_id: string | null;
+  oficina_id: string | null;
+  cliente_id: string | null;
+  participant_type: ParticipantType;
+  agent_mode: ConversationAgentMode;
+  context: ConversationContext | null;
+}): SavedConversation {
+  return {
+    id: row.id,
+    leadId: row.lead_id,
+    oficinaId: row.oficina_id,
+    clienteId: row.cliente_id,
+    participantType: row.participant_type,
+    agentMode: row.agent_mode,
+    context: row.context ?? {},
+  };
 }
 
 type LeadPersistenceInput = {
@@ -72,13 +101,14 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
   }) {
     const existingResult = (await this.supabase
       .from("leads_oficina")
-      .select("id,nome,origem,status")
+      .select("id,nome,origem,status,metadata")
       .eq("whatsapp", input.whatsapp)
       .maybeSingle()) as SupabaseResult<{
       id: string;
       nome: string | null;
       origem: "landing_page" | "manual_whatsapp";
       status: LeadStatus;
+      metadata: Record<string, unknown>;
     }>;
 
     throwIfError(existingResult);
@@ -102,14 +132,28 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         },
         { onConflict: "whatsapp" },
       )
-      .select("id,status")
-      .single()) as SupabaseResult<{ id: string; status: LeadStatus }>;
+      .select("id,status,nome,metadata")
+      .single()) as SupabaseResult<{
+      id: string;
+      status: LeadStatus;
+      nome: string | null;
+      metadata: Record<string, unknown>;
+    }>;
 
     throwIfError(result);
-    return { id: result.data!.id, status: result.data!.status };
+    return {
+      id: result.data!.id,
+      status: result.data!.status,
+      nome: result.data!.nome,
+      metadata: result.data!.metadata,
+    };
   }
 
   async upsertConversation(input: { leadId: string | null; whatsapp: string }) {
+    return this.upsertSalesLeadConversation(input);
+  }
+
+  async upsertSalesLeadConversation(input: { leadId: string | null; whatsapp: string }) {
     const result = (await this.supabase
       .from("conversas")
       .upsert(
@@ -123,16 +167,220 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         },
         { onConflict: "participant_whatsapp,agent_mode" },
       )
-      .select("id")
-      .single()) as SupabaseResult<{ id: string }>;
+      .select("id,lead_id,oficina_id,cliente_id,participant_type,agent_mode,context")
+      .single()) as SupabaseResult<{
+      id: string;
+      lead_id: string | null;
+      oficina_id: string | null;
+      cliente_id: string | null;
+      participant_type: ParticipantType;
+      agent_mode: ConversationAgentMode;
+      context: ConversationContext | null;
+    }>;
 
     throwIfError(result);
-    return { id: result.data!.id };
+    return mapConversation(result.data!);
+  }
+
+  async getOficinaByWhatsapp(input: { whatsapp: string }) {
+    const result = (await this.supabase
+      .from("oficinas")
+      .select("id,nome,whatsapp_principal,dias_lembrete_padrao")
+      .eq("whatsapp_principal", input.whatsapp)
+      .eq("status", "ativa")
+      .maybeSingle()) as SupabaseResult<{
+      id: string;
+      nome: string;
+      whatsapp_principal: string;
+      dias_lembrete_padrao: number;
+    }>;
+
+    throwIfError(result);
+    if (!result.data) return null;
+
+    return {
+      id: result.data.id,
+      nome: result.data.nome,
+      whatsappPrincipal: result.data.whatsapp_principal,
+      diasLembretePadrao: result.data.dias_lembrete_padrao,
+    };
+  }
+
+  async getConversationByWhatsapp(input: { whatsapp: string }) {
+    const result = (await this.supabase
+      .from("conversas")
+      .select("id,lead_id,oficina_id,cliente_id,participant_type,agent_mode,context")
+      .eq("participant_whatsapp", input.whatsapp)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{
+      id: string;
+      lead_id: string | null;
+      oficina_id: string | null;
+      cliente_id: string | null;
+      participant_type: ParticipantType;
+      agent_mode: ConversationAgentMode;
+      context: ConversationContext | null;
+    }>;
+
+    throwIfError(result);
+    return result.data ? mapConversation(result.data) : null;
+  }
+
+  async upsertOficinaConversation(input: {
+    oficinaId: string;
+    whatsapp: string;
+    agentMode?: Extract<ConversationAgentMode, "onboarding" | "operacao">;
+    context?: ConversationContext;
+  }) {
+    const result = (await this.supabase
+      .from("conversas")
+      .upsert(
+        {
+          oficina_id: input.oficinaId,
+          lead_id: null,
+          participant_whatsapp: input.whatsapp,
+          participant_type: "oficina_cliente",
+          agent_mode: input.agentMode ?? "onboarding",
+          context: input.context ?? {},
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "participant_whatsapp,agent_mode" },
+      )
+      .select("id,lead_id,oficina_id,cliente_id,participant_type,agent_mode,context")
+      .single()) as SupabaseResult<{
+      id: string;
+      lead_id: string | null;
+      oficina_id: string | null;
+      cliente_id: string | null;
+      participant_type: ParticipantType;
+      agent_mode: ConversationAgentMode;
+      context: ConversationContext | null;
+    }>;
+
+    throwIfError(result);
+    return mapConversation(result.data!);
+  }
+
+  async updateConversationModeAndContext(input: {
+    conversationId: string;
+    agentMode?: ConversationAgentMode;
+    context?: ConversationContext;
+  }) {
+    const update: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (input.agentMode) update.agent_mode = input.agentMode;
+    if (input.context) update.context = input.context;
+
+    const result = (await this.supabase
+      .from("conversas")
+      .update(update)
+      .eq("id", input.conversationId)) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
+  async convertLeadToOficina(input: {
+    leadId: string;
+    conversationId: string;
+    whatsapp: string;
+    responsavel: string | null;
+    nomeOficina: string | null;
+  }) {
+    const now = new Date().toISOString();
+    const nome = input.nomeOficina ?? "Oficina sem nome";
+    const oficinaResult = (await this.supabase
+      .from("oficinas")
+      .upsert(
+        {
+          nome,
+          responsavel: input.responsavel,
+          whatsapp_principal: input.whatsapp,
+          status: "ativa",
+          plano: "teste",
+          origem: "landing_whatsapp",
+          updated_at: now,
+        },
+        { onConflict: "whatsapp_principal" },
+      )
+      .select("id,nome,dias_lembrete_padrao")
+      .single()) as SupabaseResult<{
+      id: string;
+      nome: string;
+      dias_lembrete_padrao: number;
+    }>;
+
+    throwIfError(oficinaResult);
+
+    const leadResult = (await this.supabase
+      .from("leads_oficina")
+      .update({
+        status: "convertido",
+        oficina_id: oficinaResult.data!.id,
+        converted_at: now,
+        updated_at: now,
+      })
+      .eq("id", input.leadId)) as SupabaseResult<null>;
+
+    throwIfError(leadResult);
+
+    await this.updateConversationModeAndContext({
+      conversationId: input.conversationId,
+      agentMode: "onboarding",
+      context: {},
+    });
+
+    const conversationResult = (await this.supabase
+      .from("conversas")
+      .update({
+        oficina_id: oficinaResult.data!.id,
+        participant_type: "oficina_cliente",
+        updated_at: now,
+      })
+      .eq("id", input.conversationId)) as SupabaseResult<null>;
+
+    throwIfError(conversationResult);
+
+    return {
+      oficinaId: oficinaResult.data!.id,
+      nome: oficinaResult.data!.nome,
+      diasLembretePadrao: oficinaResult.data!.dias_lembrete_padrao,
+    };
+  }
+
+  async registerServiceWithReminder(input: RegisterServiceInput): Promise<RegisteredService> {
+    const result = (await this.supabase.rpc("register_service_with_reminder", {
+      p_oficina_id: input.oficinaId,
+      p_nome_cliente: input.nomeCliente,
+      p_whatsapp_cliente: input.whatsappCliente,
+      p_veiculo: input.veiculo,
+      p_servico: input.servico,
+      p_data_servico: input.dataServico,
+      p_valor: input.valor,
+      p_consentimento_whatsapp: input.consentimentoWhatsapp,
+    })) as SupabaseResult<{
+      cliente_id: string;
+      veiculo_id: string;
+      servico_id: string;
+      lembrete_id: string | null;
+    }>;
+
+    throwIfError(result);
+
+    return {
+      clienteId: result.data!.cliente_id,
+      veiculoId: result.data!.veiculo_id,
+      servicoId: result.data!.servico_id,
+      lembreteId: result.data!.lembrete_id,
+    };
   }
 
   async saveInboundMessage(input: {
     conversationId: string;
     leadId: string | null;
+    oficinaId?: string | null;
     whatsappMessageId: string;
     body: string;
     rawMessage: unknown;
@@ -143,6 +391,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       .insert({
         conversa_id: input.conversationId,
         lead_id: input.leadId,
+        oficina_id: input.oficinaId ?? null,
         direction: "inbound",
         whatsapp_message_id: input.whatsappMessageId,
         body: input.body,
@@ -163,6 +412,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
   async saveOutboundMessage(input: {
     conversationId: string;
     leadId: string | null;
+    oficinaId?: string | null;
     whatsappMessageId: string | null;
     body: string;
     rawMessage: unknown;
@@ -173,6 +423,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       .insert({
         conversa_id: input.conversationId,
         lead_id: input.leadId,
+        oficina_id: input.oficinaId ?? null,
         direction: "outbound",
         whatsapp_message_id: input.whatsappMessageId,
         body: input.body,
@@ -258,6 +509,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
   async createOutboundMessage(input: {
     conversationId: string;
     leadId: string | null;
+    oficinaId?: string | null;
     to: string;
     body: string;
   }) {
@@ -266,6 +518,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       .insert({
         conversa_id: input.conversationId,
         lead_id: input.leadId,
+        oficina_id: input.oficinaId ?? null,
         to_whatsapp: input.to,
         body: input.body,
         status: "pending",

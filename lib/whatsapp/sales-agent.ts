@@ -185,9 +185,10 @@ function deterministicReply(
 
   if (classification.intent === "quer_testar") {
     return {
-      status: "interessado",
-      body: "Perfeito. Nesta etapa eu registro seu interesse e um humano segue com os próximos passos. Para qual cidade é a oficina?",
+      status: "teste_aceito",
+      body: "Perfeito. Vou cadastrar sua oficina em teste por aqui.",
       toolCalls: [],
+      convertToOficina: true,
     };
   }
 

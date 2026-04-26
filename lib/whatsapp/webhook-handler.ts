@@ -1,11 +1,18 @@
-import { detectLeadOrigin } from "./sales-agent";
+import { resolveWhatsappConversation } from "./conversation-router";
+import { WhatsappOnboardingAgent } from "./onboarding-agent";
 import {
   extractInboundTextMessages,
   extractProviderEventId,
   extractWhatsappMessageId,
 } from "./payload";
 import { verifyMetaSignature } from "./signature";
-import type { SalesAgent, WhatsappRepository, WhatsappSender } from "./types";
+import type {
+  ConversationAgentMode,
+  OnboardingAgent,
+  SalesAgent,
+  WhatsappRepository,
+  WhatsappSender,
+} from "./types";
 
 type WebhookEnv = {
   WHATSAPP_VERIFY_TOKEN?: string;
@@ -17,6 +24,7 @@ type HandlerDeps = {
   repository: WhatsappRepository;
   whatsapp: WhatsappSender;
   agent: SalesAgent;
+  onboardingAgent?: OnboardingAgent;
 };
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -31,7 +39,40 @@ function errorStack(error: unknown) {
   return error instanceof Error ? error.stack ?? null : null;
 }
 
+function onboardingIntroMessage() {
+  return [
+    "Pronto, sua oficina esta cadastrada.",
+    "",
+    "Para registrar uma troca, me mande assim:",
+    "",
+    "Nome do cliente, carro, servico feito hoje e WhatsApp do cliente.",
+    "",
+    "Exemplo:",
+    "Joao Silva, Civic 2018, troca de oleo hoje, 41999990000.",
+  ].join("\n");
+}
+
+function localDateSaoPaulo() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function isOperationalMode(
+  mode: ConversationAgentMode,
+): mode is Extract<ConversationAgentMode, "onboarding" | "operacao"> {
+  return mode === "onboarding" || mode === "operacao";
+}
+
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
+  const onboardingAgent = deps.onboardingAgent ?? new WhatsappOnboardingAgent();
+
   return {
     async GET(request: Request) {
       const url = new URL(request.url);
@@ -91,19 +132,16 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
       }> = [];
 
       for (const inbound of inboundMessages) {
-        const lead = await deps.repository.upsertLead({
+        const resolved = await resolveWhatsappConversation({
+          repository: deps.repository,
           whatsapp: inbound.normalizedFrom,
-          nome: inbound.contactName,
-          origem: detectLeadOrigin(inbound.body),
-          status: "em_conversa",
-        });
-        const conversation = await deps.repository.upsertConversation({
-          leadId: lead.id,
-          whatsapp: inbound.normalizedFrom,
+          contactName: inbound.contactName,
+          body: inbound.body,
         });
         const savedInbound = await deps.repository.saveInboundMessage({
-          conversationId: conversation.id,
-          leadId: lead.id,
+          conversationId: resolved.conversationId,
+          leadId: resolved.leadId,
+          oficinaId: resolved.oficinaId,
           whatsappMessageId: inbound.whatsappMessageId,
           body: inbound.body,
           rawMessage: inbound.rawMessage,
@@ -115,46 +153,139 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
         }
 
         try {
-          const reply = await deps.agent.generateReply({
-            message: inbound.body,
-            leadStatus: lead.status,
-          });
+          let replyBody: string;
 
-          if (reply.status !== lead.status) {
-            await deps.repository.updateLeadStatus({
-              leadId: lead.id,
-              status: reply.status,
+          if (resolved.agentMode === "vendas") {
+            const leadStatus = resolved.leadStatus ?? "em_conversa";
+            const reply = await deps.agent.generateReply({
+              message: inbound.body,
+              leadStatus,
             });
-            await deps.repository.saveAgentToolCall({
-              conversationId: conversation.id,
-              leadId: lead.id,
-              toolName: "update_lead",
-              input: { status: lead.status },
-              output: { status: reply.status },
-            });
-          }
 
-          for (const toolCall of reply.toolCalls) {
-            await deps.repository.saveAgentToolCall({
-              conversationId: conversation.id,
-              leadId: lead.id,
-              toolName: toolCall.toolName,
-              input: toolCall.input,
-              output: toolCall.output,
+            if (
+              reply.convertToOficina &&
+              resolved.leadId &&
+              deps.repository.convertLeadToOficina
+            ) {
+              const converted = await deps.repository.convertLeadToOficina({
+                leadId: resolved.leadId,
+                conversationId: resolved.conversationId,
+                whatsapp: inbound.normalizedFrom,
+                responsavel: inbound.contactName,
+                nomeOficina:
+                  typeof resolved.context.service_draft?.nome_cliente === "string"
+                    ? resolved.context.service_draft.nome_cliente
+                    : null,
+              });
+
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                toolName: "convert_lead_to_oficina",
+                input: {
+                  whatsapp: inbound.normalizedFrom,
+                  responsavel: inbound.contactName,
+                },
+                output: converted,
+              });
+
+              replyBody = onboardingIntroMessage();
+            } else {
+              if (reply.status !== leadStatus && resolved.leadId) {
+                await deps.repository.updateLeadStatus({
+                  leadId: resolved.leadId,
+                  status: reply.status,
+                });
+                await deps.repository.saveAgentToolCall({
+                  conversationId: resolved.conversationId,
+                  leadId: resolved.leadId,
+                  toolName: "update_lead",
+                  input: { status: leadStatus },
+                  output: { status: reply.status },
+                });
+              }
+
+              replyBody = reply.body;
+            }
+
+            for (const toolCall of reply.toolCalls) {
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                toolName: toolCall.toolName,
+                input: toolCall.input,
+                output: toolCall.output,
+              });
+            }
+          } else if (isOperationalMode(resolved.agentMode)) {
+            const onboardingReply = await onboardingAgent.generateReply({
+              message: inbound.body,
+              mode: resolved.agentMode,
+              context: resolved.context,
+              today: localDateSaoPaulo(),
             });
+
+            for (const toolCall of onboardingReply.toolCalls) {
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                toolName: toolCall.toolName,
+                input: toolCall.input,
+                output: toolCall.output,
+              });
+            }
+
+            if (onboardingReply.registerServiceInput) {
+              if (!resolved.oficinaId || !deps.repository.registerServiceWithReminder) {
+                throw new Error("Missing workshop context for service registration");
+              }
+
+              const registered = await deps.repository.registerServiceWithReminder({
+                oficinaId: resolved.oficinaId,
+                ...onboardingReply.registerServiceInput,
+              });
+
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                toolName: "register_service_with_reminder",
+                input: {
+                  oficinaId: resolved.oficinaId,
+                  ...onboardingReply.registerServiceInput,
+                },
+                output: registered,
+              });
+            }
+
+            if (deps.repository.updateConversationModeAndContext) {
+              await deps.repository.updateConversationModeAndContext({
+                conversationId: resolved.conversationId,
+                agentMode: onboardingReply.nextAgentMode ?? resolved.agentMode,
+                context: onboardingReply.context,
+              });
+            }
+
+            replyBody = onboardingReply.registerServiceInput
+              ? `Cliente cadastrado. Vou lembrar o ${onboardingReply.registerServiceInput.nomeCliente} em ${
+                  resolved.diasLembretePadrao ?? 90
+                } dias para voltar trocar óleo com você.`
+              : onboardingReply.body;
+          } else {
+            replyBody = "Recebi sua mensagem. Um humano segue com os próximos passos por aqui.";
           }
 
           const outbox = await deps.repository.createOutboundMessage({
-            conversationId: conversation.id,
-            leadId: lead.id,
+            conversationId: resolved.conversationId,
+            leadId: resolved.leadId,
+            oficinaId: resolved.oficinaId,
             to: inbound.normalizedFrom,
-            body: reply.body,
+            body: replyBody,
           });
 
           try {
             const sent = await deps.whatsapp.sendTextMessage({
               to: inbound.normalizedFrom,
-              body: reply.body,
+              body: replyBody,
             });
 
             await deps.repository.markOutboundSent({
@@ -163,10 +294,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               response: sent.response ?? null,
             });
             await deps.repository.saveOutboundMessage({
-              conversationId: conversation.id,
-              leadId: lead.id,
+              conversationId: resolved.conversationId,
+              leadId: resolved.leadId,
+              oficinaId: resolved.oficinaId,
               whatsappMessageId: sent.whatsappMessageId,
-              body: reply.body,
+              body: replyBody,
               rawMessage: sent.response ?? null,
               sentAt: new Date().toISOString(),
             });
@@ -181,8 +313,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           const errorType = "agent_processing_failed";
           const errorContext = {
             whatsappMessageId: inbound.whatsappMessageId,
-            conversationId: conversation.id,
-            leadId: lead.id,
+            conversationId: resolved.conversationId,
+            leadId: resolved.leadId,
+            oficinaId: resolved.oficinaId,
             inboundBody: inbound.body,
             stack: errorStack(error),
           };
@@ -203,12 +336,13 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           }
 
           await deps.repository.saveAgentToolCall({
-            conversationId: conversation.id,
-            leadId: lead.id,
+            conversationId: resolved.conversationId,
+            leadId: resolved.leadId,
             toolName: "agent_error",
             input: {
               message: inbound.body,
-              leadStatus: lead.status,
+              leadStatus: resolved.leadStatus,
+              agentMode: resolved.agentMode,
             },
             output: {
               errorType,

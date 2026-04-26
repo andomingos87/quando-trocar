@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { WhatsappOnboardingAgent } from "@/lib/whatsapp/onboarding-agent";
 import { SupabaseWhatsappRepository } from "@/lib/whatsapp/repository";
 import { WhatsappSalesAgent } from "@/lib/whatsapp/sales-agent";
 import { WhatsAppCloudApiClient } from "@/lib/whatsapp/whatsapp-client";
@@ -19,6 +20,7 @@ function getPostHandlers() {
     repository: new SupabaseWhatsappRepository(createSupabaseAdminClient()),
     whatsapp: new WhatsAppCloudApiClient(),
     agent: new WhatsappSalesAgent(),
+    onboardingAgent: new WhatsappOnboardingAgent(),
   });
 }
 
