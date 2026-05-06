@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import { siteConfig } from "@/lib/config";
 import "./globals.css";
 
-const geist = Geist({
+// DM Sans = closest free fallback to Graphik (per design spec)
+const dmSans = DM_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -49,12 +51,12 @@ export const metadata: Metadata = {
       "Seu cliente esquece de voltar pra você. A gente resolve — pelo WhatsApp, sem instalar nada.",
     images: ["/og.png"],
   },
-  icons: { icon: "/logo.png", apple: "/logo.png" },
+  icons: { icon: "/logo_qt_byperfect.png", apple: "/logo_qt_byperfect.png" },
   robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f7931e",
+  themeColor: "#001E62",
   width: "device-width",
   initialScale: 1,
 };
@@ -63,7 +65,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className={geist.variable}>
+    <html lang="pt-BR" className={dmSans.variable}>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );

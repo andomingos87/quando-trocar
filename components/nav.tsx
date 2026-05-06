@@ -16,16 +16,16 @@ export function Nav() {
       <div className="mx-auto flex max-w-[1200px] items-center gap-4 px-5 py-3 sm:px-8 sm:py-4">
         <Link
           href="/"
-          className="flex items-center transition-transform hover:-rotate-2"
-          aria-label="Quando Trocar"
+          className="flex items-center transition-opacity hover:opacity-80"
+          aria-label="Quando Trocar by Perfect Automotive"
         >
           <Image
-            src="/logo.png"
-            alt="Quando Trocar"
-            width={240}
-            height={106}
-            sizes="100px"
-            className="h-8 w-auto sm:h-9"
+            src="/logo_qt_byperfect.png"
+            alt="Quando Trocar by Perfect Automotive"
+            width={1810}
+            height={697}
+            sizes="180px"
+            className="h-10 w-auto sm:h-11"
             priority
           />
         </Link>
@@ -44,7 +44,7 @@ export function Nav() {
         <div className="mx-4 hidden h-5 w-px bg-line lg:block" />
         <Link
           href="#cta-final"
-          className="group inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2.5 text-[13px] font-semibold text-white transition-all hover:bg-brand"
+          className="group inline-flex items-center gap-1.5 bg-brand px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-brand-dark"
         >
           Testar grátis
           <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-px group-hover:translate-x-px" />

@@ -85,7 +85,7 @@ export function Dor() {
               {/* diagonal stripes texture */}
               <div className="bg-stripes-soft pointer-events-none absolute inset-0" />
               {/* soft brand glow in corner */}
-              <div className="animate-glow-pulse pointer-events-none absolute -left-16 -top-16 size-56 rounded-full bg-[radial-gradient(circle,rgba(247,147,30,0.22),transparent_65%)]" />
+              <div className="animate-glow-pulse pointer-events-none absolute -left-16 -top-16 size-56 rounded-full bg-[radial-gradient(circle,rgba(225,157,78,0.22),transparent_65%)]" />
 
               <div className="relative">
                 <div className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/40">

@@ -1,17 +1,28 @@
+import Image from "next/image";
 import Link from "next/link";
 import { siteConfig } from "@/lib/config";
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/5 bg-ink px-5 py-10 text-[13px] text-white/60 sm:px-8">
+    <footer
+      className="border-t border-white/5 px-5 py-10 text-[13px] text-white/60 sm:px-8"
+      style={{ background: "var(--color-dark)" }}
+    >
       <div className="mx-auto max-w-[1080px]">
         <div className="flex flex-wrap items-center gap-6">
           <Link
             href="/"
-            className="flex items-center gap-2 font-display text-[15px] font-bold tracking-tight text-white"
+            className="flex items-center transition-opacity hover:opacity-80"
+            aria-label="Quando Trocar by Perfect Automotive"
           >
-            <span>QUANDO</span>
-            <span className="text-brand">TROCAR?</span>
+            <Image
+              src="/logo_qt_byperfect_white.png"
+              alt="Quando Trocar by Perfect Automotive"
+              width={1810}
+              height={697}
+              sizes="160px"
+              className="h-9 w-auto"
+            />
           </Link>
           <div className="flex-1" />
           <a

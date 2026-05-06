@@ -10,8 +10,8 @@ export function CtaFinal() {
       id="cta-final"
       className="relative isolate overflow-hidden bg-brand px-5 py-24 text-center text-white sm:px-8 md:py-32"
     >
-      {/* gradient base — warm orange → deep ember */}
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#ffa13a_0%,#f7931e_35%,#d97811_100%)]" />
+      {/* gradient base — amber impulse from logo's "CAR" */}
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#f0b76e_0%,#E19D4E_35%,#a37033_100%)]" />
 
       {/* blueprint grid — spans full width, fades toward edges */}
       <div className="bg-blueprint bg-blueprint-fade pointer-events-none absolute inset-0" />

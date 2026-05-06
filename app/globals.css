@@ -1,19 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  /* warm, editorial palette */
-  --color-ink: #0f0f0f;
-  --color-ink-soft: #1c1b19;
-  --color-paper: #fdfcfa;
-  --color-paper-soft: #f5f2ec;
-  --color-line: #e8e4dc;
-  --color-line-soft: #f0ece4;
-  --color-muted: #6b6760;
+  /* Perfect Automotive identity — navy / red / cyan / orange */
+  --color-ink: #001E62;        /* navy — primary text + dark sections */
+  --color-ink-soft: #0a2a7a;   /* navy hover/secondary */
+  --color-ink-deep: #041C2C;   /* near-black navy — footer, deepest bg */
+  --color-paper: #ffffff;
+  --color-paper-soft: #f5f7fb; /* cool tinted off-white */
+  --color-line: #dde3ee;       /* cool light gray */
+  --color-line-soft: #eef2f8;
+  --color-muted: #5b6478;      /* desaturated cool gray for body */
 
-  --color-brand: #f7931e;
-  --color-brand-dark: #d17410;
-  --color-brand-deep: #8e4c0a;
-  --color-brand-soft: #fef2dc;
+  /* primary CTA color = laranja do "CAR" no logo Quando Trocar */
+  --color-brand: #E19D4E;
+  --color-brand-dark: #c87f30;
+  --color-brand-deep: #8e5a1f;
+  --color-brand-soft: #fdf0dc;
+
+  /* secondary accents — vermelho fica como urgência/destaque, não CTA principal */
+  --color-red: #EE2737;
+  --color-red-soft: #fde2e4;
+  --color-cyan: #71C5E8;
+  --color-cyan-soft: #e0f3fb;
+  --color-orange: #FFA300;
+  --color-orange-soft: #fff1d1;
+  --color-navy: #001E62;
+  --color-dark: #041C2C;
 
   --color-wa-bg: #e5ddd3;
   --color-wa-me: #d9fdd3;
