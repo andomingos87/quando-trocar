@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans } from "next/font/google";
 import { siteConfig } from "@/lib/config";
+import { RootLayoutClient } from "@/components/root-layout-client";
 import "./globals.css";
 
 // DM Sans = closest free fallback to Graphik (per design spec)
@@ -66,7 +67,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" className={dmSans.variable}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <RootLayoutClient>{children}</RootLayoutClient>
+      </body>
     </html>
   );
 }

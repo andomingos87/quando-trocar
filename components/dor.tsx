@@ -100,7 +100,7 @@ export function Dor() {
                     não voltam sozinhos
                   </span>
                   . Cada um vale cerca de{" "}
-                  <span className="font-mono text-white">R$220</span> em
+                  <span className="font-mono font-semibold text-red">R$220</span> em
                   serviço.
                 </figcaption>
               </div>

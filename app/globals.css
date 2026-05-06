@@ -232,6 +232,12 @@
     animation: glow-pulse 4s ease-in-out infinite;
   }
 
+  /* konami sweep — diagonal racing-stripe traversal */
+  @keyframes stripe-sweep {
+    from { transform: translateX(-120vw) rotate(-20deg); }
+    to   { transform: translateX(120vw)  rotate(-20deg); }
+  }
+
   /* accordion */
   @keyframes accordion-down {
     from {

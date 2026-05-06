@@ -14,14 +14,14 @@ export function Hero() {
       <div className="mx-auto grid max-w-[1200px] items-center gap-12 px-5 pb-12 pt-10 sm:px-8 md:grid-cols-[1.05fr_1fr] md:gap-16 md:pt-20 md:pb-14">
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand-soft/60 px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-brand-deep">
-            <span className="size-1.5 animate-pulse-dot rounded-full bg-brand" />
+            <span className="size-1.5 animate-pulse-dot rounded-full bg-red" />
             em teste com oficinas reais
           </span>
 
           <h1 className="font-display mt-6 text-[clamp(2.5rem,6.2vw,4.75rem)] font-bold leading-[0.98]">
             Seu cliente{" "}
             <span className="relative whitespace-nowrap">
-              <span className="line-through decoration-brand decoration-[4px] underline-offset-2">
+              <span className="line-through decoration-red decoration-[4px] underline-offset-2">
                 esquece
               </span>
             </span>

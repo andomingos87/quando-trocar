@@ -16,18 +16,36 @@ export function Nav() {
       <div className="mx-auto flex max-w-[1200px] items-center gap-4 px-5 py-3 sm:px-8 sm:py-4">
         <Link
           href="/"
-          className="flex items-center transition-opacity hover:opacity-80"
+          className="group flex items-center transition-opacity hover:opacity-90"
           aria-label="Quando Trocar by Perfect Automotive"
         >
-          <Image
-            src="/logo_qt_byperfect.png"
-            alt="Quando Trocar by Perfect Automotive"
-            width={1810}
-            height={697}
-            sizes="180px"
-            className="h-10 w-auto sm:h-11"
-            priority
-          />
+          <span className="relative inline-block">
+            <Image
+              src="/logo_qt_byperfect.png"
+              alt="Quando Trocar by Perfect Automotive"
+              width={1810}
+              height={697}
+              sizes="180px"
+              className="h-10 w-auto sm:h-11"
+              priority
+            />
+            {/* shimmer overlays — match baked Perfect stripes (cyan→red→amber order, x 28-34%, bottom 0-13%) */}
+            <span
+              aria-hidden
+              className="absolute -skew-x-12 bg-cyan opacity-0 transition-[opacity,transform] duration-[400ms] group-hover:translate-x-[3px] group-hover:opacity-80 motion-reduce:hidden"
+              style={{ left: "28%", bottom: "1%", width: "2%", height: "12%", transitionDelay: "0ms" }}
+            />
+            <span
+              aria-hidden
+              className="absolute -skew-x-12 bg-red opacity-0 transition-[opacity,transform] duration-[400ms] group-hover:translate-x-[3px] group-hover:opacity-80 motion-reduce:hidden"
+              style={{ left: "30.5%", bottom: "1%", width: "2%", height: "12%", transitionDelay: "75ms" }}
+            />
+            <span
+              aria-hidden
+              className="absolute -skew-x-12 bg-brand opacity-0 transition-[opacity,transform] duration-[400ms] group-hover:translate-x-[3px] group-hover:opacity-80 motion-reduce:hidden"
+              style={{ left: "33%", bottom: "1%", width: "2%", height: "12%", transitionDelay: "150ms" }}
+            />
+          </span>
         </Link>
         <div className="flex-1" />
         <div className="hidden gap-7 text-[13.5px] text-muted lg:flex">
