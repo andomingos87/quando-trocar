@@ -390,8 +390,8 @@ Estas funcionalidades **não serão construídas no protótipo**. Se alguém ped
 
 ## 18. 📎 Anexos
 
-- [copy.md](copy.md) — textos e microcopy
-- [design-system.md](design-system.md) — tokens visuais
-- `quando-trocar-plano-validacao-30d.docx` — plano de validação
-- `quando-trocar-script-abordagem.docx` — script comercial
-- `quando-trocar-tracking.xlsx` — controle de validação
+- [copy.md](./copy.md) — textos e microcopy
+- [design-system.md](./design-system.md) — tokens visuais
+- `../../quando-trocar-plano-validacao-30d.docx` — plano de validação
+- `../../quando-trocar-script-abordagem.docx` — script comercial
+- `../../quando-trocar-tracking.xlsx` — controle de validação

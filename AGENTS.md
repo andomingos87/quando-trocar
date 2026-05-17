@@ -15,11 +15,14 @@ Core stack:
 
 Important project docs:
 
-- Product scope: `PRD.md` and `PRD_WHATSAPP_BOT_REAL.md`.
-- Bot architecture: `docs/whatsapp-bot-technical-plan.md`.
+- Navigable doc index: `docs/README.md`.
+- Product scope: `docs/product/PRD-whatsapp-bot.md` (canonical) and `docs/product/PRD-landing-prototype.md` (validation prototype).
+- Bot architecture: `docs/architecture/whatsapp-bot-technical-plan.md`.
 - Bot backlog: `docs/backlog-whatsapp-bot/README.md`.
-- Meta setup: `docs/meta-whatsapp-configuracao.md`.
-- Web screens: `docs/telas-web.md`.
+- Architectural decisions: `docs/adr/` (see `docs/adr/README.md` for the index).
+- Domain glossary: `docs/glossary.md`.
+- Runbooks (env, deploy, Meta setup, Supabase migrations): `docs/runbooks/`.
+- Decision and context history: `docs/CONTEXT_CHANGELOG.md`.
 
 ## Setup Commands
 

@@ -2,8 +2,8 @@
 
 Base:
 
-- `PRD_WHATSAPP_BOT_REAL.md`
-- `docs/whatsapp-bot-technical-plan.md`
+- `../product/PRD-whatsapp-bot.md`
+- `../architecture/whatsapp-bot-technical-plan.md`
 
 Stack alvo:
 

@@ -1,7 +1,7 @@
 # Quando Trocar - Levantamento Tecnico do Bot WhatsApp
 
 Data: 2026-04-25
-Base: `PRD_WHATSAPP_BOT_REAL.md`
+Base: `../product/PRD-whatsapp-bot.md`
 Status: recomendacao tecnica para implementacao real
 
 ## 1. Decisao de stack recomendada

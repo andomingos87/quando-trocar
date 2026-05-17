@@ -1,6 +1,6 @@
 # Reference material (not part of deploy)
-copy.md
-design-system.md
+docs/product/copy.md
+docs/product/design-system.md
 *.docx
 *.pdf
 *.xlsx
