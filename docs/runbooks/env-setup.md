@@ -39,9 +39,22 @@ WHATSAPP_ACCESS_TOKEN=...      # do usuário do sistema na Meta
 WHATSAPP_PHONE_NUMBER_ID=...   # do telefone configurado na Meta
 
 INTERNAL_JOB_SECRET=...        # protege endpoints internos (scheduler, workers)
+
+# Templates Meta (Fase 4 + painel admin)
+WHATSAPP_TEMPLATE_OTP_NAME=...      # categoria Authentication — login OTP
+WHATSAPP_TEMPLATE_COBRANCA_NAME=... # categoria Utility — cobrança (Admin-6)
+
+# Painel admin
+ADMIN_SESSION_SECRET=...            # ≥32 chars aleatórios; assina JWT de sessão admin
+INADIMPLENCIA_DIAS_GRACE=7          # dias antes de auto-pausar inadimplente
+ADMIN_OTP_DEV_BYPASS_CODE=          # só dev; deixe vazio em prod
+
+# Mercado Pago (Admin-6) — placeholder até integrar
+MERCADO_PAGO_ACCESS_TOKEN=...
+MERCADO_PAGO_WEBHOOK_SECRET=...
 ```
 
-Regra inviolável: `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `INTERNAL_JOB_SECRET` **nunca** podem ser `NEXT_PUBLIC_*`. Se aparecerem no bundle do browser, troque imediatamente (já vazaram).
+Regra inviolável: `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `INTERNAL_JOB_SECRET`, `ADMIN_SESSION_SECRET`, `MERCADO_PAGO_ACCESS_TOKEN`, `MERCADO_PAGO_WEBHOOK_SECRET` **nunca** podem ser `NEXT_PUBLIC_*`. Se aparecerem no bundle do browser, troque imediatamente (já vazaram).
 
 ## Setup local (`.env.local`)
 

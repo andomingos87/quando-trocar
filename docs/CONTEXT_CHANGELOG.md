@@ -19,6 +19,45 @@ Não registrar:
 
 ---
 
+## 2026-05-17 — Painel admin especificado (ADR-0013, PRD, backlog dedicado)
+
+### Adicionado
+
+- **[ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md)** — Painel admin: escopo, billing mensal recorrente, auto-pausa por inadimplência, MRR em tempo real, auditoria obrigatória. Fecha as decisões que sobravam após ADR-0010/0012.
+- **[PRD do painel admin](./product/PRD-painel-admin.md)** — canônico. 7 telas, fluxos, modelo de dados, RNFs, critérios de aceite.
+- **[Backlog do painel admin](./backlog-painel-admin/README.md)** — 7 sub-fases (Admin-0 a Admin-6), cada uma mergeavel separadamente.
+
+### Decidido
+
+- **URL**: `/admin/*` no mesmo domínio Next.js. Sessão admin separada via cookie distinto.
+- **Status oficina**: mantém enum atual (`ativa/pausada/cancelada`). Adiciona campo novo `motivo_pausa` (`inadimplencia | voluntaria | admin`).
+- **Cadastro manual de oficina**: admin pode criar oficina pelo painel com `origem='manual'`.
+- **Billing**: mensal recorrente. Cron diário gera preferência Mercado Pago e envia link por WhatsApp. Sem Subscription API (suporta Pix recorrente).
+- **Inadimplência**: auto-pausa após 7 dias (configurável). Bot responde com mensagem padrão de cobrança em vez de operar.
+- **Preço negociado**: sem expiração — vale até admin mudar.
+- **MRR**: query em tempo real (rever quando passar de ~500 oficinas).
+- **Notificações para admin**: só na tela.
+- **Impersonate**: fora do MVP.
+- **Seeds**: Anderson como único admin inicial, 1 plano placeholder editável.
+
+### Implicações para implementação
+
+- Nova migration em Admin-0: cria `planos`, `admin_users`, `admin_audit_log`, `pagamentos`, `cobranca_jobs`; adiciona `motivo_pausa`, `proximo_vencimento`, `plano_id`, `preco_negociado` em `oficinas`.
+- Pequena alteração em [conversation-router.ts](../lib/whatsapp/conversation-router.ts) para tratar oficinas pausadas por inadimplência (Admin-6).
+- Novo template Meta categoria "Utility" (`WHATSAPP_TEMPLATE_COBRANCA_NAME`) — solicitar com antecedência.
+- Reuso do template OTP existente para login admin.
+- Fase 4F do bot WhatsApp ([fase-4-retorno-dashboard.md](./backlog-whatsapp-bot/fase-4-retorno-dashboard.md)) é **substituída e expandida** pelo backlog do painel admin. Manter Fase 4F como referência, mas execução real segue o backlog novo.
+
+Nenhum código alterado nesta entrega — só documentação. Implementação real começa em Admin-0.
+
+### Pendências externas registradas
+
+- WhatsApp do Anderson para seed de `admin_users` em Admin-0: **`+5511945207618`** (confirmado 2026-05-17).
+- Template Meta categoria "Utility" para cobrança (`WHATSAPP_TEMPLATE_COBRANCA_NAME`) — a solicitar quando se aproximar de Admin-6 (ciclo Meta leva horas/dias).
+- `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` — placeholder em `.env.local.example` e no runbook. Anderson preenche valores reais quando chegar em Admin-6.
+
+---
+
 ## 2026-05-17 — Docs alinhados com as ADRs 0008, 0009, 0010, 0012
 
 ### Mudou

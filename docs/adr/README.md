@@ -20,6 +20,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0010](./0010-painel-web-no-mvp.md) | Painel web mínimo na Fase 4, com login OTP WhatsApp | accepted | 2026-05-17 |
 | [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | accepted | 2026-05-17 |
 | [0012](./0012-politica-de-preco.md) | Plano único com preço configurável por oficina via painel admin | accepted | 2026-05-17 |
+| [0013](./0013-painel-admin-escopo-billing-auditoria.md) | Painel admin — escopo, billing mensal recorrente e auditoria | accepted | 2026-05-17 |
 
 ### Em aberto (drafts)
 

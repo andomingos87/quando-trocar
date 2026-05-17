@@ -14,6 +14,7 @@
 Especificações funcionais e visuais. Tudo em português.
 
 - [PRD — Bot WhatsApp (implementação real)](./product/PRD-whatsapp-bot.md) — **canônico**. Spec completo do produto real: personas, fluxos, modelo de dados, requisitos do agente, compliance.
+- [PRD — Painel Admin](./product/PRD-painel-admin.md) — **canônico**. Painel interno (`/admin`) para devs/fundadores/donos gerirem oficinas, planos, preços, cobrança e auditoria.
 - [PRD — Landing prototype](./product/PRD-landing-prototype.md) — spec do protótipo de validação comercial (frontend-only, mockado). Histórico, mas ainda válido como referência da demo.
 - [Telas web](./product/telas-web.md) — proposta de painel operacional para a oficina.
 - [Copy](./product/copy.md) — microcopy da landing page (gitignored, material de referência).
@@ -32,6 +33,14 @@ Especificações funcionais e visuais. Tudo em português.
   - [Fase 3 — Lembretes reais](./backlog-whatsapp-bot/fase-3-lembretes-reais.md)
   - [Fase 4 — Retorno e dashboard](./backlog-whatsapp-bot/fase-4-retorno-dashboard.md)
   - [Resumo consolidado Fases 1–3](./backlog-whatsapp-bot/fases-1-2-e-3-resumo-implementacao.md)
+- [Backlog do painel admin](./backlog-painel-admin/README.md) — sub-fases Admin-0 a Admin-6.
+  - [Admin-0 — Modelo de dados](./backlog-painel-admin/admin-0-modelo-dados.md)
+  - [Admin-1 — Auth via OTP WhatsApp](./backlog-painel-admin/admin-1-auth.md)
+  - [Admin-2 — Tela Planos](./backlog-painel-admin/admin-2-planos.md)
+  - [Admin-3 — Tela Oficinas](./backlog-painel-admin/admin-3-oficinas.md)
+  - [Admin-4 — Tela Visão geral](./backlog-painel-admin/admin-4-visao-geral.md)
+  - [Admin-5 — Telas Admins e Auditoria](./backlog-painel-admin/admin-5-admins-auditoria.md)
+  - [Admin-6 — Billing Mercado Pago](./backlog-painel-admin/admin-6-billing-mercado-pago.md)
 
 ## Operação (runbooks)
 
