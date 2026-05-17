@@ -511,9 +511,11 @@ erro_envio
 
 ## 12. Fluxo 6 — Cliente Final Responde
 
+> **Decisão atualizada em 2026-05-17 — ver [ADR-0009](../adr/0009-confirmacao-vs-pre-agendamento.md).** O bot não tenta agendar nem confirmar horário. Ao detectar intenção de agendar, faz **handoff** entre cliente e atendente da oficina via links `wa.me` clicáveis.
+
 ### Objetivo
 
-Interpretar a resposta do cliente e avançar o status.
+Interpretar a resposta do cliente e, na maior parte dos casos, fazer a ponte entre cliente e atendente humano da oficina. O bot só toma ação determinística em casos simples (opt-out, número errado, sem interesse).
 
 ### Intenções esperadas
 
@@ -522,46 +524,51 @@ quer_agendar
 quer_reagendar
 pergunta_preco
 pergunta_horario
+pergunta_disponibilidade
 nao_tem_interesse
 ja_fez_servico
 numero_errado
 mensagem_indefinida
+opt_out
 ```
 
-### Exemplo
+### Padrão de handoff via wa.me
 
-Cliente:
+Aplica-se a: `quer_agendar`, `quer_reagendar`, `pergunta_preco`, `pergunta_horario`, `pergunta_disponibilidade`, `mensagem_indefinida`.
+
+O bot envia **duas mensagens** quando detecta uma dessas intenções:
+
+**1. Mensagem ao cliente final** com link `wa.me` para o WhatsApp do atendente da oficina (`oficinas.whatsapp_atendente`):
 
 ```text
-Opa, pode ser quinta 14h?
+Pra agendar, fale direto com a oficina:
+https://wa.me/5541999990000?text=Quero%20agendar%20troca%20de%20%C3%B3leo
 ```
 
-Agente:
+**2. Mensagem ao atendente da oficina** com link `wa.me` para o cliente:
 
 ```text
-Perfeito. Vou deixar pré-agendado para quinta às 14h na [oficina].
+João (Civic 2018) quer agendar troca de óleo. Chame agora:
+https://wa.me/5541988880000?text=Oi%20Jo%C3%A3o,%20da%20oficina%20Auto%20Centro,%20vamos%20agendar%20a%20troca%20do%20seu%20Civic?
 ```
 
-Banco:
+A partir daí, cliente e atendente conversam direto. O bot sai. Sem `status_conversa = agendado`, sem `data_agendada`, sem promessa de horário.
 
-```text
-status_conversa = agendado
-data_agendada = quinta 14h
-```
+### Status do lembrete após handoff
 
-### Quando o agente não souber responder
+O lembrete não vai mais para `agendado`. Possibilidades:
 
-Encaminhar para a oficina:
+- `respondido` — cliente respondeu ao lembrete.
+- `handoff_iniciado` (opcional, se houver valor em rastrear separadamente) — bot iniciou o handoff entre cliente e atendente.
 
-```text
-O cliente perguntou algo específico. Vou avisar a oficina para confirmar com você.
-```
+A receita só é contabilizada quando a oficina registrar o retorno (Fluxo 7).
 
-E notificar a oficina:
+### Intenções com ação determinística (sem handoff)
 
-```text
-O cliente João perguntou sobre preço/horário. Pode assumir a conversa?
-```
+- `opt_out` — bot marca `clientes_finais.status = opt_out`, cancela lembretes futuros, confirma remoção.
+- `numero_errado` — bot marca `clientes_finais.status = numero_errado`, cancela lembretes futuros.
+- `nao_tem_interesse` — bot encerra a conversa com mensagem cordial. Lembrete vira `sem_resposta` ou `respondido`.
+- `ja_fez_servico` — bot agradece e encerra. Lembrete vira `respondido`. A oficina pode registrar retorno se foi feito na própria oficina (Fluxo 7).
 
 ---
 

@@ -1,10 +1,12 @@
 # Fase 3 - Lembretes reais
 
+> **Atualizada em 2026-05-17 — ADR-0009.** O bot **não tenta agendar** mais. Ao detectar intenção de agendar, faz handoff via links `wa.me` (uma mensagem ao cliente, outra ao atendente). Status `agendado` removido de `lembretes.status`.
+
 ## Objetivo
 
-Enviar lembretes reais pelo WhatsApp para clientes finais com consentimento, registrar status de entrega, interpretar respostas simples e tratar opt-out.
+Enviar lembretes reais pelo WhatsApp para clientes finais com consentimento, registrar status de entrega, interpretar respostas simples, tratar opt-out e fazer **handoff** quando o cliente quiser agendar.
 
-A Fase 3 fecha o primeiro ciclo operacional do produto: a oficina cadastra uma troca, o sistema agenda um lembrete, envia uma mensagem aprovada pela Meta quando o lembrete vence e registra a resposta do cliente final sem transformar essa conversa em lead comercial.
+A Fase 3 fecha o primeiro ciclo operacional do produto: a oficina cadastra uma troca, o sistema agenda um lembrete, envia uma mensagem aprovada pela Meta quando o lembrete vence, e ao receber a resposta do cliente final, ou age determinística (opt-out, número errado) ou faz a ponte entre cliente e atendente humano. Nenhuma promessa de agenda pelo bot.
 
 ## Contexto depois das Fases 1 e 2
 
@@ -41,13 +43,13 @@ Inclui:
 - Retry para erro temporario.
 - Interpretacao de respostas simples do cliente final.
 - Opt-out automatico.
-- Handoff para oficina quando a resposta exigir atendimento humano.
+- **Handoff via `wa.me`** quando a resposta exigir atendimento humano: bot envia um link clicavel ao cliente apontando para o atendente da oficina, e simultaneamente envia um link clicavel ao atendente apontando para o cliente. A partir dai a conversa fica entre humanos.
 
 Nao inclui:
 
 - Campanhas promocionais.
 - Calendario externo.
-- Confirmacao definitiva de agenda.
+- **Bot agendar ou pre-agendar horario** (substituido por handoff via `wa.me` em todas as intencoes de agenda — ver ADR-0009).
 - Segmentacao avancada.
 - Multiatendente complexo.
 - Dashboard operacional completo.
@@ -212,11 +214,13 @@ pendente
 enfileirado
 enviado
 respondido
-agendado
+handoff_iniciado
 sem_resposta
 cancelado
 erro_envio
 ```
+
+> **Mudanca em 2026-05-17 (ADR-0009).** Status `agendado` removido. Quando o cliente sinaliza intencao de agendar, o lembrete vai para `handoff_iniciado` (ou `respondido`, se nao houver valor em rastrear o handoff separadamente) e o bot dispara as duas mensagens de `wa.me`.
 
 `clientes_finais.status`:
 
@@ -268,9 +272,10 @@ retry_scheduled
 - [ ] Implementar opt-out por palavras-chave.
 - [ ] Cancelar lembretes futuros de cliente em opt-out.
 - [ ] Garantir que novo cadastro da oficina nao reative automaticamente cliente em `opt_out`.
-- [ ] Registrar handoff quando houver pergunta especifica.
-- [ ] Notificar oficina quando o cliente pedir preco, horario, disponibilidade ou atendimento humano.
-- [ ] Registrar tool calls relevantes em `agent_tool_calls`.
+- [ ] Adicionar `oficinas.whatsapp_atendente` (nullable; default igual a `whatsapp_principal`) com normalizacao em E.164.
+- [ ] Implementar **handoff via `wa.me`**: ao detectar intencao de agendar, preco, horario, disponibilidade ou mensagem indefinida, enviar duas mensagens — uma ao cliente com `wa.me` apontando para `whatsapp_atendente` da oficina, outra ao atendente com `wa.me` apontando para o cliente, ambas com texto pre-preenchido.
+- [ ] Marcar lembrete como `handoff_iniciado` (ou `respondido`) apos handoff. Nao usar mais `agendado`.
+- [ ] Registrar `agent_tool_calls` com tipo `handoff_wame` contendo `lembrete_id`, `cliente_whatsapp`, `atendente_whatsapp` e textos enviados.
 
 ## Regras de envio
 
@@ -379,6 +384,7 @@ quer_agendar
 quer_reagendar
 pergunta_preco
 pergunta_horario
+pergunta_disponibilidade
 nao_tem_interesse
 ja_fez_servico
 numero_errado
@@ -386,19 +392,18 @@ mensagem_indefinida
 opt_out
 ```
 
-Condutas:
+Condutas (ADR-0009 — bot nao agenda, faz handoff via `wa.me`):
 
-- `quer_agendar`: marcar como `agendado` somente quando houver data/horario claro, usando linguagem de pre-agendamento.
-- `quer_reagendar`: registrar interesse e acionar handoff se depender de disponibilidade real.
-- `pergunta_preco`: acionar handoff para oficina.
-- `pergunta_horario`: acionar handoff para oficina quando exigir disponibilidade real.
-- `nao_tem_interesse`: marcar lembrete como `sem_resposta` ou `cancelado`, conforme texto.
-- `ja_fez_servico`: marcar lembrete como `respondido` e deixar retorno financeiro para Fase 4.
-- `numero_errado`: marcar cliente como `numero_errado` e cancelar lembretes futuros.
-- `opt_out`: marcar cliente como `opt_out`, preencher `opt_out_at`, cancelar lembretes futuros e confirmar remocao.
-- `mensagem_indefinida`: responder curto ou acionar handoff se houver risco de promessa indevida.
+- `quer_agendar` ou `quer_reagendar`: disparar **handoff via `wa.me`** (duas mensagens). Marcar lembrete como `handoff_iniciado`.
+- `pergunta_preco`: handoff via `wa.me`. Bot nao cita valor (ver ADR-0012).
+- `pergunta_horario` ou `pergunta_disponibilidade`: handoff via `wa.me`.
+- `mensagem_indefinida`: handoff via `wa.me` se houver risco de promessa indevida; caso contrario responder curto pedindo esclarecimento.
+- `nao_tem_interesse`: marcar lembrete como `sem_resposta` ou `cancelado`, conforme texto. Sem handoff.
+- `ja_fez_servico`: marcar lembrete como `respondido`. Sem handoff. Retorno financeiro fica para Fase 4 (oficina registra manualmente se foi feito ali).
+- `numero_errado`: marcar cliente como `numero_errado` e cancelar lembretes futuros. Sem handoff.
+- `opt_out`: marcar cliente como `opt_out`, preencher `opt_out_at`, cancelar lembretes futuros e confirmar remocao. Sem handoff.
 
-O bot nao deve confirmar agenda real. Ele pode dizer que vai avisar a oficina ou que a oficina vai confirmar o melhor horario.
+**O bot nunca confirma agenda nem promete horario.** Toda intencao de agendar vai para handoff via `wa.me`.
 
 ## Opt-out
 
@@ -426,31 +431,62 @@ Ao detectar opt-out:
 
 Novo cadastro feito pela oficina nao pode reativar automaticamente cliente em `opt_out`. A RPC de registro ou a camada de repositorio deve preservar o opt-out existente. Reativacao futura exige confirmacao explicita do cliente ou acao manual auditavel.
 
-## Handoff
+## Handoff via `wa.me` (ADR-0009)
 
-Usar os campos existentes em `conversas`:
+Em vez de manter a conversa parada esperando um humano da oficina entrar, o bot **faz a ponte ativa** entre cliente e atendente, transferindo a conversa para o WhatsApp direto.
+
+### Fluxo
+
+Quando uma das intencoes acima dispara handoff:
+
+**1. Mensagem ao cliente final** (na propria conversa do lembrete):
+
+Template fixo (pseudocodigo, valores `URL-encoded`):
 
 ```text
-handoff_required = true
-handoff_reason = motivo
+Pra agendar, fale direto com a oficina:
+https://wa.me/{whatsapp_atendente}?text={mensagem_pre_preenchida_cliente}
 ```
 
-Motivos iniciais:
+Exemplo de `mensagem_pre_preenchida_cliente`:
 
 ```text
-pergunta_preco
-pergunta_horario
-pedido_agendamento
-mensagem_ambigua
-cliente_final_ambiguo
+Quero agendar a troca de oleo do meu Civic
 ```
 
-Quando houver handoff, o sistema deve:
+Resultado:
 
-- registrar a conversa como pendente de humano;
-- avisar o cliente final com resposta curta e sem promessa de agenda;
-- notificar a oficina quando houver canal confiavel para isso;
-- registrar `agent_tool_calls` com input e decisao.
+```text
+Pra agendar, fale direto com a oficina:
+https://wa.me/5541999990000?text=Quero%20agendar%20a%20troca%20de%20oleo%20do%20meu%20Civic
+```
+
+**2. Mensagem ao atendente da oficina** (em `oficinas.whatsapp_atendente`, nova conversa ou conversa existente do bot com o atendente):
+
+Template fixo:
+
+```text
+{nome_cliente} ({veiculo}) quer agendar {servico}. Chame agora:
+https://wa.me/{whatsapp_cliente}?text={mensagem_pre_preenchida_atendente}
+```
+
+Exemplo de `mensagem_pre_preenchida_atendente`:
+
+```text
+Oi {nome_cliente}, da {nome_oficina}, vamos agendar a troca do seu {veiculo}?
+```
+
+### Campos necessarios
+
+- `oficinas.whatsapp_atendente` (text, E.164, nullable; default = `whatsapp_principal`) — numero que recebe a mensagem com o link clicavel para o cliente.
+- `conversas.handoff_required` ja existe — pode continuar sinalizando que houve handoff.
+- `conversas.handoff_reason` ja existe — usar para registrar a intencao detectada (`quer_agendar`, `pergunta_preco`, etc.).
+
+### Registro
+
+- `agent_tool_calls`: registrar `tool = handoff_wame` com input (`lembrete_id`, `cliente_id`, `intencao`, `whatsapp_cliente`, `whatsapp_atendente`) e output (texto das duas mensagens enviadas).
+- `mensagens`: persistir as duas mensagens outbound normalmente.
+- `lembretes.status`: `handoff_iniciado` (ou `respondido` se simplificar).
 
 ## Criterios de aceite
 
@@ -463,7 +499,8 @@ Quando houver handoff, o sistema deve:
 - Dado um cliente respondendo "parar", o sistema marca `opt_out`, cancela lembretes futuros e responde confirmando remocao.
 - Dado uma oficina cadastrando novo servico para cliente em `opt_out`, o cliente nao volta automaticamente para `ativo`.
 - Dado um cliente final respondendo ao lembrete, o sistema nao cria lead comercial.
-- Dado um cliente perguntando preco, o sistema registra handoff e notifica a oficina.
+- Dado um cliente respondendo "pode ser quinta 14h?" (intencao `quer_agendar`), o sistema **nao confirma agenda** e dispara handoff via `wa.me`: envia um link clicavel ao cliente apontando para `oficinas.whatsapp_atendente`, e simultaneamente envia um link clicavel ao atendente apontando para o cliente. Lembrete vira `handoff_iniciado`.
+- Dado um cliente perguntando preco, o sistema dispara handoff via `wa.me` (mesmo padrao) sem citar valor.
 - Dado um status `delivered` da Meta depois de `sent`, o sistema atualiza status sem considerar duplicado indevido.
 - Dado um erro temporario de provedor, o sistema agenda retry ate o limite configurado.
 
@@ -485,7 +522,8 @@ Quando houver handoff, o sistema deve:
 - Teste de opt-out.
 - Teste para garantir que opt-out nao e revertido por novo cadastro operacional.
 - Teste de classificacao de resposta do cliente final.
-- Teste de handoff para preco e horario.
+- Teste de handoff via `wa.me` para `quer_agendar`, `quer_reagendar`, `pergunta_preco`, `pergunta_horario` e `pergunta_disponibilidade` — confirmar que duas mensagens sao enviadas (uma ao cliente, outra ao atendente) com `wa.me` URL-encoded corretamente e que o lembrete vira `handoff_iniciado`.
+- Teste de fallback: se `oficinas.whatsapp_atendente` for nulo, usar `whatsapp_principal`.
 - Teste de retry em erro temporario.
 
 ## Riscos
@@ -500,7 +538,8 @@ Quando houver handoff, o sistema deve:
 - Mesmo WhatsApp de cliente final existir em mais de uma oficina.
 - Status da Meta ser deduplicado de forma incorreta.
 - Variavel invalida no template causar falha de envio.
-- Resposta ambigua ser marcada como agendamento real.
+- Resposta ambigua ser marcada como agendamento real. **Mitigacao 2026-05-17 (ADR-0009)**: bot nao agenda mais, ambiguidade vira handoff via `wa.me`.
+- `oficinas.whatsapp_atendente` ausente, mal normalizado ou apontando para numero errado fazendo handoff ir para o lugar errado. **Mitigacao**: validar E.164 no cadastro, defaultar para `whatsapp_principal`, registrar tool call para auditoria.
 
 ## Estado esperado para iniciar implementacao
 
@@ -513,7 +552,8 @@ Antes de implementar, a Fase 3 deve estar fechada nestas decisoes:
 - regra de idempotencia para status da Meta;
 - regra de roteamento para `cliente_final_lembrete`;
 - regra para preservar opt-out existente;
-- comportamento de handoff para perguntas de preco, horario e agenda.
+- **textos exatos das mensagens de handoff via `wa.me`** (uma ao cliente, outra ao atendente) — fixos ou parametrizaveis por oficina;
+- adicao de `oficinas.whatsapp_atendente`.
 
 ## Saida esperada
 

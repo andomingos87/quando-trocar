@@ -19,6 +19,28 @@ Não registrar:
 
 ---
 
+## 2026-05-17 — Docs alinhados com as ADRs 0008, 0009, 0010, 0012
+
+### Mudou
+
+- **`docs/product/PRD-whatsapp-bot.md §12` (Fluxo 6 — Cliente Final Responde)** — reescrito para refletir o handoff via `wa.me` da [ADR-0009](./adr/0009-confirmacao-vs-pre-agendamento.md). Removido o exemplo de `status_conversa = agendado` e `data_agendada`. Adicionado padrão das duas mensagens (cliente → atendente, atendente → cliente).
+- **`docs/backlog-whatsapp-bot/fase-3-lembretes-reais.md`** — `lembretes.status` perdeu `agendado` e ganhou `handoff_iniciado`. Regras de resposta do cliente reescritas: toda intenção de agendar/perguntar preço/disponibilidade vira handoff `wa.me`. Adicionada tarefa de criar `oficinas.whatsapp_atendente`. Seção de handoff documenta os templates das duas mensagens.
+- **`docs/backlog-whatsapp-bot/fase-4-retorno-dashboard.md`** — login do painel mudou de Supabase Auth Phone OTP por SMS para **OTP via WhatsApp** (template Meta Authentication) — ADR-0010. Adicionadas sub-fases **4F (painel admin + planos)** e **4G (Mercado Pago)**. `create_retorno` não escreve mais `lembretes.status = agendado`. Riscos e testes atualizados.
+- **`.codex/prompts/whatsapp-reminder-agent.md`** — reescrito. Classificador inclui `pergunta_disponibilidade`. Comportamento de handoff `wa.me` documentado com templates de mensagens pré-preenchidas. Bot nunca confirma agenda nem cita preço.
+- **`.codex/prompts/whatsapp-sales-agent.md`** — adicionada regra de preço (ADR-0012): bot não cita valor; primeira menção vira redirect para teste grátis; insistência vira handoff `wa.me` para WhatsApp comercial.
+
+### Pendências de implementação que estes docs deixam claras
+
+- `oficinas.whatsapp_atendente` (Fase 3) — schema + UI nas configurações.
+- Tabela `auth_otps` + template Meta Authentication aprovado (Fase 4A).
+- Tabela `planos` + `oficinas.plano_id` + `oficinas.preco_negociado` (Fase 4F).
+- Tabelas `admin_users` + `admin_audit_log` + painel `/admin` (Fase 4F).
+- Tabela `pagamentos` + webhook Mercado Pago + integração no fluxo de conversão (Fase 4G).
+
+Nenhum código foi alterado — só documentação. Implementação real entra nas respectivas fases.
+
+---
+
 ## 2026-05-17 — Todas as ADRs em aberto decididas
 
 ### Decidido

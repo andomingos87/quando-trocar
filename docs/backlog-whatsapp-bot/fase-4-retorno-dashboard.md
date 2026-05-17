@@ -1,8 +1,15 @@
 # Fase 4 - Retorno e dashboard
 
+> **Atualizada em 2026-05-17.** Mudancas decorrentes das ADRs 0008, 0010, 0012:
+>
+> - **Login do painel da oficina**: passou de Supabase Auth Phone OTP por SMS para **OTP enviado via WhatsApp** usando template Meta categoria "Authentication" (ADR-0010). Sem Twilio, sem SMS.
+> - **Painel admin separado** para devs/fundadores/donos gerenciarem planos, precos e oficinas (ADR-0012). Mesmo fluxo OTP via WhatsApp, mas resolvido contra `admin_users`.
+> - **Modelagem de planos**: tabela `planos` + `oficinas.plano_id` + `oficinas.preco_negociado` para suportar preco variavel por oficina (ADR-0012).
+> - **Pagamento via Mercado Pago** (ADR-0008) entra como sub-fase desta Fase 4 (Fase 4F).
+
 ## Objetivo
 
-Fechar o ciclo de valor do produto registrando retornos, receita gerada e exibindo as metricas principais em um dashboard operacional simples para a oficina.
+Fechar o ciclo de valor do produto registrando retornos, receita gerada e exibindo as metricas principais em um dashboard operacional simples para a oficina. Adicionalmente, entregar painel admin minimo para gerencia de planos/precos e iniciar billing via Mercado Pago.
 
 A Fase 4 parte do estado consolidado das Fases 1, 2 e 3:
 
@@ -20,7 +27,7 @@ O objetivo agora nao e criar um CRM completo. O objetivo e mostrar valor finance
 Inclui:
 
 - Area logada basica da oficina.
-- Login simplificado por telefone da oficina com codigo temporario, sem senha.
+- **Login passwordless via OTP enviado por WhatsApp** (template Meta categoria Authentication) — ADR-0010.
 - Primeiro acesso criando ou confirmando o vinculo entre usuario autenticado e oficina.
 - Vinculo de usuario autenticado com oficina via `oficina_members`.
 - RLS real por `oficina_id` nas tabelas exibidas no painel.
@@ -32,7 +39,10 @@ Inclui:
 - Calculo de receita gerada.
 - Dashboard com metricas principais.
 - Telas basicas de inicio, registrar troca, clientes, lembretes, conversas e retornos.
-- Configuracoes essenciais da oficina.
+- Configuracoes essenciais da oficina (incluindo `whatsapp_atendente` para handoff da Fase 3).
+- **Painel admin separado** (URL distinta, ex.: `/admin`) para devs/fundadores/donos — gerencia de planos, precos e oficinas (ADR-0012).
+- **Modelo de planos** com tabela `planos` e preco negociado por oficina (ADR-0012).
+- **Cobranca via Mercado Pago** (ADR-0008): geracao de link de pagamento, webhook de confirmacao, atualizacao de status da oficina.
 
 Nao inclui:
 
@@ -45,23 +55,26 @@ Nao inclui:
 - Relatorios complexos.
 - Agenda com calendario externo.
 - Confirmacao automatica de agenda real sem validacao da oficina.
+- Multiplos tiers de plano (Starter/Pro/Business). MVP usa plano unico com preco variavel (ADR-0012).
 
 ## Dependencias
 
-- Fase 3 concluida.
+- Fase 3 concluida (incluindo handoff via `wa.me` e `oficinas.whatsapp_atendente`).
 - Template `lembrete_troca_oleo` aprovado e envio real validado.
 - Rota interna do consumer deployada.
 - `INTERNAL_JOB_SECRET` consistente entre app e Vault do Supabase.
 - Lembretes enviados e respostas registradas.
-- Supabase Auth definido para area logada.
-- Provedor de Phone OTP configurado no Supabase para envio de codigo temporario.
+- Supabase Auth definido para area logada (modo: anonymous sign-in ou custom JWT, ja que o OTP eh proprio via WhatsApp).
+- **Template Meta categoria "Authentication" aprovado** para envio de OTP de login (ADR-0010). Ciclo de aprovacao Meta leva horas a dias — solicitar com antecedencia.
 - `oficina_members` associando usuarios autenticados a oficinas.
 - RLS funcionando por `oficina_id`.
+- **Conta Mercado Pago configurada** com `MERCADO_PAGO_ACCESS_TOKEN` (ADR-0008).
 
 Observacao importante:
 
 - `oficina_members` ja existe na modelagem da Fase 2, mas a area logada e as policies RLS para uso pelo painel ainda precisam ser tratadas como parte explicita desta fase.
 - Como tabelas `public` ficam expostas pela Data API do Supabase, toda tabela exibida no painel deve ter RLS e policies de membership antes de ser usada por cliente autenticado.
+- O OTP via WhatsApp **substitui** Supabase Auth Phone OTP por SMS. Nada de Twilio.
 
 ## Dados
 
@@ -177,65 +190,76 @@ Regras de membership:
 - Criar indice unico por `(oficina_id, user_id)`.
 - Policies do painel devem considerar apenas memberships com `status = active`.
 
-## Auth, RLS e acesso ao painel
+## Auth, RLS e acesso ao painel (ADR-0010 — OTP via WhatsApp)
 
-A Fase 4 deve incluir uma entrega propria de seguranca antes das telas:
+A Fase 4 deve incluir uma entrega propria de seguranca antes das telas. O login eh **passwordless via OTP enviado por WhatsApp** — sem senha, sem email, sem SMS.
 
-- Criar clientes Supabase para server e browser conforme padrao do projeto.
-- Criar rota publica `/entrar` para login por telefone e codigo temporario.
-- Criar layout/rotas protegidas para o dashboard.
-- Resolver oficina atual por `auth.uid()` + `oficina_members`.
-- Bloquear acesso quando o usuario nao tiver oficina associada.
-- Criar policies RLS por membership em:
-  - `oficinas`
-  - `oficina_members`
-  - `clientes_finais`
-  - `veiculos`
-  - `servicos`
-  - `lembretes`
-  - `retornos`
-  - `conversas`
-  - `mensagens`
-  - `outbound_messages`
+### Componentes
 
-Regras:
+- Tabela `auth_otps`: `id`, `target` (`oficina` ou `admin`), `target_id`, `whatsapp`, `code_hash`, `attempts`, `expires_at`, `used_at`, `created_at`, `ip`.
+- Sessao: cookie HTTP-only assinado (JWT proprio ou Supabase Auth com custom claims). TTL recomendado: 30 dias com refresh.
+- Cliente WhatsApp para envio do template de OTP (reusar `lib/whatsapp/whatsapp-client.ts`).
+- Rate limiting: maximo de 3 envios de OTP por numero por 15 min, e 1 por IP por 60s.
+- Validacao: codigo expira em 5 min, maximo de 5 tentativas por OTP.
 
-- A oficina vira cliente pelo WhatsApp e deve ter `oficinas.whatsapp_principal` normalizado antes do primeiro acesso ao painel.
-- O primeiro acesso deve acontecer sem senha: telefone da oficina, codigo temporario e entrada direta no dashboard.
-- O codigo temporario da V1 deve usar Supabase Auth Phone OTP por SMS.
-- Codigo por WhatsApp pode ser adotado depois via provedor compativel, como Twilio/Twilio Verify, sem alterar o modelo de autorizacao.
-- Nao implementar OTP proprio com Meta WhatsApp Cloud API na V1.
-- Nao permitir cadastro livre pelo painel: telefone desconhecido nao cria oficina nem acesso automaticamente.
-- O envio do codigo deve ser permitido apenas para telefone vinculado a oficina ativa ou convite valido.
-- Apos login bem-sucedido, criar ou confirmar `oficina_members` para o `auth.uid()` autenticado.
-- Se o usuario tiver uma unica oficina ativa, entrar direto no dashboard.
-- Se no futuro o usuario tiver mais de uma oficina ativa, exibir seletor simples de oficina.
-- Sessao deve ser persistida no navegador para evitar codigo a cada acesso comum.
-- Nunca usar `user_metadata` para autorizacao.
-- Nunca usar telefone digitado, parametro de URL ou nome da oficina como autorizacao final.
-- Nunca expor `SUPABASE_SERVICE_ROLE_KEY` em cliente React.
-- `UPDATE` precisa de policy de `SELECT` correspondente, senao pode retornar zero linhas sem erro.
-- Views de dashboard, se forem usadas, devem ser `security_invoker = true` no Postgres 15+ ou ficar fora do schema exposto.
-- RPCs privilegiadas devem validar membership explicitamente ou ficar restritas ao backend com service role.
+### Tabelas com policies RLS por membership
 
-Fluxo recomendado de login:
+- `oficinas`
+- `oficina_members`
+- `clientes_finais`
+- `veiculos`
+- `servicos`
+- `lembretes`
+- `retornos`
+- `conversas`
+- `mensagens`
+- `outbound_messages`
+
+`auth_otps`, `admin_users` e `admin_audit_log` (introduzidos na Fase 4F) ficam **sem RLS** e acessadas apenas via service role no backend.
+
+### Fluxo de login do painel da oficina
 
 1. Usuario acessa `/entrar`.
 2. Informa o WhatsApp principal da oficina.
 3. Aplicacao normaliza o telefone para E.164.
 4. Backend verifica se existe `oficinas.status = ativa` com esse `whatsapp_principal`.
-5. Se nao existir, mostrar uma mensagem orientando contato pelo WhatsApp comercial.
-6. Se existir, acionar Phone OTP do Supabase.
-7. Usuario informa o codigo.
-8. Supabase cria a sessao autenticada.
-9. Backend cria ou confirma `oficina_members` como `owner`.
-10. Dashboard resolve a oficina atual por `auth.uid()` + `oficina_members`.
+5. Se nao existir, mostrar mensagem orientando contato pelo WhatsApp comercial. Nao envia codigo.
+6. Se existir, gerar codigo de 6 digitos, persistir hash em `auth_otps` com `expires_at = now() + 5 min`, e enviar via template Meta "Authentication" para o numero. Se a conversa estiver dentro da janela de 24h, envio livre eh aceitavel; fora dela, **obrigatorio template approved**.
+7. Usuario informa o codigo no painel.
+8. Backend valida (hash bate, nao expirou, nao usado, attempts < 5) → cria sessao.
+9. Backend cria ou confirma `oficina_members` como `owner` para o usuario autenticado.
+10. Dashboard resolve a oficina atual pela sessao + `oficina_members`.
 
 Mensagem para telefone sem acesso:
 
 ```text
 Nao encontramos uma oficina ativa com esse numero. Fale conosco pelo WhatsApp para ativar seu acesso.
 ```
+
+### Regras gerais
+
+- A oficina vira cliente pelo WhatsApp e deve ter `oficinas.whatsapp_principal` normalizado antes do primeiro acesso ao painel.
+- Nao permitir cadastro livre pelo painel: telefone desconhecido nao cria oficina nem acesso automaticamente.
+- Envio de codigo apenas para telefone vinculado a oficina ativa.
+- Se o usuario tiver uma unica oficina ativa, entrar direto no dashboard.
+- Se no futuro o usuario tiver mais de uma oficina ativa, exibir seletor simples de oficina.
+- Sessao persistida no navegador para evitar codigo a cada acesso comum.
+- Nunca usar `user_metadata` para autorizacao.
+- Nunca usar telefone digitado, parametro de URL ou nome da oficina como autorizacao final.
+- Nunca expor `SUPABASE_SERVICE_ROLE_KEY` ou `MERCADO_PAGO_ACCESS_TOKEN` em cliente React.
+- `UPDATE` precisa de policy de `SELECT` correspondente, senao pode retornar zero linhas sem erro.
+- Views de dashboard, se forem usadas, devem ser `security_invoker = true` no Postgres 15+ ou ficar fora do schema exposto.
+- RPCs privilegiadas devem validar membership explicitamente ou ficar restritas ao backend com service role.
+
+### Template Meta "Authentication" para OTP
+
+Variavel unica: o codigo de 6 digitos. Exemplo de copy (Meta tem regras estritas de copy para Authentication):
+
+```text
+{{1}} eh seu codigo de acesso ao Quando Trocar. Valido por 5 minutos. Nao compartilhe.
+```
+
+Cadastrar em `WHATSAPP_TEMPLATE_OTP_NAME` (env var) com categoria "Authentication".
 
 ## Metricas principais
 
@@ -291,7 +315,7 @@ Comportamento:
 
 - Validar que a oficina esta ativa.
 - Validar que cliente, veiculo, servico e lembrete pertencem a mesma `oficina_id`.
-- Se `status = agendado`, criar retorno agendado e marcar `lembretes.status = agendado` quando houver `lembrete_id`.
+- Se `status = agendado`, criar retorno agendado. **Nao escrever `lembretes.status = agendado`** — ADR-0009 removeu esse status. Lembrete relacionado, se existir, deve estar em `respondido` ou `handoff_iniciado` (decisao da Fase 3).
 - Se `status = concluido`, criar retorno concluido.
 - Se `status = concluido`, criar um novo registro em `servicos` para o servico de retorno.
 - Se `status = concluido` e o cliente ainda tiver consentimento valido, criar o proximo `lembretes` com base em `oficinas.dias_lembrete_padrao`.
@@ -396,10 +420,13 @@ Tela `Configuracoes`:
 
 ### Fase 4A - Area logada, oficina atual e RLS
 
-- [ ] Implementar rota `/entrar` com telefone da oficina e codigo temporario.
-- [ ] Implementar Supabase Auth Phone OTP para o painel.
+- [ ] Solicitar aprovacao Meta de template categoria "Authentication" para OTP (com antecedencia).
+- [ ] Criar tabela `auth_otps` (com hash do codigo, expires_at, attempts, used_at).
+- [ ] Implementar emissao de codigo, persistencia, envio via template Meta, rate limiting (3/15min por numero, 1/60s por IP).
+- [ ] Implementar rota `/entrar` (input do WhatsApp + tela de codigo).
 - [ ] Normalizar telefone informado para E.164 antes de buscar oficina.
-- [ ] Bloquear envio de codigo para telefone sem oficina ativa ou convite valido.
+- [ ] Bloquear envio de codigo para telefone sem oficina ativa.
+- [ ] Implementar validacao do codigo, criacao de sessao (JWT proprio ou Supabase Auth com claims).
 - [ ] Implementar primeiro acesso criando ou confirmando `oficina_members` como `owner`.
 - [ ] Implementar resolucao de oficina atual via `oficina_members`.
 - [ ] Criar layout protegido do dashboard.
@@ -440,8 +467,33 @@ Tela `Configuracoes`:
 - [ ] Implementar tela `Lembretes`.
 - [ ] Implementar tela `Conversas`.
 - [ ] Implementar tela `Retornos`.
-- [ ] Implementar tela `Configuracoes`.
+- [ ] Implementar tela `Configuracoes` — incluir campo `whatsapp_atendente` (handoff da Fase 3).
 - [ ] Garantir que todas as telas respeitam RLS e oficina atual.
+
+### Fase 4F - Painel admin + modelo de planos (ADR-0012)
+
+Painel separado em `/admin` para devs/fundadores/donos gerenciarem planos, precos e oficinas.
+
+- [ ] Criar tabela `planos`: `id, nome, preco_base, descricao, ativo, created_at, updated_at`. Seed inicial: 1 plano ativo (nome a definir, preco_base inicial pode ser zero ou valor placeholder).
+- [ ] Adicionar `oficinas.plano_id` (FK para `planos`) e `oficinas.preco_negociado` (numeric, nullable).
+- [ ] Criar tabela `admin_users`: `id, whatsapp, nome, ativo, created_at`. Seed: WhatsApps de Anderson e demais admins iniciais.
+- [ ] Criar tabela `admin_audit_log`: `id, admin_id, acao, entidade, entidade_id, payload, ip, created_at`.
+- [ ] Implementar fluxo de login admin: mesmo OTP via WhatsApp da Fase 4A, mas resolvendo contra `admin_users` (com `ativo = true`).
+- [ ] Tela admin `Planos`: listar, criar, editar `preco_base` e `descricao`, marcar `ativo`.
+- [ ] Tela admin `Oficinas`: listar, filtrar por status/plano, editar `plano_id`, editar `preco_negociado`.
+- [ ] Toda acao admin que muta estado deve registrar em `admin_audit_log`.
+- [ ] Testar isolamento: oficina nao acessa `/admin`; admin nao precisa de `oficina_members`.
+
+### Fase 4G - Cobranca via Mercado Pago (ADR-0008)
+
+- [ ] Configurar `MERCADO_PAGO_ACCESS_TOKEN` em env vars.
+- [ ] Criar tabela `pagamentos`: `id, oficina_id, valor, status, mp_preference_id, mp_payment_id, descricao, created_at, updated_at, paid_at`.
+- [ ] Implementar geracao de preferencia de pagamento Mercado Pago com valor = `oficinas.preco_negociado` ou `planos.preco_base` (fallback).
+- [ ] Implementar fluxo de cobranca disparado pelo painel admin ou ao final do periodo de teste.
+- [ ] Implementar endpoint `/api/webhooks/mercado-pago` com validacao de assinatura.
+- [ ] Atualizar `oficinas.status` e `pagamentos.status` no recebimento de notificacao.
+- [ ] Garantir idempotencia via `mp_payment_id` unique (ADR-0006).
+- [ ] Tela admin: listar pagamentos, status, link para detalhes Mercado Pago.
 
 ## Criterios de aceite
 
@@ -462,12 +514,20 @@ Tela `Configuracoes`:
 
 ## Testes recomendados
 
-- Teste de login por telefone e codigo temporario para oficina ativa.
-- Teste de telefone desconhecido sem criacao automatica de acesso.
+- Teste de login por telefone e OTP via WhatsApp para oficina ativa.
+- Teste de telefone desconhecido sem criacao automatica de acesso (e sem envio de OTP).
+- Teste de OTP expirado (apos 5 min).
+- Teste de OTP com codigo errado ate o limite de tentativas (5).
+- Teste de rate limit (3 envios/15min por numero).
 - Teste de primeiro acesso criando ou confirmando `oficina_members`.
 - Teste de Auth/membership resolvendo a oficina atual.
 - Teste de RLS por oficina para leitura e escrita.
 - Teste de membership `revoked` sem acesso ao painel.
+- Teste de login admin (mesmo fluxo OTP, resolvido contra `admin_users`).
+- Teste de oficina tentando acessar `/admin` (deve bloquear).
+- Teste de mutacao admin gerando entrada em `admin_audit_log`.
+- Teste de webhook Mercado Pago: payment confirmed marca `pagamentos.status = pago` e atualiza `oficinas.status`.
+- Teste de idempotencia: webhook Mercado Pago duplicado nao duplica pagamento.
 - Teste de extracao de retorno por WhatsApp da oficina.
 - Teste de vinculacao segura ao cliente.
 - Teste de comportamento com cliente ambiguo.
@@ -483,16 +543,20 @@ Tela `Configuracoes`:
 
 ## Riscos
 
-- Envio de codigo para telefone sem oficina ativa gerar acesso indevido ou custo desnecessario.
-- Telefone mal normalizado impedir acesso legitimo ou vincular a oficina errada.
-- Receita ser inflada por retorno duplicado.
+- Envio de codigo OTP para telefone sem oficina ativa gerar acesso indevido ou custo desnecessario. **Mitigacao**: bloquear antes do envio.
+- Telefone mal normalizado impedir acesso legitimo ou vincular a oficina errada. **Mitigacao**: normalizar E.164 e testar variacoes.
+- Template OTP da Meta ser recusado ou demorar para aprovar. **Mitigacao**: solicitar com antecedencia; usar copy padrao Meta para Authentication.
+- OTP enviado fora da janela 24h sem template aprovado falha silenciosamente. **Mitigacao**: sempre usar o template Authentication, mesmo dentro da janela, para consistencia.
+- Forca bruta no OTP. **Mitigacao**: limite de 5 tentativas por codigo, rate limit 3/15min por numero.
+- Receita ser inflada por retorno duplicado. **Mitigacao**: `idempotency_key` em `retornos`.
 - Vinculo errado entre retorno e cliente.
 - Resposta de cliente final virar receita sem confirmacao da oficina.
 - Confirmar retorno sem criar o proximo ciclo de servico/lembrete.
 - Dashboard virar CRM complexo cedo demais.
 - RLS mal configurado expor dados entre oficinas.
 - View ou RPC privilegiada bypassar RLS.
-- Oficina interpretar pre-agendamento como agenda confirmada.
+- **Admin com poder destrutivo sem rastro**. Mitigacao: `admin_audit_log` obrigatorio em toda mutacao admin.
+- **Webhook Mercado Pago duplicado** marcando pagamento duas vezes. Mitigacao: `mp_payment_id` unique.
 
 ## Saida esperada
 
