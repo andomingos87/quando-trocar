@@ -19,6 +19,40 @@ Não registrar:
 
 ---
 
+## 2026-05-17 — Todas as ADRs em aberto decididas
+
+### Decidido
+
+- **[ADR-0007](./adr/0007-provedor-whatsapp-business-cloud.md)** — Provedor WhatsApp: Meta Business Cloud API direta (sem BSP intermediário). Implementação já está nessa base desde a Fase 1; decisão formaliza o caminho.
+- **[ADR-0008](./adr/0008-pagamento-no-mvp.md)** — Pagamento integrado via Mercado Pago. Implementação pendente.
+- **[ADR-0009](./adr/0009-confirmacao-vs-pre-agendamento.md)** — Bot não se envolve em agendamento. Detecta intenção de agendar e gera duas mensagens com link `wa.me` clicável: uma para o cliente (chamar o atendente), outra para o atendente (chamar o cliente). Substitui o fluxo de `status = agendado` previsto no PRD §12.
+- **[ADR-0010](./adr/0010-painel-web-no-mvp.md)** — Painel web mínimo (4 telas) na Fase 4. Login passwordless via OTP enviado por WhatsApp. Exige template de Authentication aprovado pela Meta.
+- **[ADR-0011](./adr/0011-visibilidade-de-representante.md)** — Não rastrear representante no MVP. Todo lead com `origem = landing_page`.
+- **[ADR-0012](./adr/0012-politica-de-preco.md)** — Plano único, preço variável por oficina, armazenado no banco e editável via painel admin separado (para devs/fundadores/donos). Bot vendedor não cita preço — conduz para teste grátis ou handoff humano.
+
+### Implicações para implementação
+
+Mudanças no modelo de dados decorrentes (a implementar em fase específica, não agora):
+
+- `oficinas.whatsapp_atendente` para o ping de handoff (ADR-0009).
+- `lembretes.status` enum simplificado (remover `agendado`, ADR-0009).
+- Tabela `auth_otps` + sessão para login do painel (ADR-0010).
+- Tabela `planos` + `oficinas.plano_id` + `oficinas.preco_negociado` (ADR-0012).
+- Tabela `admin_users` + `admin_audit_log` para painel admin (ADR-0012).
+- Template Meta categoria "Authentication" para OTP (ADR-0010).
+
+### Pendente de reflexão nos docs
+
+Estes docs ainda descrevem o fluxo antigo e precisam de revisão no momento da implementação:
+
+- `docs/product/PRD-whatsapp-bot.md §12` (Fluxo 6 — substituído por ADR-0009).
+- `docs/backlog-whatsapp-bot/fase-3-lembretes-reais.md` (ajustar para handoff em vez de `agendado`).
+- `docs/backlog-whatsapp-bot/fase-4-retorno-dashboard.md` (ajustar para painel mínimo + OTP + admin panel).
+- `.codex/prompts/whatsapp-reminder-agent.md` (novo comportamento de handoff).
+- `.codex/prompts/whatsapp-sales-agent.md` (não cita preço).
+
+---
+
 ## 2026-05-17 — Estrutura de context engineering instalada
 
 ### Adicionado

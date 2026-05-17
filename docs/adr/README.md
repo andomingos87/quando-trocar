@@ -4,7 +4,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 
 ## Índice
 
-### Aceitas (retroativas)
+### Aceitas
 
 | # | Título | Status | Data |
 |---|--------|--------|------|
@@ -14,19 +14,16 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0004](./0004-padrao-webhook-persist-fila-worker.md) | Webhook valida → persiste → enfileira → worker processa | accepted | 2026-04-25 |
 | [0005](./0005-templates-meta-vs-mensagem-livre.md) | Templates Meta fora da janela 24h, livre dentro | accepted | 2026-04-25 |
 | [0006](./0006-idempotencia-via-provider-ids.md) | Idempotência via unique index em provider IDs e business keys | accepted | 2026-04-25 |
+| [0007](./0007-provedor-whatsapp-business-cloud.md) | Provedor WhatsApp — Meta Business Cloud API direta | accepted | 2026-05-17 |
+| [0008](./0008-pagamento-no-mvp.md) | Pagamento via Mercado Pago | accepted | 2026-05-17 |
+| [0009](./0009-confirmacao-vs-pre-agendamento.md) | Bot não agenda — apenas faz a ponte entre cliente e oficina | accepted | 2026-05-17 |
+| [0010](./0010-painel-web-no-mvp.md) | Painel web mínimo na Fase 4, com login OTP WhatsApp | accepted | 2026-05-17 |
+| [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | accepted | 2026-05-17 |
+| [0012](./0012-politica-de-preco.md) | Plano único com preço configurável por oficina via painel admin | accepted | 2026-05-17 |
 
 ### Em aberto (drafts)
 
-Decisões pendentes registradas em `PRD-whatsapp-bot.md §24`. Cada ADR draft lista trade-offs e referências — a decisão fica para o time tomar.
-
-| # | Título | Status |
-|---|--------|--------|
-| [0007](./0007-provedor-whatsapp-business-cloud.md) | Provedor WhatsApp para a primeira versão | proposed |
-| [0008](./0008-pagamento-no-mvp.md) | Pagamento dentro do fluxo ou manual no MVP | proposed |
-| [0009](./0009-confirmacao-vs-pre-agendamento.md) | Agente confirma agenda ou apenas pré-agenda | proposed |
-| [0010](./0010-painel-web-no-mvp.md) | Painel web no MVP ou só WhatsApp | proposed |
-| [0011](./0011-visibilidade-de-representante.md) | Representante comercial terá visão própria dos leads | proposed |
-| [0012](./0012-politica-de-preco.md) | Política de preço/plano usada pelo agente vendedor | proposed |
+_Sem ADRs em aberto no momento._
 
 ## Status possíveis
 

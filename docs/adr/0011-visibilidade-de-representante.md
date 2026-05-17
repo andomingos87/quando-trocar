@@ -1,33 +1,41 @@
-# ADR 0011: Representante comercial terá visão própria dos leads
+# ADR 0011: Não rastrear representante no MVP
 
-- **Status**: proposed
-- **Data**: pendente
-- **Decisores**: pendente
+- **Status**: accepted
+- **Data**: 2026-05-17
+- **Decisores**: Anderson Domingos
 - **Fonte**: `docs/product/PRD-whatsapp-bot.md §3.3, §24`
 
 ## Contexto
 
-Persona 3.3 do PRD é o "Representante Comercial" — pessoa que vende para oficinas e quer mostrar valor rápido. Pode enviar a landing ou o link do WhatsApp para o dono.
+Persona 3.3 do PRD prevê o "Representante Comercial" — pessoa que vende para oficinas. A questão: o sistema precisa rastrear quais leads vieram via representante? Precisa de painel próprio? Comissão calculada?
 
-Pergunta: o representante tem visão dos leads que ele indicou? Painel próprio? Comissionamento rastreável?
-
-Hoje o sistema cria `lead_oficina` com `origem = landing_page`. Não há campo para indicar `representante_id` nem fluxo de visualização de leads por representante.
+Modelo comercial do MVP é venda direta (Anderson para oficina, sem revendedores formais). Não há estrutura de canais nos próximos 6 meses.
 
 ## Decisão
 
-**Pendente — depende do modelo comercial (uso direto pelo dono vs. parceiros revendedores).**
+**Não rastrear representante no MVP.**
 
-Recomendação inicial: deixar fora do MVP. Adicionar `representante_id` e visão de leads se/quando o modelo de canais se concretizar.
+Todo lead entra com `origem = landing_page`. Nenhuma coluna adicional, nenhuma tabela `representantes`, nenhum painel de representante.
+
+Se/quando o modelo de canais virar prioridade, reabrir esta decisão.
 
 ## Alternativas consideradas
 
-- **Sem visão de representante no MVP** — Simplifica. Modelo comercial fica B2C direto. Recomendado para MVP.
-- **Representante com painel próprio + tracking de indicação** — Necessário se o modelo for revenda. Adiciona schema (`representantes`, `lead_oficina.representante_id`), fluxo de cadastro de representante, comissão.
-- **Tracking básico via UTM na landing** — Atalho — guardar `origem_detalhe` na URL do CTA. Permite rastrear sem painel próprio.
+- **Não rastrear** — Escolhido. Coerente com modelo de venda direta.
+- **UTM tracking (link único)** — Descartado para o MVP. Pode ser adicionado depois sem custo alto se o modelo mudar.
+- **Representante com painel próprio** — Descartado. Custo alto para zero retorno atual.
 
 ## Consequências
 
-A decidir após escolha.
+### Positivas
+
+- Zero código, zero schema, zero painel adicional para construir agora.
+- Foco do MVP fica em validar venda direta (B2C oficina).
+
+### Negativas / trade-offs
+
+- Se um representante informal aparecer cedo, comissão precisa ser rastreada fora do sistema (planilha manual).
+- Reabrir essa decisão depois é barato: adicionar `origem_detalhe` em `leads_oficina` e capturar UTM na landing é trabalho de ~1 dia.
 
 ## Referências
 

@@ -1,37 +1,64 @@
-# ADR 0008: Pagamento dentro do fluxo ou manual no MVP
+# ADR 0008: Pagamento via Mercado Pago
 
-- **Status**: proposed
-- **Data**: pendente
-- **Decisores**: pendente
+- **Status**: accepted
+- **Data**: 2026-05-17
+- **Decisores**: Anderson Domingos
 - **Fonte**: `docs/product/PRD-whatsapp-bot.md §24`
 
 ## Contexto
 
-Quando uma oficina decide contratar, há um momento de cobrança. Caminhos possíveis:
+Quando uma oficina decide contratar, há um momento de cobrança. Caminhos possíveis eram:
 
-- **Pagamento manual** — Representante ou o próprio Anderson envia link/PIX/boleto fora do fluxo do bot. Bot só registra a oficina como ativa após confirmação manual.
-- **Pagamento integrado no bot** — Bot gera link de pagamento (Stripe, Iugu, Asaas, Pagar.me) e atualiza status automaticamente via webhook do provedor.
-- **Período de teste sem pagamento** — Oficina entra direto em `plano = teste`, sem cobrança no início. Cobrança depois (manual ou integrada).
+- **Pagamento manual** — Cobrança fora do fluxo (PIX, boleto enviado manualmente).
+- **Pagamento integrado** — Bot gera link de pagamento e o sistema atualiza status via webhook do provedor.
+- **Período de teste sem cobrança inicial** — Oficina entra em `plano = teste`, cobrança vem depois.
 
-O PRD prevê estado `cliente_ativo` e `plano = teste` mas não define a forma de cobrança.
+A pergunta era qual abordagem usar e, se integrada, qual provedor.
 
 ## Decisão
 
-**Pendente — depende de validação comercial. Definir antes de operar com oficinas reais pagantes.**
+**Pagamento integrado via Mercado Pago.**
 
-Recomendação inicial: começar com **período de teste gratuito + cobrança manual** no MVP. Migrar para pagamento integrado quando volume justificar (provavelmente após 10+ oficinas ativas).
+Quando a oficina aceita contratar, o bot gera link de pagamento Mercado Pago (preferência de pagamento ou checkout transparente). Webhook do Mercado Pago atualiza `oficinas.status` para `cliente_ativo` e `oficinas.plano` quando o pagamento é confirmado.
+
+Período de teste grátis ainda é compatível — a oficina entra em `plano = teste` sem cobrança; cobrança só dispara ao final do teste ou quando a oficina pedir explicitamente.
 
 ## Alternativas consideradas
 
-- **Manual no MVP** — Simples, controlado, permite negociar caso a caso. Contra: não escala, atrito comercial.
-- **Stripe / Iugu / Asaas integrado** — Escala, mas adiciona ~1-2 semanas de implementação e mais um provedor. Faz sentido só com volume.
-- **Test grátis + cobrança manual** — Atalho razoável para validação. Recomendado para o MVP.
+- **Mercado Pago** — Escolhido. Penetração alta no Brasil, suporta PIX, cartão, boleto. API documentada e estável. Webhooks confiáveis.
+- **Stripe** — Excelente DX, mas menos popular no Brasil para PMEs. Conversão menor para oficinas em geral.
+- **Iugu / Asaas / Pagar.me** — Alternativas válidas no Brasil, sem motivo forte para escolher sobre Mercado Pago no MVP.
+- **Manual no MVP** — Descartado: gera atrito comercial e não escala além de meia dúzia de oficinas.
 
 ## Consequências
 
-A decidir após escolha.
+### Positivas
+
+- Mercado Pago é familiar para a maioria das oficinas brasileiras (PIX/boleto/cartão num só lugar).
+- Webhook automático elimina trabalho manual de reconciliação.
+- Suporta cobrança recorrente nativamente.
+
+### Negativas / trade-offs
+
+- Taxa do Mercado Pago no fluxo (~4-5% em cartão, menor em PIX). Aceitável.
+- Acoplamento com o provedor — migrar para outro envolve refazer integração e remapear webhooks.
+- Webhook do Mercado Pago precisa de endpoint próprio (`/api/webhooks/mercado-pago` ou similar) com validação de assinatura.
+- Precisa decidir: cobrança recorrente automática (preferência) ou cobrança avulsa renovada? Decidir na implementação.
+
+## Implementação
+
+A implementação do pagamento integrado ainda não foi feita — entra no escopo da Fase 4 ou de uma fase específica de billing.
+
+Tarefas futuras (não fazer agora):
+
+1. Cadastrar app no Mercado Pago, gerar `MERCADO_PAGO_ACCESS_TOKEN`.
+2. Criar endpoint `/api/webhooks/mercado-pago` com validação.
+3. Definir produto/preço no painel ou via API (depende de [ADR-0012](./0012-politica-de-preco.md)).
+4. Adicionar ao fluxo de conversão da oficina: bot envia link de pagamento ao detectar `teste_aceito` ou `cliente_ativo` desejado.
+5. Persistir `pagamentos` (status, valor, data, ID externo, `oficina_id`).
 
 ## Referências
 
-- `docs/product/PRD-whatsapp-bot.md §24` (Decisões em Aberto), §8 (Conversão da Oficina), §22 (Critérios de Aceite — Conversão)
-- Relacionado: [ADR-0012](./0012-politica-de-preco.md)
+- `docs/product/PRD-whatsapp-bot.md §8` (Conversão da Oficina), §24 (Decisões em Aberto)
+- Relacionado: [ADR-0012](./0012-politica-de-preco.md) (preço a definir)
+- [Mercado Pago Developers](https://www.mercadopago.com.br/developers)

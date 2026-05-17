@@ -1,38 +1,50 @@
-# ADR 0007: Provedor WhatsApp para a primeira versão
+# ADR 0007: Provedor WhatsApp — Meta Business Cloud API direta
 
-- **Status**: proposed
-- **Data**: pendente
-- **Decisores**: pendente
+- **Status**: accepted
+- **Data**: 2026-05-17
+- **Decisores**: Anderson Domingos
 - **Fonte**: `docs/product/PRD-whatsapp-bot.md §17, §24`
 
 ## Contexto
 
-O bot precisa enviar e receber mensagens WhatsApp. Existem três caminhos comuns no mercado:
+O bot precisa enviar e receber mensagens WhatsApp. Caminhos comuns no mercado:
 
 - **Meta WhatsApp Business Cloud API (direta)** — Conexão direta com a Meta. Templates aprovados, webhooks oficiais, suporte oficial.
-- **BSP homologado** (ex: Twilio, Gupshup, Infobip, Take Blip) — Camada intermediária com SLA, UI de templates, dashboard próprio.
-- **API não oficial / não homologada** (Z-API, Evolution API) — Mais barato e flexível para protótipo, mas risco de bloqueio do número.
+- **BSP homologado** (Twilio, Gupshup, Infobip, Take Blip) — Camada intermediária com dashboard e UI de templates.
+- **API não oficial** (Z-API, Evolution API) — Mais barato, mas risco de bloqueio.
 
-O `whatsapp-bot-technical-plan.md` recomenda Cloud API direta. O setup atual em `runbooks/meta-whatsapp-setup.md` é baseado nela. Mas a decisão formal não foi fechada — outras opções ainda estão na mesa.
+O `whatsapp-bot-technical-plan.md` recomendou Cloud API direta desde o início, e o setup atual em `runbooks/meta-whatsapp-setup.md` já está montado nessa base.
 
 ## Decisão
 
-**Pendente — discutir e fechar antes do lançamento real.**
+**Meta WhatsApp Business Cloud API direta.**
 
-Recomendação inicial (não vinculante): Meta Cloud API direta para MVP, considerando BSP no momento de escalar para múltiplas oficinas com necessidade de templates aprovados em volume.
+Conexão oficial, sem intermediário BSP. Token, webhook e templates gerenciados via Meta Business Manager. Implementação já está nesse caminho desde a Fase 1.
 
 ## Alternativas consideradas
 
-- **Meta Cloud API direta** — Pros: oficial, sem intermediário, custo previsível (por conversa). Contras: gestão manual de templates, sem dashboard pronto.
-- **BSP (Twilio/Gupshup/Infobip)** — Pros: dashboard, templates mais simples, suporte. Contras: custo extra (markup do BSP), mais um vendor.
-- **Z-API / Evolution API** — Pros: barato, rápido para prototipar. Contras: risco de bloqueio do número WhatsApp, não recomendado para SaaS de produção.
+- **Meta Cloud API direta** — Escolhido. Custo previsível (por conversa, definido pela Meta), zero risco de bloqueio, suporte oficial.
+- **BSP (Twilio/Gupshup/Infobip)** — Descartado para o MVP. Adiciona vendor e markup. Pode ser reavaliado quando a operação justificar (centenas de oficinas, templates em volume, equipe dedicada de atendimento).
+- **Z-API / Evolution API** — Descartado. Risco de bloqueio do número é inaceitável para SaaS de produção.
 
 ## Consequências
 
-A decidir após escolha.
+### Positivas
+
+- Sem vendor intermediário — controle total sobre tokens, templates e webhooks.
+- Custo previsível direto com a Meta.
+- Sem markup de BSP.
+- Implementação já em produção desde Fase 1.
+
+### Negativas / trade-offs
+
+- Gestão manual de templates via painel da Meta (sem UI auxiliar de BSP).
+- Sem suporte humano de BSP — incidentes dependem da documentação Meta.
+- Migrar para BSP no futuro exige adaptação do `whatsapp-client.ts` e remapeamento de templates.
 
 ## Referências
 
 - `docs/product/PRD-whatsapp-bot.md §17` (Integração WhatsApp), §24 (Decisões em Aberto)
 - `docs/architecture/whatsapp-bot-technical-plan.md`
 - `docs/runbooks/meta-whatsapp-setup.md`
+- `lib/whatsapp/whatsapp-client.ts`
