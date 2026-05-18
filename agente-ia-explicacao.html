@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Como funciona o Agente de IA — Quando Trocar</title>
+<style>
+  :root {
+    --ink: #001E62;
+    --ink-soft: #0a2a7a;
+    --ink-deep: #041C2C;
+    --paper: #ffffff;
+    --paper-soft: #f5f7fb;
+    --line: #dde3ee;
+    --line-soft: #eef2f8;
+    --muted: #5b6478;
+    --brand: #E19D4E;
+    --brand-dark: #c87f30;
+    --brand-soft: #fdf0dc;
+    --red: #EE2737;
+    --red-soft: #fde2e4;
+    --cyan: #71C5E8;
+    --cyan-soft: #e0f3fb;
+    --green: #25d366;
+    --wa-me: #d9fdd3;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--paper-soft);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* HERO */
+  .hero {
+    background: linear-gradient(160deg, var(--ink) 0%, var(--ink-soft) 50%, var(--ink-deep) 100%);
+    color: white;
+    padding: 72px 0 96px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: -120px; right: -120px;
+    width: 380px; height: 380px;
+    background: var(--brand);
+    border-radius: 50%;
+    opacity: 0.18;
+    filter: blur(20px);
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    bottom: -100px; left: -80px;
+    width: 280px; height: 280px;
+    background: var(--red);
+    border-radius: 50%;
+    opacity: 0.14;
+    filter: blur(30px);
+  }
+  .hero .wrap { position: relative; z-index: 1; }
+  .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brand);
+    padding: 6px 14px;
+    border: 1px solid rgba(225,157,78,0.35);
+    border-radius: 999px;
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-size: clamp(34px, 5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
+    font-weight: 700;
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--brand);
+  }
+  .lead {
+    font-size: clamp(17px, 1.6vw, 20px);
+    color: rgba(255,255,255,0.78);
+    max-width: 640px;
+    margin: 0;
+  }
+
+  /* SECTIONS */
+  section { padding: 80px 0; }
+  section.alt { background: var(--paper); }
+  section h2 {
+    font-size: clamp(26px, 3vw, 36px);
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin: 0 0 12px;
+    font-weight: 700;
+  }
+  section .sub {
+    color: var(--muted);
+    font-size: 17px;
+    max-width: 680px;
+    margin: 0 0 40px;
+  }
+
+  /* ANALOGIA */
+  .analogy {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 36px 32px;
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 24px;
+    align-items: center;
+  }
+  .analogy .avatar {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green), #128c7e);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 32px; font-weight: 700;
+    box-shadow: 0 8px 20px rgba(37,211,102,0.25);
+  }
+  .analogy h3 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .analogy p { margin: 0; color: var(--muted); font-size: 16px; }
+
+  /* FLUXO */
+  .flow {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .flow-step {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 20px;
+    align-items: start;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .flow-step:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0,30,98,0.08);
+  }
+  .flow-step .num {
+    width: 56px; height: 56px;
+    background: var(--ink);
+    color: white;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .flow-step h4 {
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .flow-step p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+  }
+  .flow-arrow {
+    text-align: center;
+    color: var(--line);
+    font-size: 24px;
+    line-height: 1;
+    padding: 4px 0;
+    user-select: none;
+  }
+
+  /* ATENDENTES */
+  .agents {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .agent-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px 24px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  }
+  .agent-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 36px rgba(0,30,98,0.10);
+    border-color: transparent;
+  }
+  .agent-card .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+  .agent-card h4 {
+    margin: 0 0 8px;
+    font-size: 19px;
+    font-weight: 700;
+  }
+  .agent-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14.5px;
+  }
+  .agent-card.vendas .tag { background: var(--brand-soft); color: var(--brand-dark); }
+  .agent-card.onboarding .tag { background: var(--cyan-soft); color: #1d6f96; }
+  .agent-card.operacao .tag { background: #e8f5e9; color: #1f7a3e; }
+  .agent-card.lembrete .tag { background: var(--red-soft); color: #b21825; }
+  .agent-card.suporte .tag { background: var(--line-soft); color: var(--muted); }
+  .agent-card.suporte { opacity: 0.85; }
+  .agent-card .future {
+    position: absolute;
+    top: 16px; right: 16px;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--line-soft);
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  /* SPLIT IA vs REGRAS */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .split-card {
+    border-radius: 20px;
+    padding: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  .split-card.ai {
+    background: linear-gradient(135deg, #1a2b6b 0%, var(--ink) 100%);
+    color: white;
+  }
+  .split-card.rules {
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .split-card .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 5px 11px;
+    border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  .split-card.ai .badge { background: rgba(225,157,78,0.25); color: var(--brand); }
+  .split-card.rules .badge { background: var(--red-soft); color: var(--red); }
+  .split-card h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .split-card .role {
+    font-size: 14px;
+    margin: 0 0 20px;
+    opacity: 0.8;
+  }
+  .split-card.rules .role { color: var(--muted); }
+  .split-card ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .split-card li {
+    padding: 8px 0 8px 24px;
+    position: relative;
+    font-size: 15px;
+  }
+  .split-card li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 16px;
+    width: 14px; height: 2px;
+    background: currentColor;
+    opacity: 0.4;
+  }
+  .split-card.ai li { color: rgba(255,255,255,0.88); }
+  .split-card.rules li { color: var(--ink); }
+
+  .vs {
+    text-align: center;
+    margin-top: 24px;
+    padding: 20px;
+    background: var(--brand-soft);
+    border-radius: 16px;
+    color: var(--ink);
+  }
+  .vs strong { color: var(--brand-dark); }
+
+  /* EXAMPLE BUBBLE */
+  .example {
+    background: #e5ddd3;
+    border-radius: 20px;
+    padding: 28px;
+    margin-top: 8px;
+  }
+  .bubble {
+    background: var(--paper);
+    padding: 12px 16px;
+    border-radius: 12px;
+    border-top-left-radius: 4px;
+    max-width: 72%;
+    margin-bottom: 10px;
+    font-size: 15px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.06);
+  }
+  .bubble.me {
+    background: var(--wa-me);
+    margin-left: auto;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 4px;
+  }
+  .bubble .from {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .bubble.me .from { color: #5a8a5a; }
+
+  .arrow-down {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    padding: 14px 0;
+  }
+
+  .interpret {
+    background: var(--paper);
+    border: 1px dashed var(--ink);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-top: 4px;
+  }
+  .interpret .label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--brand-dark);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .interpret .fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .interpret .field {
+    background: var(--paper-soft);
+    padding: 10px 14px;
+    border-radius: 8px;
+  }
+  .interpret .field .k {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+    font-weight: 600;
+  }
+  .interpret .field .v {
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* PRINCIPIO */
+  .principle {
+    background: var(--ink);
+    color: white;
+    border-radius: 20px;
+    padding: 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .principle::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 80% 20%, rgba(225,157,78,0.18), transparent 50%);
+    pointer-events: none;
+  }
+  .principle h3 {
+    margin: 0 0 12px;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    position: relative;
+  }
+  .principle p {
+    margin: 0;
+    color: rgba(255,255,255,0.78);
+    font-size: 17px;
+    max-width: 640px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* TAKEAWAYS */
+  .takeaways {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 8px;
+  }
+  .takeaway {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--brand);
+    border-radius: 12px;
+    padding: 20px 22px;
+  }
+  .takeaway:nth-child(2) { border-left-color: var(--cyan); }
+  .takeaway:nth-child(3) { border-left-color: var(--green); }
+  .takeaway:nth-child(4) { border-left-color: var(--red); }
+  .takeaway h4 {
+    margin: 0 0 6px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .takeaway p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  footer {
+    padding: 40px 0 60px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--line);
+    margin-top: 40px;
+  }
+  footer strong { color: var(--ink); }
+
+  @media (max-width: 720px) {
+    .split { grid-template-columns: 1fr; }
+    .principle { padding: 32px 24px; }
+    .flow-step { padding: 18px 20px; gap: 14px; }
+    .flow-step .num { width: 44px; height: 44px; font-size: 18px; }
+    .analogy { grid-template-columns: 1fr; text-align: center; }
+    .analogy .avatar { margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Quando Trocar · Agente de IA</span>
+    <h1>Um <em>atendente</em><br/>que nunca dorme.</h1>
+    <p class="lead">
+      Como o Agente de IA do Quando Trocar conversa com oficinas e motoristas pelo WhatsApp — explicado sem jargão técnico.
+    </p>
+  </div>
+</header>
+
+<!-- A ANALOGIA -->
+<section>
+  <div class="wrap">
+    <h2>A ideia em uma frase</h2>
+    <p class="sub">Imagine uma equipe de atendimento bem treinada no WhatsApp da oficina. Cada pessoa sabe exatamente seu papel. Ninguém aperta botões que não são da sua função.</p>
+
+    <div class="analogy">
+      <div class="avatar">QT</div>
+      <div>
+        <h3>É como um time de atendimento — mas digital</h3>
+        <p>Quem manda mensagem nem percebe que tá falando com um robô. A conversa flui natural, em português, 24 horas por dia.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FLUXO -->
+<section class="alt">
+  <div class="wrap">
+    <h2>O que acontece quando chega uma mensagem</h2>
+    <p class="sub">Toda mensagem passa por um "gerente invisível" antes de ser respondida. Ele faz três perguntas, sempre na mesma ordem.</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="num">1</div>
+        <div>
+          <h4>Quem está falando comigo?</h4>
+          <p>É uma oficina nova querendo conhecer o produto? Uma oficina já cliente registrando um serviço? Um motorista respondendo um lembrete?</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="num">2</div>
+        <div>
+          <h4>Em que momento da conversa essa pessoa está?</h4>
+          <p>Acabou de chegar? Está testando? Já é cliente pagante? O contexto define como responder.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="num">3</div>
+        <div>
+          <h4>Qual atendente deve atender essa pessoa?</h4>
+          <p>O gerente escolhe o especialista certo para o momento — e nunca deixa um atendente entrar no lugar do outro sem motivo.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ATENDENTES ESPECIALIZADOS -->
+<section>
+  <div class="wrap">
+    <h2>Os cinco atendentes especialistas</h2>
+    <p class="sub">Em vez de um robô tentando fazer tudo, são cinco especialistas. Cada um treinado para uma situação específica.</p>
+
+    <div class="agents">
+      <div class="agent-card vendas">
+        <span class="tag">Vendas</span>
+        <h4>Conversa com quem ainda não é cliente</h4>
+        <p>Explica o produto, tira dúvidas, oferece o teste grátis. Trabalha para converter oficinas novas.</p>
+      </div>
+      <div class="agent-card onboarding">
+        <span class="tag">Onboarding</span>
+        <h4>Ajuda a oficina a dar os primeiros passos</h4>
+        <p>Quando a oficina aceita testar, esse atendente ajuda a cadastrar o primeiro serviço.</p>
+      </div>
+      <div class="agent-card operacao">
+        <span class="tag">Operação</span>
+        <h4>O dia a dia da oficina já cliente</h4>
+        <p>A oficina manda "troquei óleo do Gol ABC1234, 50.000 km" e o atendente entende, registra e agenda o lembrete sozinho.</p>
+      </div>
+      <div class="agent-card lembrete">
+        <span class="future">Em breve</span>
+        <span class="tag">Lembrete</span>
+        <h4>Conversa com o motorista final</h4>
+        <p>Responde quando o cliente da oficina reage ao lembrete da próxima troca.</p>
+      </div>
+      <div class="agent-card suporte">
+        <span class="future">Em breve</span>
+        <span class="tag">Suporte</span>
+        <h4>Cuida das dúvidas e passa pra humano</h4>
+        <p>Para casos que fogem do roteiro ou exigem atenção de uma pessoa de verdade.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- IA vs REGRAS -->
+<section class="alt">
+  <div class="wrap">
+    <h2>O segredo: a IA não decide nada importante sozinha</h2>
+    <p class="sub">Essa separação é proposital. A IA é boa em entender texto. As regras fixas garantem que nada importante saia do lugar.</p>
+
+    <div class="split">
+      <div class="split-card ai">
+        <span class="badge">Parte inteligente</span>
+        <h3>A IA</h3>
+        <p class="role">Boa em entender bagunça</p>
+        <ul>
+          <li>Lê texto mal escrito e tira o significado</li>
+          <li>Identifica placa, km, tipo de serviço</li>
+          <li>Percebe se a conversa é vendas ou operação</li>
+          <li>Sugere a próxima ação ao sistema</li>
+        </ul>
+      </div>
+      <div class="split-card rules">
+        <span class="badge">Parte previsível</span>
+        <h3>As regras fixas</h3>
+        <p class="role">Quem realmente executa</p>
+        <ul>
+          <li>Salva (ou não) no banco de dados</li>
+          <li>Agenda o lembrete da próxima troca</li>
+          <li>Muda o status do cliente</li>
+          <li>Confirma o pagamento — nunca a IA</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="vs">
+      <strong>Por quê?</strong> Porque IA às vezes inventa. Se ela pudesse mudar status de pagamento ou cancelar lembrete sozinha, um erro dela viraria prejuízo. Então: a IA <em>sugere</em>, mas o código <em>executa</em>.
+    </div>
+  </div>
+</section>
+
+<!-- EXEMPLO PRÁTICO -->
+<section>
+  <div class="wrap">
+    <h2>Exemplo prático</h2>
+    <p class="sub">Veja como o sistema transforma uma mensagem bagunçada em ação registrada e auditável.</p>
+
+    <div class="example">
+      <div class="bubble">
+        <div class="from">Oficina do Zé</div>
+        trokei oleo gol prata placa abc-1234 cinquenta mil km hj
+      </div>
+    </div>
+
+    <div class="arrow-down">↓ a IA interpreta ↓</div>
+
+    <div class="interpret">
+      <div class="label">Dados extraídos pela IA</div>
+      <div class="fields">
+        <div class="field"><div class="k">Veículo</div><div class="v">Gol prata</div></div>
+        <div class="field"><div class="k">Placa</div><div class="v">ABC-1234</div></div>
+        <div class="field"><div class="k">Serviço</div><div class="v">Troca de óleo</div></div>
+        <div class="field"><div class="k">KM atual</div><div class="v">50.000</div></div>
+        <div class="field"><div class="k">Data</div><div class="v">Hoje</div></div>
+      </div>
+    </div>
+
+    <div class="arrow-down">↓ as regras fixas executam ↓</div>
+
+    <div class="example">
+      <div class="bubble me">
+        <div class="from">Quando Trocar</div>
+        Anotado! Próxima troca agendada para 55.000 km. Vou avisar o cliente quando estiver próximo. ✓
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- E SE A IA FICAR EM DÚVIDA -->
+<section class="alt">
+  <div class="wrap">
+    <div class="principle">
+      <h3>E se a IA ficar em dúvida?</h3>
+      <p>Ela não chuta. Não inventa. Faz uma pergunta direta de volta — "qual a placa do veículo?" — e segue daí. Melhor perguntar duas vezes do que registrar errado uma vez.</p>
+    </div>
+  </div>
+</section>
+
+<!-- RESUMO -->
+<section>
+  <div class="wrap">
+    <h2>Resumindo em quatro ideias</h2>
+    <p class="sub">Se você tirar quatro coisas dessa explicação, sejam estas.</p>
+
+    <div class="takeaways">
+      <div class="takeaway">
+        <h4>Um gerente decide quem atende</h4>
+        <p>Toda mensagem passa por uma triagem antes de chegar num atendente.</p>
+      </div>
+      <div class="takeaway">
+        <h4>Cinco especialistas, não um faz-tudo</h4>
+        <p>Cada atendente tem um papel claro e limitado.</p>
+      </div>
+      <div class="takeaway">
+        <h4>IA entende. Regras executam.</h4>
+        <p>Nada crítico fica nas mãos da IA sozinha.</p>
+      </div>
+      <div class="takeaway">
+        <h4>Em dúvida, ela pergunta</h4>
+        <p>E tudo fica registrado para auditoria depois.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <strong>Quando Trocar</strong> · Agente de IA para oficinas no WhatsApp
+  </div>
+</footer>
+
+</body>
+</html>
