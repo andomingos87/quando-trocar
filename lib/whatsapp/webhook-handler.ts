@@ -1,4 +1,5 @@
 import { resolveWhatsappConversation } from "./conversation-router";
+import { checkOficinaInadimplencia } from "./inadimplencia-guard";
 import { WhatsappOnboardingAgent } from "./onboarding-agent";
 import { WhatsappReminderAgent } from "./reminder-agent";
 import {
@@ -212,6 +213,23 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
 
         if (savedInbound.duplicate) {
           continue;
+        }
+
+        // Admin-6: oficinas pausadas por inadimplencia recebem mensagem
+        // padrao de cobranca e o bot NAO opera normalmente.
+        if (resolved.oficinaId) {
+          const guard = await checkOficinaInadimplencia(resolved.oficinaId);
+          if (guard.suspended) {
+            try {
+              await deps.whatsapp.sendTextMessage({
+                to: inbound.normalizedFrom,
+                body: guard.message,
+              });
+            } catch (err) {
+              console.error("inadimplencia guard send failed", err);
+            }
+            continue;
+          }
         }
 
         try {

@@ -24,6 +24,9 @@ LOGO QUANDO TROCAR.pdf
 .env.local
 .env.*.local
 
+# MCP (contains Supabase access token — never commit)
+.mcp.json
+
 # Vercel
 .vercel
 
