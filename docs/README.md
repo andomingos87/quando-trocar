@@ -51,6 +51,7 @@ Procedimentos passo a passo para tarefas operacionais.
 - [Setup de variáveis de ambiente](./runbooks/env-setup.md) — quais variáveis configurar e onde.
 - [Migrations do Supabase](./runbooks/supabase-migrations.md) — fluxo de criar, revisar e aplicar migrations.
 - [Deploy na Vercel](./runbooks/deploy-vercel.md) — preview vs produção, env vars, smoke tests.
+- [Tunar o agente de IA](./runbooks/tunar-agente.md) — passo a passo para ajustar prompt/resposta do bot sem regressão.
 
 ## Prompts para agentes
 
@@ -62,6 +63,12 @@ Em `.codex/prompts/` (na raiz do projeto):
 - `supabase-rls-review.md` — checklist de revisão de RLS antes de migration.
 - `openai-structured-output-review.md` — checklist de revisão de Structured Outputs.
 - `phase-implementation.md` — template para iniciar implementação de uma nova fase.
+
+## Qualidade do agente de IA
+
+- [Skill `whatsapp-agent`](../.claude/skills/whatsapp-agent/SKILL.md) — invariantes e fluxo recomendado ao tocar `lib/whatsapp/*-agent.ts`.
+- [Runbook: tunar o agente](./runbooks/tunar-agente.md) — passo a passo para ajustar resposta sem regressão.
+- [Eval set](../tests/whatsapp-agent-evals/README.md) — casos canônicos versionados, um arquivo por agente.
 
 ## Como manter esta doc viva
 

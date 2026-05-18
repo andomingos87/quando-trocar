@@ -1,0 +1,105 @@
+[
+  {
+    "id": "rem-001",
+    "critical": true,
+    "agent_mode": "cliente_final_lembrete",
+    "context": {
+      "lembrete_id": "lemb-abc",
+      "veiculo": "Onix 2018",
+      "whatsapp_atendente": "5511999990010"
+    },
+    "input": "Pode ser quinta 14h?",
+    "expected": {
+      "intent": "quer_agendar",
+      "lembrete_status_after": "handoff_iniciado",
+      "tool_calls": [{ "tool_name": "handoff_wame" }],
+      "reply_must_contain": ["wa.me"],
+      "reply_must_not_contain": ["confirmado", "agendado", "quinta 14h"]
+    },
+    "notes": "ADR-0009: bot NUNCA confirma horário. Cliente que quer agendar → handoff wa.me para o atendente."
+  },
+  {
+    "id": "rem-002",
+    "critical": true,
+    "agent_mode": "cliente_final_lembrete",
+    "context": { "lembrete_id": "lemb-def" },
+    "input": "Quanto custa?",
+    "expected": {
+      "intent": "pergunta_preco",
+      "lembrete_status_after": "handoff_iniciado",
+      "tool_calls": [{ "tool_name": "handoff_wame" }],
+      "reply_must_not_contain": ["R$", "reais"]
+    },
+    "notes": "ADR-0012: pergunta de preço em lembrete → handoff direto, sem soft redirect (regra de vendas não se aplica aqui)."
+  },
+  {
+    "id": "rem-003",
+    "critical": true,
+    "agent_mode": "cliente_final_lembrete",
+    "context": { "lembrete_id": "lemb-ghi" },
+    "input": "Para de me mandar mensagem",
+    "expected": {
+      "intent": "opt_out",
+      "lembrete_status_after": "cancelado",
+      "tool_calls": [{ "tool_name": "mark_opt_out" }],
+      "reply_must_contain": ["removid"]
+    },
+    "notes": "Opt-out marca cliente.opt_out=true, opt_out_at=now, cancela lembretes futuros. Compliance LGPD."
+  },
+  {
+    "id": "rem-004",
+    "critical": true,
+    "agent_mode": "cliente_final_lembrete",
+    "context": { "lembrete_id": "lemb-jkl" },
+    "input": "Não é meu número",
+    "expected": {
+      "intent": "numero_errado",
+      "lembrete_status_after": "cancelado",
+      "tool_calls": [{ "tool_name": "mark_numero_errado" }]
+    },
+    "notes": "Número errado cancela lembretes futuros e marca cliente. Diferente de opt-out (sem flag LGPD)."
+  },
+  {
+    "id": "rem-005",
+    "critical": false,
+    "agent_mode": "cliente_final_lembrete",
+    "context": { "lembrete_id": "lemb-mno" },
+    "input": "Já fiz em outra oficina, obrigado",
+    "expected": {
+      "intent": "ja_fez_servico",
+      "lembrete_status_after": "respondido",
+      "tool_calls": [],
+      "reply_must_not_contain": ["agend", "wa.me"]
+    },
+    "notes": "Cliente já resolveu fora. Sem registrar receita. Sem handoff."
+  },
+  {
+    "id": "rem-006",
+    "critical": false,
+    "agent_mode": "cliente_final_lembrete",
+    "context": { "lembrete_id": "lemb-pqr" },
+    "input": "ata",
+    "expected": {
+      "intent": "mensagem_indefinida",
+      "tool_calls": [{ "tool_name": "handoff_wame" }]
+    },
+    "notes": "Mensagem ambígua → handoff (decisão segura, não tenta interpretar)."
+  },
+  {
+    "id": "rem-007",
+    "critical": true,
+    "agent_mode": "cliente_final_lembrete",
+    "context": {
+      "lembrete_id": "lemb-stu",
+      "veiculo": "HB20 2020",
+      "whatsapp_atendente": null,
+      "whatsapp_principal": "5511999990020"
+    },
+    "input": "Pode agendar para amanhã?",
+    "expected": {
+      "intent": "quer_agendar",
+      "tool_calls": [{ "tool_name": "handoff_wame", "input_contains": "5511999990020" }]
+    },
+    "notes": "Fallback: se whatsapp_atendente é null, usar whatsapp_principal. URL deve estar corretamente codificada."
+  }
+]

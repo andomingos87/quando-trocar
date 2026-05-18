@@ -12,6 +12,7 @@ Se você precisa fazer X e não sabe por onde começar, o runbook é o lugar.
 | [Setup de variáveis de ambiente](./env-setup.md) | Configurar `.env.local` no desenvolvimento, ou variáveis no Vercel para deploy. |
 | [Migrations do Supabase](./supabase-migrations.md) | Criar, revisar e aplicar uma migration. Especialmente importante para mudanças que afetam RLS. |
 | [Deploy na Vercel](./deploy-vercel.md) | Fazer deploy de preview ou produção, configurar env vars no Vercel, smoke tests pós-deploy. |
+| [Tunar o agente de IA](./tunar-agente.md) | Ajustar resposta/intenção/handoff do bot WhatsApp sem quebrar testes nem ADRs. |
 
 ## Convenções dos runbooks
 
