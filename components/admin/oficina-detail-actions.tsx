@@ -27,14 +27,14 @@ export function OficinaDetailActions({
       <button
         type="button"
         onClick={() => setModal({ kind: "status" })}
-        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-100"
+        className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-line-soft"
       >
         Editar status
       </button>
       <button
         type="button"
         onClick={() => setModal({ kind: "plano-preco" })}
-        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-100"
+        className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:bg-line-soft"
       >
         Editar plano/preco
       </button>
@@ -53,7 +53,7 @@ export function OficinaDetailActions({
             }
             router.refresh();
           }}
-          className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-800"
+          className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-dark"
         >
           Disparar cobranca manual
         </button>
@@ -94,16 +94,16 @@ function ModalShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/50 px-4">
       <div onClick={onClose} className="absolute inset-0" aria-hidden="true" />
-      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto sm:p-6">
         <header className="mb-3 flex items-start justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar"
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1 text-muted hover:bg-line-soft hover:text-ink"
           >
             ✕
           </button>
@@ -158,11 +158,11 @@ function StatusModal({
     <ModalShell title="Editar status" onClose={onClose}>
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Status</span>
+          <span className="mb-1 block font-medium text-ink">Status</span>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as typeof status)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            className="w-full rounded-lg border border-line px-3 py-2"
           >
             <option value="ativa">Ativa</option>
             <option value="pausada">Pausada</option>
@@ -171,11 +171,11 @@ function StatusModal({
         </label>
         {status === "pausada" ? (
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Motivo da pausa</span>
+            <span className="mb-1 block font-medium text-ink">Motivo da pausa</span>
             <select
               value={motivo ?? ""}
               onChange={(e) => setMotivo(e.target.value as typeof motivo)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-line px-3 py-2"
             >
               <option value="voluntaria">Voluntaria</option>
               <option value="inadimplencia">Inadimplencia</option>
@@ -185,7 +185,7 @@ function StatusModal({
         ) : null}
         {status === "cancelada" ? (
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">
+            <span className="mb-1 block font-medium text-ink">
               Confirme o nome da oficina para cancelar
             </span>
             <input
@@ -193,15 +193,15 @@ function StatusModal({
               value={cancelName}
               onChange={(e) => setCancelName(e.target.value)}
               placeholder={oficina.nome}
-              className="w-full rounded-lg border border-red-300 px-3 py-2"
+              className="w-full rounded-lg border border-red/40 px-3 py-2"
             />
-            <span className="mt-1 block text-xs text-red-700">
+            <span className="mt-1 block text-xs text-red">
               Cancelamento e irreversivel por esta tela.
             </span>
           </label>
         ) : null}
         {error ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
             {error}
           </p>
         ) : null}
@@ -210,7 +210,7 @@ function StatusModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium"
+            className="rounded-lg border border-line px-3 py-2 text-sm font-medium"
           >
             Cancelar
           </button>
@@ -218,7 +218,7 @@ function StatusModal({
             type="button"
             onClick={submit}
             disabled={busy}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:bg-muted"
           >
             {busy ? "Salvando..." : "Salvar"}
           </button>
@@ -283,11 +283,11 @@ function PlanoPrecoModal({
     <ModalShell title="Editar plano e preco" onClose={onClose}>
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Plano</span>
+          <span className="mb-1 block font-medium text-ink">Plano</span>
           <select
             value={planoId}
             onChange={(e) => setPlanoId(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            className="w-full rounded-lg border border-line px-3 py-2"
           >
             {planos.map((p) => (
               <option key={p.id} value={p.id}>
@@ -297,7 +297,7 @@ function PlanoPrecoModal({
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">
+          <span className="mb-1 block font-medium text-ink">
             Preco negociado (vazio = usa preco_base)
           </span>
           <input
@@ -306,11 +306,11 @@ function PlanoPrecoModal({
             step="0.01"
             value={precoNegociado}
             onChange={(e) => setPrecoNegociado(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+            className="w-full rounded-lg border border-line px-3 py-2"
           />
         </label>
         {error ? (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
             {error}
           </p>
         ) : null}
@@ -319,7 +319,7 @@ function PlanoPrecoModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium"
+            className="rounded-lg border border-line px-3 py-2 text-sm font-medium"
           >
             Cancelar
           </button>
@@ -327,7 +327,7 @@ function PlanoPrecoModal({
             type="button"
             onClick={submit}
             disabled={busy}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:bg-muted"
           >
             {busy ? "Salvando..." : "Salvar"}
           </button>

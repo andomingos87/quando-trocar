@@ -106,26 +106,26 @@ export function PlanoFormModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/50 px-4">
       <div
         onClick={onClose}
         className="absolute inset-0"
         aria-hidden="true"
       />
-      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto sm:p-6">
         <header className="mb-4 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-semibold">
               {mode === "create" ? "Novo plano" : "Editar plano"}
             </h2>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-muted">
               Sera registrado em <code>admin_audit_log</code>.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1 text-muted hover:bg-line-soft hover:text-ink"
             aria-label="Fechar"
           >
             ✕
@@ -134,19 +134,19 @@ export function PlanoFormModal({
 
         <form onSubmit={submit} className="space-y-4">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Nome</span>
+            <span className="mb-1 block font-medium text-ink">Nome</span>
             <input
               type="text"
               required
               maxLength={120}
               value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+              className="w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
             />
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">
+            <span className="mb-1 block font-medium text-ink">
               Preco base (R$)
             </span>
             <input
@@ -158,10 +158,10 @@ export function PlanoFormModal({
               onChange={(e) =>
                 setForm({ ...form, preco_base: e.target.value })
               }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+              className="w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
             />
             {oficinasPotencialmenteAfetadas > 0 ? (
-              <span className="mt-1 block text-xs text-amber-700">
+              <span className="mt-1 block text-xs text-[#8a5a00]">
                 {oficinasPotencialmenteAfetadas} oficina(s) vinculada(s) podem
                 ser afetadas (somente as sem preco negociado).
               </span>
@@ -169,14 +169,14 @@ export function PlanoFormModal({
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">
+            <span className="mb-1 block font-medium text-ink">
               Descricao
             </span>
             <textarea
               rows={3}
               value={form.descricao}
               onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+              className="w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
             />
           </label>
 
@@ -185,13 +185,13 @@ export function PlanoFormModal({
               type="checkbox"
               checked={form.ativo}
               onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
-              className="size-4 rounded border-slate-300"
+              className="size-4 rounded border-line"
             />
-            <span className="font-medium text-slate-700">Ativo</span>
+            <span className="font-medium text-ink">Ativo</span>
           </label>
 
           {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
               {error}
             </p>
           ) : null}
@@ -201,14 +201,14 @@ export function PlanoFormModal({
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-line-soft disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-400"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:bg-muted"
             >
               {submitting ? "Salvando..." : "Salvar"}
             </button>

@@ -23,6 +23,25 @@ export async function listAdmins(supabase: SupabaseClient): Promise<AdminUserRow
   return data ?? [];
 }
 
+export type AdminProfile = {
+  id: string;
+  nome: string;
+  whatsapp: string;
+};
+
+export async function getAdminProfile(
+  supabase: SupabaseClient,
+  adminId: string,
+): Promise<AdminProfile | null> {
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("id, nome, whatsapp")
+    .eq("id", adminId)
+    .maybeSingle();
+  if (error) throw new Error(`get_admin_profile_failed: ${error.message}`);
+  return data ?? null;
+}
+
 export type AdminInviteInput = { nome: string; whatsapp: string };
 
 export type AdminValidationError =

@@ -1,57 +1,59 @@
-import Link from "next/link";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
+import { getAdminProfile } from "@/lib/admin/admins";
 import { requireAdmin } from "@/lib/admin/session";
-import { LogoutButton } from "./logout-button";
-
-const NAV_ITEMS = [
-  { href: "/admin", label: "Visao geral" },
-  { href: "/admin/oficinas", label: "Oficinas" },
-  { href: "/admin/planos", label: "Planos" },
-  { href: "/admin/pagamentos", label: "Pagamentos" },
-  { href: "/admin/admins", label: "Admins" },
-  { href: "/admin/auditoria", label: "Auditoria" },
-];
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { AdminNav } from "./admin-nav";
+import { AdminUserMenu } from "./admin-user-menu";
+import { MobileMenu } from "./mobile-menu";
+import { ADMIN_NAV_ITEMS } from "./nav-items";
+import { SidebarFooter } from "./sidebar-footer";
 
 export default async function AdminAuthenticatedLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const admin = await requireAdmin();
+  const session = await requireAdmin();
+  const supabase = createSupabaseAdminClient();
+  const profile = await getAdminProfile(supabase, session.adminId);
+
+  const nome = profile?.nome ?? "Admin";
+  const whatsapp = profile?.whatsapp ?? session.whatsapp;
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white md:flex md:flex-col">
-        <div className="px-5 py-6">
-          <p className="text-xs font-medium uppercase tracking-widest text-slate-500">
-            Quando Trocar
-          </p>
-          <p className="text-base font-semibold">Admin</p>
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-ink-deep text-paper md:flex">
+        <div className="flex items-center gap-3 px-5 py-6">
+          <Image
+            src="/logo_qt_byperfect_white.png"
+            alt="Quando Trocar"
+            width={140}
+            height={32}
+            priority
+            className="h-8 w-auto"
+          />
         </div>
-        <nav className="flex-1 px-2 pb-4">
-          <ul className="space-y-1">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-100"
-                >
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <p className="px-5 pb-3 text-[10px] font-medium uppercase tracking-widest text-paper/50">
+          Painel admin
+        </p>
+        <div className="flex-1 overflow-y-auto">
+          <AdminNav items={ADMIN_NAV_ITEMS} />
+        </div>
+        <SidebarFooter />
       </aside>
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-          <div className="text-sm text-slate-600">
-            Logado como <span className="font-medium text-slate-900">{admin.whatsapp}</span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-white/95 px-4 py-2.5 backdrop-blur sm:px-6">
+          <div className="flex items-center gap-3">
+            <MobileMenu />
+            <span className="text-xs font-medium uppercase tracking-widest text-muted sm:hidden">
+              Admin
+            </span>
           </div>
-          <LogoutButton />
+          <AdminUserMenu nome={nome} whatsapp={whatsapp} />
         </header>
-        <main className="flex-1 px-6 py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       </div>
     </div>
   );

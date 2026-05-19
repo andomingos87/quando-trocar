@@ -34,7 +34,7 @@ export default async function PagamentosPage({
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Pagamentos</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted">
           {list.total} {list.total === 1 ? "pagamento" : "pagamentos"} no total
         </p>
       </header>

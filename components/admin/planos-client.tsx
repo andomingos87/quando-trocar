@@ -67,28 +67,28 @@ export function PlanosClient({
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted">
           {planos.length} {planos.length === 1 ? "plano" : "planos"} no total
         </p>
         <button
           type="button"
           onClick={() => setModal({ open: true, mode: "create" })}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark sm:w-auto"
         >
           Novo plano
         </button>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
           {error}
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-line bg-white">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-line bg-paper-soft text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Nome</th>
               <th className="px-4 py-3 font-medium">Preco base</th>
@@ -99,34 +99,34 @@ export function PlanosClient({
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-soft">
             {planos.length === 0 ? (
               <tr>
                 <td
                   colSpan={7}
-                  className="px-4 py-10 text-center text-slate-500"
+                  className="px-4 py-10 text-left text-muted"
                 >
                   Nenhum plano. Clique em <strong>Novo plano</strong> para criar.
                 </td>
               </tr>
             ) : null}
             {planos.map((plano) => (
-              <tr key={plano.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-900">
+              <tr key={plano.id} className="hover:bg-paper-soft">
+                <td className="px-4 py-3 font-medium text-ink">
                   {plano.nome}
                 </td>
                 <td className="px-4 py-3 tabular-nums">
                   {currency.format(plano.preco_base)}
                 </td>
-                <td className="px-4 py-3 max-w-[240px] truncate text-slate-600">
+                <td className="px-4 py-3 max-w-[240px] truncate text-muted">
                   {plano.descricao ?? "—"}
                 </td>
                 <td className="px-4 py-3">
                   <span
                     className={
                       plano.ativo
-                        ? "inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
-                        : "inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+                        ? "inline-flex rounded-full bg-cyan-soft px-2 py-0.5 text-xs font-medium text-ink"
+                        : "inline-flex rounded-full bg-line px-2 py-0.5 text-xs font-medium text-ink"
                     }
                   >
                     {plano.ativo ? "Ativo" : "Inativo"}
@@ -135,7 +135,7 @@ export function PlanosClient({
                 <td className="px-4 py-3 tabular-nums">
                   {plano.oficinas_vinculadas}
                 </td>
-                <td className="px-4 py-3 text-slate-600">
+                <td className="px-4 py-3 text-muted">
                   {dateFmt.format(new Date(plano.updated_at))}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -145,7 +145,7 @@ export function PlanosClient({
                       onClick={() =>
                         setModal({ open: true, mode: "edit", plano })
                       }
-                      className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                      className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-ink hover:bg-line-soft"
                     >
                       Editar
                     </button>
@@ -154,7 +154,7 @@ export function PlanosClient({
                         type="button"
                         disabled={busy === plano.id}
                         onClick={() => handleDeactivate(plano)}
-                        className="rounded-md border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-md border border-red/40 px-2.5 py-1 text-xs font-medium text-red hover:bg-red-soft disabled:opacity-50"
                       >
                         {busy === plano.id ? "Desativando..." : "Desativar"}
                       </button>

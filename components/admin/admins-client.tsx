@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { AdminUserRow } from "@/lib/admin/admins";
 import { formatDateTime } from "@/lib/admin/format";
+import { WhatsAppInput } from "@/components/admin/ui";
 
 export function AdminsClient({
   initial,
@@ -53,21 +54,21 @@ export function AdminsClient({
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark sm:w-auto"
         >
           Convidar admin
         </button>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
           {error}
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-line bg-white">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-line bg-paper-soft text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Nome</th>
               <th className="px-4 py-3 font-medium">WhatsApp</th>
@@ -77,37 +78,37 @@ export function AdminsClient({
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-soft">
             {initial.map((a) => (
-              <tr key={a.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-900">
+              <tr key={a.id} className="hover:bg-paper-soft">
+                <td className="px-4 py-3 font-medium text-ink">
                   {a.nome}
                   {a.id === selfAdminId ? (
-                    <span className="ml-2 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                    <span className="ml-2 rounded bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand-deep">
                       voce
                     </span>
                   ) : null}
                 </td>
-                <td className="px-4 py-3 tabular-nums text-slate-700">{a.whatsapp}</td>
+                <td className="px-4 py-3 tabular-nums text-ink">{a.whatsapp}</td>
                 <td className="px-4 py-3">
                   <span
                     className={
                       a.ativo
-                        ? "inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800"
-                        : "inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+                        ? "inline-flex rounded-full bg-cyan-soft px-2 py-0.5 text-xs font-medium text-ink"
+                        : "inline-flex rounded-full bg-line px-2 py-0.5 text-xs font-medium text-ink"
                     }
                   >
                     {a.ativo ? "Ativo" : "Inativo"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{formatDateTime(a.ultimo_acesso_em)}</td>
-                <td className="px-4 py-3 text-slate-600">{formatDateTime(a.created_at)}</td>
+                <td className="px-4 py-3 text-muted">{formatDateTime(a.ultimo_acesso_em)}</td>
+                <td className="px-4 py-3 text-muted">{formatDateTime(a.created_at)}</td>
                 <td className="px-4 py-3 text-right">
                   <button
                     type="button"
                     onClick={() => toggleAtivo(a)}
                     disabled={busy === a.id}
-                    className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-ink hover:bg-line-soft disabled:opacity-50"
                   >
                     {a.ativo ? "Desativar" : "Ativar"}
                   </button>
@@ -164,15 +165,15 @@ function InviteModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/50 px-4">
       <div onClick={onClose} className="absolute inset-0" aria-hidden="true" />
-      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto sm:p-6">
         <header className="mb-3 flex items-start justify-between">
           <h2 className="text-lg font-semibold">Convidar admin</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100"
+            className="rounded-md p-1 text-muted hover:bg-line-soft"
             aria-label="Fechar"
           >
             ✕
@@ -180,28 +181,25 @@ function InviteModal({
         </header>
         <form onSubmit={submit} className="space-y-3">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Nome</span>
+            <span className="mb-1 block font-medium text-ink">Nome</span>
             <input
               type="text"
               required
               value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-line px-3 py-2"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">WhatsApp</span>
-            <input
-              type="tel"
+            <span className="mb-1 block font-medium text-ink">WhatsApp</span>
+            <WhatsAppInput
               required
               value={form.whatsapp}
-              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-              placeholder="+55 11 90000-0000"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              onChange={(v) => setForm({ ...form, whatsapp: v })}
             />
           </label>
           {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
               {error}
             </p>
           ) : null}
@@ -210,14 +208,14 @@ function InviteModal({
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium"
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:bg-muted"
             >
               {busy ? "Enviando..." : "Convidar"}
             </button>

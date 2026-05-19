@@ -8,10 +8,10 @@ import type { PagamentoListFilters, PagamentoRow } from "@/lib/admin/pagamentos"
 import { formatBRL, formatDate } from "@/lib/admin/format";
 
 const STATUS_BADGE: Record<string, string> = {
-  pendente: "bg-amber-100 text-amber-800",
-  pago: "bg-emerald-100 text-emerald-800",
-  falhou: "bg-red-100 text-red-800",
-  cancelado: "bg-slate-200 text-slate-700",
+  pendente: "bg-orange-soft text-[#8a5a00]",
+  pago: "bg-cyan-soft text-ink",
+  falhou: "bg-red-soft text-red",
+  cancelado: "bg-line text-ink",
 };
 
 export function PagamentosClient({
@@ -77,14 +77,14 @@ export function PagamentosClient({
   return (
     <>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+        <label className="block w-full text-sm sm:w-auto">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Status
           </span>
           <select
             value={filters.status ?? ""}
             onChange={(e) => updateFilter("status", e.target.value || undefined)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm"
           >
             <option value="">Todos</option>
             <option value="pendente">Pendente</option>
@@ -93,14 +93,14 @@ export function PagamentosClient({
             <option value="cancelado">Cancelado</option>
           </select>
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+        <label className="block w-full text-sm sm:w-auto">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Periodo
           </span>
           <select
             value={filters.periodo ?? ""}
             onChange={(e) => updateFilter("periodo", e.target.value || undefined)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm"
           >
             <option value="">Todos</option>
             <option value="7d">Ultimos 7 dias</option>
@@ -111,14 +111,14 @@ export function PagamentosClient({
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
           {error}
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-line bg-white">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-line bg-paper-soft text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Data</th>
               <th className="px-4 py-3 font-medium">Oficina</th>
@@ -130,21 +130,21 @@ export function PagamentosClient({
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-soft">
             {initial.rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={8} className="px-4 py-10 text-left text-muted">
                   Nenhum pagamento encontrado.
                 </td>
               </tr>
             ) : null}
             {initial.rows.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-slate-600">{formatDate(p.created_at)}</td>
+              <tr key={p.id} className="hover:bg-paper-soft">
+                <td className="px-4 py-3 text-muted">{formatDate(p.created_at)}</td>
                 <td className="px-4 py-3">
                   <Link
                     href={`/admin/oficinas/${p.oficina_id}`}
-                    className="text-slate-900 hover:underline"
+                    className="text-ink hover:underline"
                   >
                     {p.oficina_nome ?? p.oficina_id.slice(0, 8)}
                   </Link>
@@ -159,9 +159,9 @@ export function PagamentosClient({
                     {p.status}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{formatDate(p.vencimento)}</td>
-                <td className="px-4 py-3 text-slate-600">{formatDate(p.paid_at)}</td>
-                <td className="px-4 py-3 text-slate-600 tabular-nums">{p.tentativa}</td>
+                <td className="px-4 py-3 text-muted">{formatDate(p.vencimento)}</td>
+                <td className="px-4 py-3 text-muted">{formatDate(p.paid_at)}</td>
+                <td className="px-4 py-3 text-muted tabular-nums">{p.tentativa}</td>
                 <td className="px-4 py-3 text-right">
                   {p.status === "pendente" ? (
                     <div className="flex justify-end gap-2">
@@ -169,7 +169,7 @@ export function PagamentosClient({
                         type="button"
                         disabled={busy === p.id}
                         onClick={() => reenviar(p.id)}
-                        className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                        className="rounded-md border border-line px-2.5 py-1 text-xs font-medium text-ink hover:bg-line-soft disabled:opacity-50"
                       >
                         Reenviar
                       </button>
@@ -177,7 +177,7 @@ export function PagamentosClient({
                         type="button"
                         disabled={busy === p.id}
                         onClick={() => cancelar(p.id)}
-                        className="rounded-md border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-md border border-red/40 px-2.5 py-1 text-xs font-medium text-red hover:bg-red-soft disabled:opacity-50"
                       >
                         Cancelar
                       </button>
@@ -191,7 +191,7 @@ export function PagamentosClient({
       </div>
 
       {totalPages > 1 ? (
-        <div className="flex items-center justify-between text-sm text-slate-600">
+        <div className="flex items-center justify-between text-sm text-muted">
           <span>
             Pagina {initial.page} de {totalPages}
           </span>
@@ -204,7 +204,7 @@ export function PagamentosClient({
                 params.set("page", String(initial.page - 1));
                 router.push(`/admin/pagamentos?${params.toString()}`);
               }}
-              className="rounded-lg border border-slate-300 px-3 py-1 disabled:opacity-50"
+              className="rounded-lg border border-line px-3 py-1 disabled:opacity-50"
             >
               Anterior
             </button>
@@ -216,7 +216,7 @@ export function PagamentosClient({
                 params.set("page", String(initial.page + 1));
                 router.push(`/admin/pagamentos?${params.toString()}`);
               }}
-              className="rounded-lg border border-slate-300 px-3 py-1 disabled:opacity-50"
+              className="rounded-lg border border-line px-3 py-1 disabled:opacity-50"
             >
               Proxima
             </button>

@@ -36,14 +36,14 @@ export function AuditoriaClient({
   return (
     <>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+        <label className="block w-full text-sm sm:w-auto">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Admin
           </span>
           <select
             value={filters.admin_id ?? ""}
             onChange={(e) => updateFilter("admin_id", e.target.value || undefined)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm"
           >
             <option value="">Todos</option>
             {admins.map((a) => (
@@ -53,14 +53,14 @@ export function AuditoriaClient({
             ))}
           </select>
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+        <label className="block w-full text-sm sm:w-auto">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Entidade
           </span>
           <select
             value={filters.entidade ?? ""}
             onChange={(e) => updateFilter("entidade", e.target.value || undefined)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm"
           >
             <option value="">Todas</option>
             {entidades.map((e) => (
@@ -70,14 +70,14 @@ export function AuditoriaClient({
             ))}
           </select>
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+        <label className="block w-full text-sm sm:w-auto">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Acao
           </span>
           <select
             value={filters.acao ?? ""}
             onChange={(e) => updateFilter("acao", e.target.value || undefined)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm"
           >
             <option value="">Todas</option>
             {acoes.map((a) => (
@@ -87,8 +87,8 @@ export function AuditoriaClient({
             ))}
           </select>
         </label>
-        <label className="text-sm">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+        <label className="block w-full text-sm sm:w-auto">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Entidade ID
           </span>
           <input
@@ -96,14 +96,14 @@ export function AuditoriaClient({
             defaultValue={filters.entidade_id ?? ""}
             onBlur={(e) => updateFilter("entidade_id", e.target.value || undefined)}
             placeholder="uuid"
-            className="w-56 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+            className="w-56 rounded-lg border border-line px-3 py-1.5 text-sm font-mono"
           />
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-line bg-white">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead className="border-b border-line bg-paper-soft text-xs uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Quando</th>
               <th className="px-4 py-3 font-medium">Admin</th>
@@ -113,10 +113,10 @@ export function AuditoriaClient({
               <th className="px-4 py-3 font-medium">IP</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line-soft">
             {initial.rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-10 text-left text-muted">
                   Nenhuma entrada com esses filtros.
                 </td>
               </tr>
@@ -124,20 +124,20 @@ export function AuditoriaClient({
             {initial.rows.map((r) => (
               <Fragment key={r.id}>
                 <tr
-                  className="cursor-pointer hover:bg-slate-50"
+                  className="cursor-pointer hover:bg-paper-soft"
                   onClick={() => setExpanded(expanded === r.id ? null : r.id)}
                 >
-                  <td className="px-4 py-3 text-slate-600">{formatDateTime(r.created_at)}</td>
+                  <td className="px-4 py-3 text-muted">{formatDateTime(r.created_at)}</td>
                   <td className="px-4 py-3">{r.admin_label}</td>
                   <td className="px-4 py-3 font-mono text-xs">{r.acao}</td>
-                  <td className="px-4 py-3 text-slate-700">{r.entidade}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                  <td className="px-4 py-3 text-ink">{r.entidade}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-muted">
                     {r.entidade_id ? r.entidade_id.slice(0, 8) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{r.ip ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted">{r.ip ?? "—"}</td>
                 </tr>
                 {expanded === r.id ? (
-                  <tr className="bg-slate-50">
+                  <tr className="bg-paper-soft">
                     <td colSpan={6} className="px-4 py-3">
                       <PayloadViewer payload={r.payload} />
                     </td>
@@ -150,7 +150,7 @@ export function AuditoriaClient({
       </div>
 
       {totalPages > 1 ? (
-        <div className="flex items-center justify-between text-sm text-slate-600">
+        <div className="flex items-center justify-between text-sm text-muted">
           <span>
             Pagina {initial.page} de {totalPages}
           </span>
@@ -163,7 +163,7 @@ export function AuditoriaClient({
                 params.set("page", String(initial.page - 1));
                 router.push(`/admin/auditoria?${params.toString()}`);
               }}
-              className="rounded-lg border border-slate-300 px-3 py-1 disabled:opacity-50"
+              className="rounded-lg border border-line px-3 py-1 disabled:opacity-50"
             >
               Anterior
             </button>
@@ -175,7 +175,7 @@ export function AuditoriaClient({
                 params.set("page", String(initial.page + 1));
                 router.push(`/admin/auditoria?${params.toString()}`);
               }}
-              className="rounded-lg border border-slate-300 px-3 py-1 disabled:opacity-50"
+              className="rounded-lg border border-line px-3 py-1 disabled:opacity-50"
             >
               Proxima
             </button>
@@ -189,7 +189,7 @@ export function AuditoriaClient({
 function PayloadViewer({ payload }: { payload: unknown }) {
   if (!payload || typeof payload !== "object") {
     return (
-      <pre className="overflow-x-auto rounded-lg border border-slate-200 bg-white p-3 text-xs">
+      <pre className="overflow-x-auto rounded-lg border border-line bg-white p-3 text-xs">
         {JSON.stringify(payload, null, 2)}
       </pre>
     );
@@ -199,16 +199,16 @@ function PayloadViewer({ payload }: { payload: unknown }) {
     return (
       <div className="grid gap-3 md:grid-cols-2">
         <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-red-700">Antes</p>
-          <pre className="overflow-x-auto rounded-lg border border-red-200 bg-red-50 p-3 text-xs">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-red">Antes</p>
+          <pre className="overflow-x-auto rounded-lg border border-red/30 bg-red-soft p-3 text-xs">
             {JSON.stringify(obj.before, null, 2)}
           </pre>
         </div>
         <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-emerald-700">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink">
             Depois
           </p>
-          <pre className="overflow-x-auto rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs">
+          <pre className="overflow-x-auto rounded-lg border border-cyan/40 bg-cyan-soft p-3 text-xs">
             {JSON.stringify(obj.after, null, 2)}
           </pre>
         </div>
@@ -216,7 +216,7 @@ function PayloadViewer({ payload }: { payload: unknown }) {
     );
   }
   return (
-    <pre className="overflow-x-auto rounded-lg border border-slate-200 bg-white p-3 text-xs">
+    <pre className="overflow-x-auto rounded-lg border border-line bg-white p-3 text-xs">
       {JSON.stringify(payload, null, 2)}
     </pre>
   );

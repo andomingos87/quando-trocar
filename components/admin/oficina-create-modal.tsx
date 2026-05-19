@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { WhatsAppInput } from "@/components/admin/ui";
+
 export function OficinaCreateModal({
   planos,
   onClose,
@@ -61,55 +63,52 @@ export function OficinaCreateModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-deep/50 px-4">
       <div onClick={onClose} className="absolute inset-0" aria-hidden="true" />
-      <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div className="relative w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl max-h-[90vh] overflow-y-auto sm:p-6">
         <header className="mb-4">
           <h2 className="text-lg font-semibold">Nova oficina</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-muted">
             Cadastro manual. <code>origem = manual</code>.
           </p>
         </header>
         <form onSubmit={submit} className="space-y-4">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Nome</span>
+            <span className="mb-1 block font-medium text-ink">Nome</span>
             <input
               type="text"
               required
               value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-line px-3 py-2"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">WhatsApp</span>
-            <input
-              type="tel"
+            <span className="mb-1 block font-medium text-ink">WhatsApp</span>
+            <WhatsAppInput
               required
               value={form.whatsapp}
-              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-              placeholder="+55 11 90000-0000"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              onChange={(v) => setForm({ ...form, whatsapp: v })}
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Cidade</span>
+            <span className="mb-1 block font-medium text-ink">Cidade</span>
             <input
               type="text"
               required
               value={form.cidade}
               onChange={(e) => setForm({ ...form, cidade: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-line px-3 py-2"
             />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Plano</span>
+              <span className="mb-1 block font-medium text-ink">Plano</span>
               <select
                 required
                 value={form.plano_id}
                 onChange={(e) => setForm({ ...form, plano_id: e.target.value })}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="w-full rounded-lg border border-line px-3 py-2"
               >
                 {planos.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -119,7 +118,7 @@ export function OficinaCreateModal({
               </select>
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">
+              <span className="mb-1 block font-medium text-ink">
                 Preco negociado (opt.)
               </span>
               <input
@@ -129,34 +128,34 @@ export function OficinaCreateModal({
                 value={form.preco_negociado}
                 onChange={(e) => setForm({ ...form, preco_negociado: e.target.value })}
                 placeholder="usa preco base se vazio"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                className="w-full rounded-lg border border-line px-3 py-2"
               />
             </label>
           </div>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Status inicial</span>
+            <span className="mb-1 block font-medium text-ink">Status inicial</span>
             <select
               value={form.status}
               onChange={(e) =>
                 setForm({ ...form, status: e.target.value as "ativa" | "pausada" })
               }
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-line px-3 py-2"
             >
               <option value="ativa">Ativa (com proximo_vencimento +30d)</option>
               <option value="pausada">Pausada</option>
             </select>
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Observacao</span>
+            <span className="mb-1 block font-medium text-ink">Observacao</span>
             <textarea
               rows={2}
               value={form.observacao}
               onChange={(e) => setForm({ ...form, observacao: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="w-full rounded-lg border border-line px-3 py-2"
             />
           </label>
           {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
               {error}
             </p>
           ) : null}
@@ -165,14 +164,14 @@ export function OficinaCreateModal({
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium"
+              className="rounded-lg border border-line px-3 py-2 text-sm font-medium"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white disabled:bg-muted"
             >
               {submitting ? "Criando..." : "Cadastrar"}
             </button>

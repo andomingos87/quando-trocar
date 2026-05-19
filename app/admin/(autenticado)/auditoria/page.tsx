@@ -48,7 +48,7 @@ export default async function AuditoriaPage({
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Auditoria</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted">
           {entries.total} {entries.total === 1 ? "entrada" : "entradas"} no total
         </p>
       </header>

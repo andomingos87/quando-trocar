@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button, Field, Input, WhatsAppInput } from "@/components/admin/ui";
+
 type Step = "request" | "verify";
 
 type State =
@@ -87,36 +89,30 @@ export function EntrarForm() {
     <div className="space-y-4">
       {step === "request" ? (
         <form onSubmit={requestOtp} className="space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">WhatsApp</span>
-            <input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
+          <Field label="WhatsApp">
+            <WhatsAppInput
               required
               value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="+55 11 90000-0000"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+              onChange={setWhatsapp}
               disabled={submitting}
+              autoFocus
             />
-          </label>
-          <button
+          </Field>
+          <Button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="w-full"
           >
             {submitting ? "Enviando..." : "Enviar codigo"}
-          </button>
+          </Button>
         </form>
       ) : (
         <form onSubmit={verifyOtp} className="space-y-4">
-          <p className="text-xs text-slate-600">
-            Codigo enviado para <strong>{whatsapp}</strong>. Valido por 5 minutos.
+          <p className="text-xs text-muted">
+            Codigo enviado para <strong className="text-ink">{whatsapp}</strong>. Valido por 5 minutos.
           </p>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Codigo</span>
-            <input
+          <Field label="Codigo">
+            <Input
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
@@ -126,42 +122,41 @@ export function EntrarForm() {
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               placeholder="000000"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-center text-xl tracking-[0.6em] outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+              className="text-center text-xl tracking-[0.6em]"
               disabled={submitting}
               autoFocus
             />
-          </label>
+          </Field>
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setStep("request");
                 setCode("");
                 setState({ status: "idle" });
               }}
               disabled={submitting}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Voltar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={submitting || code.length !== 6}
-              className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="flex-1"
             >
               {submitting ? "Validando..." : "Entrar"}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {state.status === "error" ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
           {state.message}
         </p>
       ) : null}
       {state.status === "info" ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <p className="rounded-lg border border-cyan/40 bg-cyan-soft px-3 py-2 text-sm text-ink">
           {state.message}
         </p>
       ) : null}

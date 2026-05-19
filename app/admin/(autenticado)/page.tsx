@@ -1,3 +1,4 @@
+import { Card, CardHint, CardLabel, CardValue } from "@/components/admin/ui";
 import { formatBRL, formatDateTime } from "@/lib/admin/format";
 import {
   getAtividadesRecentes,
@@ -13,7 +14,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
-function Card({
+type MetricTone = "default" | "warning" | "danger" | "ok";
+
+function MetricCard({
   label,
   value,
   hint,
@@ -22,22 +25,22 @@ function Card({
   label: string;
   value: string | number;
   hint?: string;
-  tone?: "default" | "warning" | "danger" | "ok";
+  tone?: MetricTone;
 }) {
-  const ring =
+  const cardTone =
     tone === "warning"
-      ? "ring-amber-200"
+      ? "atencao"
       : tone === "danger"
-        ? "ring-red-200"
+        ? "erro"
         : tone === "ok"
-          ? "ring-emerald-200"
-          : "ring-slate-200";
+          ? "sucesso"
+          : "default";
   return (
-    <div className={`rounded-2xl bg-white p-5 ring-1 ${ring}`}>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </div>
+    <Card tone={cardTone}>
+      <CardLabel>{label}</CardLabel>
+      <CardValue>{value}</CardValue>
+      {hint ? <CardHint>{hint}</CardHint> : null}
+    </Card>
   );
 }
 
@@ -60,26 +63,26 @@ export default async function AdminOverviewPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Visao geral</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className="text-2xl font-semibold text-ink">Visao geral</h1>
+        <p className="mt-1 text-sm text-muted">
           Diagnostico do produto em segundos. Atualiza a cada 30s.
         </p>
       </header>
 
       {empty ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-          <p className="text-base font-medium">Nenhuma oficina ainda.</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Cadastre a primeira em <strong>Oficinas → Nova oficina</strong>.
+        <div className="rounded-2xl border border-dashed border-line bg-white px-6 py-10">
+          <p className="text-base font-medium text-ink">Nenhuma oficina ainda.</p>
+          <p className="mt-1 text-sm text-muted">
+            Cadastre a primeira em <strong className="text-ink">Oficinas → Nova oficina</strong>.
           </p>
         </div>
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card label="MRR estimado" value={formatBRL(mrr)} hint="Soma de preco efetivo das ativas" tone="ok" />
-        <Card label="Oficinas ativas" value={counts.ativas} />
-        <Card label="Oficinas em teste" value={counts.em_teste} />
-        <Card
+        <MetricCard label="MRR estimado" value={formatBRL(mrr)} hint="Soma de preco efetivo das ativas" tone="ok" />
+        <MetricCard label="Oficinas ativas" value={counts.ativas} />
+        <MetricCard label="Oficinas em teste" value={counts.em_teste} />
+        <MetricCard
           label="Oficinas em risco"
           value={counts.em_risco}
           hint="Pausadas por inadimplencia"
@@ -88,44 +91,44 @@ export default async function AdminOverviewPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card label="Novas oficinas no mes" value={novas} />
-        <Card label="Receita recebida no mes" value={formatBRL(receita)} />
-        <Card
+        <MetricCard label="Novas oficinas no mes" value={novas} />
+        <MetricCard label="Receita recebida no mes" value={formatBRL(receita)} />
+        <MetricCard
           label="Pagamentos pendentes"
           value={pendentes}
           tone={pendentes > 0 ? "warning" : "default"}
         />
-        <Card
+        <MetricCard
           label="Pagamentos falhos no mes"
           value={falhos}
           tone={falhos > 0 ? "danger" : "default"}
         />
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white">
-        <h2 className="border-b border-slate-100 px-5 py-3 text-sm font-medium uppercase tracking-wide text-slate-500">
+      <section className="rounded-2xl border border-line bg-white">
+        <h2 className="border-b border-line-soft px-5 py-3 text-sm font-medium uppercase tracking-wide text-muted">
           Atividades recentes
         </h2>
         {atividades.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-slate-500">
+          <p className="px-5 py-6 text-sm text-muted">
             Nenhuma atividade ainda. Operacoes do painel aparecerao aqui.
           </p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-line-soft">
             {atividades.map((a) => (
               <li key={a.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-5 py-3 text-sm">
                 <div>
                   <p>
-                    <span className="font-mono text-xs text-slate-600">{a.acao}</span>
-                    <span className="ml-2 text-slate-500">por</span>{" "}
-                    <span className="font-medium text-slate-800">{a.admin_label}</span>
+                    <span className="font-mono text-xs text-muted">{a.acao}</span>
+                    <span className="ml-2 text-muted">por</span>{" "}
+                    <span className="font-medium text-ink">{a.admin_label}</span>
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-muted">
                     {a.entidade}
                     {a.entidade_id ? ` · ${a.entidade_id.slice(0, 8)}` : ""}
                   </p>
                 </div>
-                <span className="text-xs text-slate-500">{formatDateTime(a.created_at)}</span>
+                <span className="text-xs text-muted">{formatDateTime(a.created_at)}</span>
               </li>
             ))}
           </ul>

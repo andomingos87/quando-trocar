@@ -16,7 +16,7 @@ export default async function AdminsPage() {
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">Admins</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-muted">
           {admins.length} {admins.length === 1 ? "admin" : "admins"} no total
         </p>
       </header>
