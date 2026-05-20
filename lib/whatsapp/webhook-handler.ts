@@ -1,7 +1,13 @@
+import { WhatsappCobrancaAgent } from "./cobranca-agent";
 import { resolveWhatsappConversation } from "./conversation-router";
-import { checkOficinaInadimplencia } from "./inadimplencia-guard";
+import {
+  ADMIN_PAUSA_MESSAGE,
+  getOficinaPauseState,
+  INADIMPLENCIA_MESSAGE,
+} from "./inadimplencia-guard";
 import { WhatsappOnboardingAgent } from "./onboarding-agent";
 import { WhatsappReminderAgent } from "./reminder-agent";
+import { WhatsappSupportAgent } from "./support-agent";
 import {
   extractInboundTextMessages,
   extractProviderEventId,
@@ -10,10 +16,13 @@ import {
 } from "./payload";
 import { verifyMetaSignature } from "./signature";
 import type {
+  CobrancaAgent,
+  CobrancaSubmode,
   ConversationAgentMode,
   OnboardingAgent,
   ReminderAgent,
   SalesAgent,
+  SupportAgent,
   WhatsappRepository,
   WhatsappSender,
 } from "./types";
@@ -30,6 +39,8 @@ type HandlerDeps = {
   agent: SalesAgent;
   onboardingAgent?: OnboardingAgent;
   reminderAgent?: ReminderAgent;
+  supportAgent?: SupportAgent;
+  cobrancaAgent?: CobrancaAgent;
 };
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -93,6 +104,8 @@ function isOperationalMode(
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   const onboardingAgent = deps.onboardingAgent ?? new WhatsappOnboardingAgent();
   const reminderAgent = deps.reminderAgent ?? new WhatsappReminderAgent();
+  const supportAgent = deps.supportAgent ?? new WhatsappSupportAgent();
+  const cobrancaAgent = deps.cobrancaAgent ?? new WhatsappCobrancaAgent();
 
   return {
     async GET(request: Request) {
@@ -223,27 +236,71 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           continue;
         }
 
-        // Admin-6: oficinas pausadas por inadimplencia recebem mensagem
-        // padrao de cobranca e o bot NAO opera normalmente.
+        // Estado de pausa da oficina: rotear para cobranca-agent (inadimplencia/winback)
+        // ou responder com mensagem fixa (pausa administrativa, ou mensagem que nao
+        // veio da oficina-cliente).
+        let effectiveAgentMode: ConversationAgentMode = resolved.agentMode;
+        let cobrancaSubmode: CobrancaSubmode | null = null;
         if (resolved.oficinaId) {
-          const guard = await checkOficinaInadimplencia(resolved.oficinaId);
-          if (guard.suspended) {
-            try {
-              await deps.whatsapp.sendTextMessage({
-                to: inbound.normalizedFrom,
-                body: guard.message,
-              });
-            } catch (err) {
-              console.error("inadimplencia guard send failed", err);
+          const pauseState = await getOficinaPauseState(resolved.oficinaId);
+          if (pauseState.paused) {
+            const isOficinaConversation =
+              resolved.participantType === "oficina_cliente";
+            if (
+              pauseState.motivoPausa === "admin" ||
+              !isOficinaConversation
+            ) {
+              const fixedMessage =
+                pauseState.motivoPausa === "admin"
+                  ? ADMIN_PAUSA_MESSAGE
+                  : INADIMPLENCIA_MESSAGE;
+              try {
+                await deps.whatsapp.sendTextMessage({
+                  to: inbound.normalizedFrom,
+                  body: fixedMessage,
+                });
+              } catch (err) {
+                console.error("pausa fixed message send failed", err);
+              }
+              continue;
             }
-            continue;
+            effectiveAgentMode = "cobranca";
+            cobrancaSubmode =
+              pauseState.motivoPausa === "inadimplencia"
+                ? "cobranca_inadimplente"
+                : "cobranca_winback";
           }
         }
 
         try {
           let replyBody: string;
+          const normalizedBody = inbound.body.trim().toLowerCase();
 
-          if (resolved.agentMode === "vendas") {
+          if (
+            normalizedBody === "/suporte" &&
+            effectiveAgentMode === "operacao"
+          ) {
+            if (deps.repository.updateConversationModeAndContext) {
+              await deps.repository.updateConversationModeAndContext({
+                conversationId: resolved.conversationId,
+                agentMode: "suporte",
+              });
+            }
+            replyBody =
+              "Ok, modo suporte ativo. Me conta o que esta acontecendo. Mande /voltar quando quiser sair.";
+          } else if (
+            normalizedBody === "/voltar" &&
+            effectiveAgentMode === "suporte"
+          ) {
+            if (deps.repository.updateConversationModeAndContext) {
+              await deps.repository.updateConversationModeAndContext({
+                conversationId: resolved.conversationId,
+                agentMode: "operacao",
+              });
+            }
+            replyBody =
+              "Pronto, voltei pro modo normal. O que precisa hoje?";
+          } else if (effectiveAgentMode === "vendas") {
             const leadStatus = resolved.leadStatus ?? "em_conversa";
             const reply = await deps.agent.generateReply({
               message: inbound.body,
@@ -335,10 +392,10 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 output: toolCall.output,
               });
             }
-          } else if (isOperationalMode(resolved.agentMode)) {
+          } else if (isOperationalMode(effectiveAgentMode)) {
             const onboardingReply = await onboardingAgent.generateReply({
               message: inbound.body,
-              mode: resolved.agentMode,
+              mode: effectiveAgentMode,
               context: resolved.context,
               today: localDateSaoPaulo(),
             });
@@ -392,7 +449,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                   resolved.diasLembretePadrao ?? 90
                 } dias para voltar trocar óleo com você.`
               : onboardingReply.body;
-          } else if (resolved.agentMode === "cliente_final_lembrete") {
+          } else if (effectiveAgentMode === "cliente_final_lembrete") {
             const reminderReply = await reminderAgent.generateReply({
               message: inbound.body,
               conversationContext: resolved.context,
@@ -458,19 +515,90 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             }
 
             replyBody = reminderReply.replyBody;
-          } else if (resolved.agentMode === "suporte") {
-            if (deps.repository.markConversationHandoff) {
+          } else if (effectiveAgentMode === "suporte") {
+            const supportReply = await supportAgent.generateReply({
+              message: inbound.body,
+              context: resolved.context,
+              oficinaNome: resolved.oficinaNome,
+            });
+
+            const inheritedHandoffReason =
+              resolved.context.supportHandoffReason ??
+              (resolved.context.ambiguousReminderLookup
+                ? "cliente_final_ambiguo"
+                : null);
+
+            if (
+              supportReply.handoffRequired &&
+              deps.repository.markConversationHandoff
+            ) {
               await deps.repository.markConversationHandoff({
                 conversationId: resolved.conversationId,
                 reason:
-                  resolved.context.supportHandoffReason ??
-                  (resolved.context.ambiguousReminderLookup
-                    ? "cliente_final_ambiguo"
-                    : "mensagem_ambigua"),
+                  inheritedHandoffReason ??
+                  supportReply.handoffReason ??
+                  "mensagem_ambigua",
               });
             }
 
-            replyBody = "Recebi sua mensagem. Vou avisar a oficina para continuar com voce.";
+            for (const toolCall of supportReply.toolCalls) {
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                oficinaId: resolved.oficinaId,
+                clienteId: resolved.clienteId,
+                toolName: toolCall.toolName,
+                input: toolCall.input,
+                output: toolCall.output,
+              });
+            }
+
+            // Cliente final que caiu em suporte por lookup ambiguo mantem a
+            // copy especifica desse caso ("avisar a oficina"). Suporte direto
+            // de oficina-cliente recebe a resposta padrao do agente.
+            replyBody = resolved.context.ambiguousReminderLookup
+              ? "Recebi sua mensagem. Vou avisar a oficina para continuar com voce."
+              : supportReply.replyBody;
+          } else if (effectiveAgentMode === "cobranca" && cobrancaSubmode) {
+            const pendingPayment =
+              resolved.oficinaId && deps.repository.getLatestPendingPagamento
+                ? await deps.repository.getLatestPendingPagamento({
+                    oficinaId: resolved.oficinaId,
+                  })
+                : null;
+
+            const cobrancaReply = await cobrancaAgent.generateReply({
+              message: inbound.body,
+              submode: cobrancaSubmode,
+              oficinaNome: resolved.oficinaNome,
+              proximoVencimento: null,
+              pendingPayment,
+              context: resolved.context,
+            });
+
+            if (
+              cobrancaReply.handoffRequired &&
+              deps.repository.markConversationHandoff
+            ) {
+              await deps.repository.markConversationHandoff({
+                conversationId: resolved.conversationId,
+                reason: cobrancaReply.handoffReason ?? "cobranca_handoff",
+              });
+            }
+
+            for (const toolCall of cobrancaReply.toolCalls) {
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                oficinaId: resolved.oficinaId,
+                clienteId: resolved.clienteId,
+                toolName: toolCall.toolName,
+                input: toolCall.input,
+                output: toolCall.output,
+              });
+            }
+
+            replyBody = cobrancaReply.replyBody;
           } else {
             replyBody = "Recebi sua mensagem. Um humano segue com os próximos passos por aqui.";
           }

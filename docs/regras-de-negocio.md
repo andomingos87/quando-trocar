@@ -201,6 +201,16 @@ Dados mínimos coletados no fluxo: `nome_oficina`, `whatsapp_principal`.
 - Útil para captação offline, eventos, indicações.
 - Fonte: [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
 
+### 2.4 Conversão manual de lead em oficina (painel admin)
+Admin pode converter um lead vivo em oficina sem passar pelo bot. Fechamento por telefone ou visita.
+
+Ação atômica via RPC `convert_lead_to_oficina_manual`:
+- Bloqueia se lead já está em status terminal (`convertido | perdido`) ou se WhatsApp já está em uso por oficina não-cancelada.
+- Cria `oficinas` com `origem = 'manual'`, `plano_id` escolhido pelo admin, `preco_negociado` opcional, `dias_lembrete_padrao` configurável e `status` inicial `ativa | pausada`.
+- Atualiza `leads_oficina.status = convertido`, preenche `converted_at` e `oficina_id`.
+- Se houver conversa ligada ao lead, transita para `participant_type = oficina_cliente` e `agent_mode = onboarding`.
+- Fonte: `convertLeadManual` em `lib/admin/leads.ts`, migration `20260520120000_admin_lead_cliente_actions.sql`.
+
 ---
 
 ## 3. Onboarding e operação
@@ -401,6 +411,25 @@ Sistema:
 
 - Fonte: `WRONG_NUMBER_PATTERNS` em `lib/whatsapp/reminder-agent.ts`.
 
+### 7.4 Reativação de opt-out (admin)
+Só o admin humano pode reativar consentimento. O bot **nunca** muda `opt_out → ativo`.
+
+Quando admin reativa via painel:
+- `clientes_finais.status = ativo`
+- `clientes_finais.opt_out_at = null`
+- `clientes_finais.consentimento_whatsapp = true`
+- `clientes_finais.origem_consentimento` recebe novo valor obrigatório informado pelo admin (ex: `pedido_verbal_oficina`, `cliente_confirmou_whatsapp`).
+- `clientes_finais.data_consentimento = now()`.
+
+- Fonte: `reactivateCliente` em `lib/admin/clientes.ts`, ADR-0001.
+
+### 7.5 Mudança manual de status do cliente (admin)
+Admin pode também:
+- Marcar cliente `ativo → numero_errado` com motivo. Lembretes pendentes (`pendente|enfileirado|agendado`) são cancelados em cascata.
+- Reverter `numero_errado → ativo` (consentimento WhatsApp não muda).
+
+- Fonte: `marcarNumeroErrado`, `marcarNumeroCorreto` em `lib/admin/clientes.ts`.
+
 ---
 
 ## 8. WhatsApp e Meta (janela, templates)
@@ -523,9 +552,46 @@ Quando `oficinas.status != 'ativa'`, o scheduler **não enfileira** lembretes de
 - Tela `/admin` calcula MRR somando `COALESCE(preco_negociado, planos.preco_base)` onde `status = 'ativa'`.
 - Sem snapshot, sem cache. Revisitar acima de ~500 oficinas ativas.
 
-### 11.4 Fora do escopo do admin no MVP
+### 11.4 Ações admin sobre lead
+Admin pode, no detalhe de um lead, via painel:
+- Mudar status entre não-terminais: `novo | em_conversa | qualificado | interessado | teste_aceito`. Para `convertido` ou `perdido` há ações dedicadas (ver abaixo).
+- Reabrir lead `perdido` → volta para `em_conversa`, limpa `motivo_perda`.
+- Marcar lead como `perdido` com motivo (rota dedicada; já existia).
+- Editar dados qualificatórios: `nome`, `nome_responsavel`, `nome_oficina`, `cidade`, `volume_trocas_mes`, `ticket_medio`, `principal_dor`, `melhor_horario_contato`.
+- Trocar WhatsApp do lead com confirmação dupla (digitar o número duas vezes) e checagem de unicidade.
+- Converter manualmente em oficina (ver §2.4).
+- Soft delete (lead some das listagens; auditoria preservada). Bloqueado se status = `convertido` (oficina ficaria órfã visualmente).
+
+LLM **nunca** dispara essas mudanças (ADR-0001). Toda mutação grava em `admin_audit_log`.
+
+- Fonte: `lib/admin/leads.ts`, `app/api/admin/leads/[id]/route.ts`, `components/admin/lead-detail-actions.tsx`.
+
+### 11.5 Ações admin sobre cliente final
+Admin pode, no detalhe de um cliente final, via painel:
+- Editar `nome`.
+- Trocar WhatsApp com confirmação dupla e checagem de unicidade dentro da mesma `oficina_id`.
+- Marcar opt-out com motivo (`ativo → opt_out`, já existia).
+- Reativar opt-out informando nova `origem_consentimento` (`opt_out → ativo`).
+- Marcar número errado com motivo (`ativo → numero_errado`); cancela lembretes pendentes em cascata.
+- Reverter número errado (`numero_errado → ativo`); consentimento WhatsApp não muda.
+- Soft delete; cancela lembretes pendentes (`pendente | enfileirado | agendado`) em cascata.
+
+Todas as mutações gravam em `admin_audit_log`. LLM continua proibido de mudar status (ADR-0001).
+
+- Fonte: `lib/admin/clientes.ts`, `app/api/admin/clientes/[id]/route.ts`, `components/admin/cliente-detail-actions.tsx`.
+
+### 11.6 Soft delete (lead e cliente)
+- Implementado via colunas `deleted_at`, `deleted_by`, `deleted_reason` em `leads_oficina` e `clientes_finais`.
+- Registros com `deleted_at IS NOT NULL` ficam ocultos de listagens e detalhes por padrão (`listLeads`, `getLeadById`, `listClientesFinais`, `getClienteById` filtram por padrão; flag `includeDeleted: true` desativa).
+- Não há hard delete pelo painel. Para apagar definitivamente: SQL direto no Supabase.
+- Fonte: migration `20260520120000_admin_lead_cliente_actions.sql`.
+
+### 11.7 Fora do escopo do admin no MVP
 - Impersonate (entrar como oficina) — não tem.
-- Edição direta de dados operacionais (clientes, lembretes, serviços) — não tem.
+- Mesclar leads ou clientes duplicados — não tem (planejado para depois).
+- Bulk actions em listas — não tem.
+- Hard delete pelo painel — não tem (sempre soft).
+- Edição operacional de veículos, serviços e lembretes individuais — não tem (apenas o cliente).
 - Relatórios customizáveis, multi-tenant/agências, módulo de suporte — não tem.
 
 Para suporte profundo: admin acessa Supabase diretamente.
@@ -615,6 +681,41 @@ Lista das coisas que o bot **nunca** faz, com fonte:
 - Fonte: `lib/whatsapp/support-agent.ts`, `.codex/prompts/whatsapp-suporte.md`.
 
 ---
+
+## 15. Modo cobrança (`agent_mode='cobranca'`)
+
+### 15.1 Entrada e saída
+- **Entrada**: webhook detecta `oficinas.status='pausada'` em uma conversa de `participant_type='oficina_cliente'` e roteia conforme `motivo_pausa` (ver tabela em item 10.3).
+- `agent_mode='cobranca'` é override de runtime no webhook — **não** é persistido em `conversas.agent_mode`.
+- **Saída**: pagamento confirmado pelo webhook do Mercado Pago reativa a oficina (`status='ativa'`). Próxima mensagem cai no modo `operacao` / `onboarding` naturalmente.
+
+### 15.2 Submodes
+- `cobranca_inadimplente` — `motivo_pausa='inadimplencia'`. Foco em pagamento.
+- `cobranca_winback` — `motivo_pausa='voluntaria'`. Foco em entender por que pausou e oferecer ponte com humano.
+
+### 15.3 Intenções fechadas
+- `pediu_link` (inadimplente) → responde com link MP se houver pagamento pendente, senão handoff `link_indisponivel`.
+- `vai_pagar` → mesma resposta de `pediu_link`.
+- `ja_paguei` → **sempre handoff** (`verificar_pagamento`). Humano confere e reativa.
+- `negocia_prazo` → **sempre handoff** (`negocia_prazo` / `negocia_winback`). Sem exceção.
+- `quer_voltar` (winback) → handoff `reativacao_voluntaria`.
+- `nao_quer_voltar` (winback) → resposta cordial, sem handoff.
+- `disputa` → handoff (`disputa_cobranca` / `disputa_winback`).
+- `outro` → inadimplente: manda valor + vencimento + link; winback: pergunta o que faltou.
+
+### 15.4 Link de pagamento
+- Sempre lê `mp_preference_id` do `pagamentos` mais recente com `status='pendente'` da oficina (`getLatestPendingPagamento`).
+- Formato: `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id={mp_preference_id}`.
+- Agente **nunca** gera preference nova. Se não houver, handoff.
+
+### 15.5 Proibições adicionais da cobrança
+- Nunca prometer prazo (`"pode pagar dia 25"` está proibido).
+- Nunca prometer desconto, parcelamento ou condição comercial.
+- Nunca confirmar pagamento sem o webhook MP — `ja_paguei` é sempre handoff.
+- Nunca mudar `oficinas.status`, `oficinas.motivo_pausa` ou qualquer campo de `pagamentos`.
+- Nunca gerar link de pagamento novo. Só reusa o existente.
+
+- Fonte: `lib/whatsapp/cobranca-agent.ts`, `lib/whatsapp/inadimplencia-guard.ts`, `.codex/prompts/whatsapp-cobranca.md`.
 
 ---
 

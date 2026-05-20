@@ -559,6 +559,33 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     throwIfError(result);
   }
 
+  async getLatestPendingPagamento(input: { oficinaId: string }) {
+    const result = (await this.supabase
+      .from("pagamentos")
+      .select("valor, vencimento, mp_preference_id")
+      .eq("oficina_id", input.oficinaId)
+      .eq("status", "pendente")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{
+      valor: number | string;
+      vencimento: string | null;
+      mp_preference_id: string | null;
+    }>;
+
+    if (result.error) throw new Error(result.error.message);
+    if (!result.data) return null;
+
+    return {
+      valor:
+        typeof result.data.valor === "number"
+          ? result.data.valor
+          : Number(result.data.valor),
+      vencimento: result.data.vencimento,
+      mpPreferenceId: result.data.mp_preference_id,
+    };
+  }
+
   async convertLeadToOficina(input: {
     leadId: string;
     conversationId: string;
