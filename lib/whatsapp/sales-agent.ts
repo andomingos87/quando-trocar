@@ -123,6 +123,20 @@ export function detectVaiPensar(message: string) {
   ].some((re) => re.test(normalized));
 }
 
+export function detectSocialTest(message: string) {
+  const normalized = normalizeText(message);
+  if (normalized.length === 0) return false; // greeting trata isso
+  // Mensagens muito curtas (ate 3 chars) que nao sao greeting nem ack
+  if (normalized.length <= 3 && !/^(oi|ola|ei|eai|opa|ok|ta|tah)$/.test(normalized)) {
+    return true;
+  }
+  return [
+    /^(kkk+|kekek+|hahaha+|rsrs+|huehue+|hueheue+|kkkkk+)$/,
+    /^(testando|to testando|tava testando|so testando|teste pra ver)$/,
+    /^(opa kk|opa rs|kk testando|rs testando)$/,
+  ].some((re) => re.test(normalized));
+}
+
 export function detectQuerHumano(message: string) {
   const normalized = normalizeText(message);
   return [
@@ -280,8 +294,20 @@ export function classifySalesMessage(
 
   // 5. Saudacao basica -> fora_escopo com confidence ALTA (ciclo 3)
   //    Confidence >= 0.85 evita ir pro OpenAI fallback (que pode escolher small_talk).
+  //    O branch fora_escopo no buildReply diferencia 1a saudacao vs subsequente via memory.
   if (detectBasicGreeting(message)) {
     return { intent: "fora_escopo", confidence: 0.9 };
+  }
+
+  // 5.3. Confirmacao curta ("ok", "blz", "entendi") — vem antes do social_test
+  // pra "blz" (3 chars) nao ser classificado como social.
+  if (detectNeutralAck(message)) {
+    return { intent: "confirmacao_neutra", confidence: 0.9 };
+  }
+
+  // 5.5. Mensagem social/teste curta ("kk", "rs", "testando", ".") -> social_test
+  if (detectSocialTest(message)) {
+    return { intent: "social_test", confidence: 0.88 };
   }
 
   // 6. Pergunta de preco
@@ -311,13 +337,7 @@ export function classifySalesMessage(
     return { intent: "quer_testar", confidence: 0.86 };
   }
 
-  // 10. Confirmacao neutra ("ok", "blz", "entendi") — depois de quer_testar pra
-  //     "topa" e similares nao baterem aqui erroneamente.
-  if (detectNeutralAck(message)) {
-    return { intent: "confirmacao_neutra", confidence: 0.9 };
-  }
-
-  // 11. Small talk (off-topic explicito: futebol, piada)
+  // 10. Small talk (off-topic explicito: futebol, piada)
   if (detectSmallTalk(message)) {
     return { intent: "small_talk", confidence: 0.88 };
   }
@@ -367,6 +387,42 @@ function commercialHandoff(handoffWhatsapp: string) {
 const GREETING_PREFIX =
   "Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico.";
 
+// Saudacao subsequente (greeted=true): 5 variacoes pra alternar
+const GREETING_AFTER_GREETED = [
+  "Td certo chefe! Posso te ajudar com algo do produto, ou ja quer ver quanto vale pra sua oficina?",
+  "Bom, td bem chefe! Tava te falando aqui — bora ver como funciona pro seu caso?",
+  "Fala chefe! Se quiser eu te explico de novo, te mostro o numero, ou ja ativo o teste de 14 dias.",
+  "Td bom chefe :) Se for so um oi tranquilo, mas se quiser saber mais do produto e so chamar.",
+  "Tamo aqui chefe! Me diz no que posso ajudar: como funciona, preco, ou ja partir pro teste?",
+];
+
+// fora_escopo: 5 variacoes (rotaciona conforme consecutive_fallback)
+const FALLBACK_VARIATIONS = [
+  // [0] explainer curto (1a aparicao apos ja ter explicado uma vez)
+  "Nao entendi muito bem chefe. Se quiser ver como funciona ou ja topa testar 14 dias gratis, me fala.",
+  // [1] menu de opcoes
+  "Pra eu te ajudar melhor chefe, escolhe uma:\n- Como funciona\n- Quanto custa\n- Ja quero testar\n- Falar com o Anderson",
+  // [2] simples + gancho
+  "Pode reformular chefe? Ou se preferir, eu te explico de novo o produto, te passo o preco, ou ja ativo o teste.",
+  // [3] mais social
+  "Hmm, me ajuda chefe :) Me diz se voce quer ver como funciona, saber o preco, ou ja topa um teste.",
+  // [4] empurra pro humano sem fechar a porta
+  "Chefe, se preferir, posso te conectar direto com o Anderson. Senao, me diz o que precisa saber do produto.",
+];
+
+// social_test: 5 variacoes
+const SOCIAL_TEST_VARIATIONS = [
+  "Hahaha to por aqui chefe :) Qualquer coisa do produto e so chamar.",
+  "Td bem chefe :) Quer ver como funciona ou ja partir pro teste de 14 dias?",
+  "Chefe, se for so testando me avisa kkk. Senao, e so dizer o que precisa.",
+  "Beleza chefe :) Quando quiser saber do Quando Trocar, me fala.",
+  "Hahaha td bom chefe. Tamo aqui pra ajudar quando voce decidir o que quer saber.",
+];
+
+function pickVariation<T>(pool: ReadonlyArray<T>, index: number): T {
+  return pool[index % pool.length];
+}
+
 function withGreeting(memory: SalesConversationMemory, body: string) {
   if (memory.greeted) {
     return { body, greeted: true as const };
@@ -387,6 +443,12 @@ function buildReply(
 ): AgentReply {
   const memory: SalesConversationMemory = { ...context.memory };
 
+  // Contador de fallback consecutivo (Fix 2). Por padrao, todo branch
+  // que NAO seja fora_escopo final ou social_test reseta. Salvo o
+  // valor de entrada pra usar nos branches de loop.
+  const incomingFallbackCount = memory.consecutive_fallback ?? 0;
+  memory.consecutive_fallback = 0;
+
   // Handoff direto por porte (rede/franquia)
   if (detectScaleHandoff(context.message)) {
     return {
@@ -400,11 +462,24 @@ function buildReply(
   }
 
   // Small talk — resposta gentil, sem mudar status nem repetir pitch
+  // (counter ja resetado no topo)
   if (classification.intent === "small_talk") {
     return {
       status: context.leadStatus,
       body:
         "Hahaha nao to aqui pra isso chefe :) Mas se quiser ver como funciona ou ja topa testar 14 dias gratis, e so me chamar.",
+      toolCalls: [],
+      updatedContext: { sales: memory },
+    };
+  }
+
+  // Social/teste ("kk", "rs", "testando", "?") — resposta paciente, varia entre 5.
+  // Conta como fallback consecutive porque indica que o lead nao engajou.
+  if (classification.intent === "social_test") {
+    memory.consecutive_fallback = incomingFallbackCount + 1;
+    return {
+      status: context.leadStatus,
+      body: pickVariation(SOCIAL_TEST_VARIATIONS, incomingFallbackCount),
       toolCalls: [],
       updatedContext: { sales: memory },
     };
@@ -627,23 +702,65 @@ function buildReply(
     };
   }
 
-  // Fallback geral (fora_escopo) — variacao por funcionamento_explained, com saudacao se 1o turno
-  const fallbackBaseBody = memory.funcionamento_explained
-    ? "Nao entendi muito bem chefe. Se quiser ver como funciona ou ja topa testar 14 dias gratis, me fala."
-    : "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo e te avisa quem voltou. Pra eu te dar um numero, quantas trocas voce faz por mes e qual o ticket medio?";
+  // Fix 1: saudacao SUBSEQUENTE ("bom dia" depois de ja ter saudado)
+  // -> resposta social dedicada com 5 variacoes. NAO conta como fallback (reseta).
+  if (memory.greeted && detectBasicGreeting(context.message)) {
+    return {
+      status: statusForIntent(classification.intent),
+      body: pickVariation(GREETING_AFTER_GREETED, incomingFallbackCount),
+      toolCalls: [],
+      updatedContext: { sales: memory },
+    };
+  }
 
-  const fallbackPain = withPain(memory, context.message, fallbackBaseBody);
-  const fallbackGreeted = withGreeting(memory, fallbackPain.body);
+  // Primeira aparicao (greeted=false): explainer + saudacao. Marca como fallback #1.
+  if (!memory.greeted) {
+    const baseBody =
+      "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo e te avisa quem voltou. Pra eu te dar um numero, quantas trocas voce faz por mes e qual o ticket medio?";
+    const fallbackPain = withPain(memory, context.message, baseBody);
+    const fallbackGreeted = withGreeting(memory, fallbackPain.body);
 
-  memory.pain_detected = fallbackPain.painDetected;
+    memory.pain_detected = fallbackPain.painDetected;
+    memory.funcionamento_explained = true;
+    memory.greeted = fallbackGreeted.greeted;
+    memory.consecutive_fallback = 1;
+
+    return {
+      status: statusForIntent(classification.intent),
+      body: fallbackGreeted.body,
+      toolCalls: [],
+      updatedContext: { sales: memory },
+    };
+  }
+
+  // Fix 2: contador de fallback consecutivo. Em >= 7, handoff automatico.
+  const nextCount = incomingFallbackCount + 1;
+  memory.consecutive_fallback = nextCount;
+
+  if (nextCount >= 7) {
+    return {
+      status: context.leadStatus,
+      body: `Chefe, vou te conectar direto com o Anderson — fica mais rapido a gente fechar isso por la: ${whatsappLink({ phone: context.salesConfig.whatsappHandoffComercial })}`,
+      toolCalls: [],
+      handoffRequired: true,
+      handoffReason: "fallback_loop",
+      updatedContext: { sales: memory },
+    };
+  }
+
+  // Fix 3: rotaciona entre 5 variacoes baseado no contador
+  // (nextCount = 2 -> indice 1 = menu; 3 -> indice 2; etc.; antigo currentCount=1
+  // ja foi tratado no branch !greeted acima)
+  const variation = pickVariation(FALLBACK_VARIATIONS, incomingFallbackCount);
+  const wrappedPain = withPain(memory, context.message, variation);
+  memory.pain_detected = wrappedPain.painDetected;
   if (!memory.funcionamento_explained) {
     memory.funcionamento_explained = true;
   }
-  memory.greeted = fallbackGreeted.greeted;
 
   return {
     status: statusForIntent(classification.intent),
-    body: fallbackGreeted.body,
+    body: wrappedPain.body,
     toolCalls: [],
     updatedContext: { sales: memory },
   };
@@ -658,6 +775,7 @@ function parseOpenAIClassification(text: string): SalesClassification | null {
       parsed.intent === "pergunta_preco" ||
       parsed.intent === "pergunta_faq" ||
       parsed.intent === "small_talk" ||
+      parsed.intent === "social_test" ||
       parsed.intent === "confirmacao_neutra" ||
       parsed.intent === "vai_pensar" ||
       parsed.intent === "quer_humano" ||
@@ -821,6 +939,7 @@ export class WhatsappSalesAgent {
                     "pergunta_preco",
                     "pergunta_faq",
                     "small_talk",
+                    "social_test",
                     "confirmacao_neutra",
                     "vai_pensar",
                     "quer_humano",

@@ -29,6 +29,7 @@ export type SalesIntent =
   | "pergunta_preco"
   | "pergunta_faq"
   | "small_talk"
+  | "social_test"
   | "confirmacao_neutra"
   | "vai_pensar"
   | "quer_humano"
@@ -76,6 +77,7 @@ export type SalesConversationMemory = {
   pain_detected?: boolean;
   greeted?: boolean;
   funcionamento_explained?: boolean;
+  consecutive_fallback?: number;
 };
 
 export type FaqVendasRecord = {

@@ -11,6 +11,7 @@ import {
   detectQuerHumano,
   detectScaleHandoff,
   detectSmallTalk,
+  detectSocialTest,
   detectVaiPensar,
   extractVolumeOrTicket,
   matchFaq,
@@ -569,5 +570,134 @@ describe("whatsapp sales agent — Ciclo 3 (TIER 1 + TIER 2 criticos)", () => {
   test("FAQ matching: question about clients routes to prova social FAQ", () => {
     const match = matchFaq("voces tem cliente que ja usa?", faqs);
     expect(match?.id).toBe("faq-prova-social");
+  });
+});
+
+describe("whatsapp sales agent — Ciclo 4 (greeting subsequente + contador + variacoes + social/teste)", () => {
+  test("Fix 1: greeting subsequente (greeted=true) retorna resposta social dedicada", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "bom dia",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    // Nao deve repetir "Nao entendi muito bem chefe" — deve usar uma das 5 variacoes
+    expect(reply.body.toLowerCase()).not.toContain("nao entendi muito bem chefe");
+    // Pelo menos uma das variacoes deve aparecer parcialmente
+    expect(reply.body).toMatch(/td (certo|bem|bom)|tamo aqui|fala chefe|posso te ajudar/i);
+  });
+
+  test("Fix 1: variacoes diferentes em chamadas consecutivas", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const ctx1 = { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 0 } };
+    const ctx2 = { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 1 } };
+
+    const r1 = await agent.generateReply({ message: "oi", leadStatus: "em_conversa", context: ctx1, salesConfig: baseConfig, faqs });
+    const r2 = await agent.generateReply({ message: "ola", leadStatus: "em_conversa", context: ctx2, salesConfig: baseConfig, faqs });
+
+    // Bodies devem ser diferentes (rotacao no pool de 5)
+    expect(r1.body).not.toBe(r2.body);
+  });
+
+  test("Fix 2: contador consecutive_fallback incrementa em fora_escopo seguidos", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+
+    const r1 = await agent.generateReply({
+      message: "manda ai kkk",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 1 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(r1.updatedContext?.sales?.consecutive_fallback).toBe(2);
+
+    const r2 = await agent.generateReply({
+      message: "blah aleatorio",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 3 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(r2.updatedContext?.sales?.consecutive_fallback).toBe(4);
+  });
+
+  test("Fix 2: contador chega em 7 -> handoff automatico", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "frase aleatoria sem sentido",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 6 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.handoffRequired).toBe(true);
+    expect(reply.handoffReason).toBe("fallback_loop");
+    expect(reply.body).toMatch(/wa\.me/);
+  });
+
+  test("Fix 2: outros intents resetam o contador", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "quanto custa?",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 5 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.updatedContext?.sales?.consecutive_fallback).toBe(0);
+  });
+
+  test("Fix 3: pool de 5 variacoes do fallback gera respostas diferentes", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const bodies = new Set<string>();
+    for (let i = 1; i <= 5; i++) {
+      const reply = await agent.generateReply({
+        message: "frase aleatoria " + i,
+        leadStatus: "em_conversa",
+        context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: i } },
+        salesConfig: baseConfig,
+        faqs,
+      });
+      bodies.add(reply.body);
+    }
+    // Pelo menos 3 textos distintos no pool (alguns podem repetir pelo pain_prefix)
+    expect(bodies.size).toBeGreaterThanOrEqual(3);
+  });
+
+  test("Fix 4: detectSocialTest catches short/test messages", () => {
+    expect(detectSocialTest("kk")).toBe(true);
+    expect(detectSocialTest("kkkk")).toBe(true);
+    expect(detectSocialTest("rs")).toBe(true);
+    expect(detectSocialTest("testando")).toBe(true);
+    expect(detectSocialTest("to testando")).toBe(true);
+    // "?" cai em detectBasicGreeting (body vazio apos normalize), nao em social_test
+    expect(detectSocialTest("?")).toBe(false);
+    expect(detectSocialTest("ok")).toBe(false); // ack, nao social
+    expect(detectSocialTest("oi")).toBe(false); // greeting, nao social
+    expect(detectSocialTest("quanto custa?")).toBe(false);
+  });
+
+  test('Fix 4: "kk" classifica como social_test', () => {
+    expect(classifySalesMessage("kkkk", faqs).intent).toBe("social_test");
+    expect(classifySalesMessage("testando", faqs).intent).toBe("social_test");
+  });
+
+  test("Fix 4: social_test retorna variacoes do pool", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "kkkk",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body.toLowerCase()).toMatch(/hahaha|td bem|tamo aqui|beleza chefe|chefe/);
+    expect(reply.status).toBe("em_conversa");
   });
 });

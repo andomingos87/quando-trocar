@@ -70,6 +70,7 @@ The bot does not invent ranges, does not say "depende", does not commit to a fin
 - `pergunta_preco` → status unchanged; soft redirect on 1st (connects with known ROI if memory has it), handoff on 2nd
 - `pergunta_faq` → status unchanged; response from `faq_vendas`
 - `small_talk` → status unchanged; dedicated short response, does not repeat pitch (off-topic only: futebol, piada)
+- `social_test` → status unchanged; patient response (5 rotated variations); counts toward `consecutive_fallback`
 - `confirmacao_neutra` → status unchanged; short ack if `funcionamento_explained`, else falls into the regular flow
 - `vai_pensar` → status unchanged; "sem pressa" copy, no handoff
 - `quer_humano` → status unchanged; **direct handoff** to commercial `wa.me`
@@ -77,23 +78,34 @@ The bot does not invent ranges, does not say "depende", does not commit to a fin
 - `sem_interesse` → `perdido` only when explicit (`isExplicitLossMessage`)
 - `fora_escopo` → do not destroy an existing higher-value status; short copy when already explained
 
-## Detection order (classifySalesMessage) — 13 steps
+## Detection order (classifySalesMessage) — updated ciclo 4
 
-1. `isExplicitLossMessage` → `sem_interesse` (highest priority, beats even pain).
-2. **`detectPain` → `pergunta_funcionamento`** (override: pain always wins unless explicit loss).
-3. **`detectQuerHumano` → `quer_humano`** (explicit attendant request).
-4. **`detectVaiPensar` → `vai_pensar`** (hesitation: "vou pensar", "depois te falo").
-5. **`detectBasicGreeting` → `fora_escopo`** confidence 0.9 — avoids OpenAI fallback for "oi/ola/bom dia/" and empty bodies.
-6. `detectPriceQuestion` → `pergunta_preco`.
-7. `extractVolumeOrTicket` → `informa_volume_ticket`.
-8. Regex of "how does it work" → `pergunta_funcionamento`.
-9. Regex of "I want to try" → `quer_testar`.
-10. **`detectNeutralAck` → `confirmacao_neutra`** (after quer_testar so "topa" doesn't conflict).
-11. `detectSmallTalk` → `small_talk` (futebol, piada — only).
-12. `matchFaq` → `pergunta_faq`.
-13. Default → `fora_escopo`.
+1. `isExplicitLossMessage` → `sem_interesse` (highest priority, beats pain).
+2. **`detectPain` → `pergunta_funcionamento`** (override).
+3. **`detectQuerHumano` → `quer_humano`**.
+4. **`detectVaiPensar` → `vai_pensar`**.
+5. **`detectBasicGreeting` → `fora_escopo`** confidence 0.9 (skips OpenAI). Empty bodies (stickers) included.
+6. **`detectNeutralAck` → `confirmacao_neutra`** (moved up so "blz" doesn't fall into social_test).
+7. **`detectSocialTest` → `social_test`** (≤3 chars not covered above, "kkkk", "testando").
+8. `detectPriceQuestion` → `pergunta_preco`.
+9. `extractVolumeOrTicket` → `informa_volume_ticket`.
+10. Regex of "how does it work" → `pergunta_funcionamento`.
+11. Regex of "I want to try" → `quer_testar`.
+12. `detectSmallTalk` → `small_talk` (futebol, piada).
+13. `matchFaq` → `pergunta_faq`.
+14. Default → `fora_escopo`.
 
 Second gate inside `WhatsappSalesAgent.generateReply`: if OpenAI returns `sem_interesse` but `detectPain` matches and message is not explicit loss → override to `pergunta_funcionamento`.
+
+## Loop escalation (ciclo 4)
+
+- `memory.consecutive_fallback` counts `fora_escopo` + `social_test` in sequence. Any other intent resets to 0.
+- The 5-item pool `FALLBACK_VARIATIONS` rotates based on that counter (avoids repeating the same copy twice in a row).
+- When the counter reaches **7**, the next fallback triggers an **automatic handoff** to the commercial WhatsApp with `handoffReason = "fallback_loop"`.
+
+## Subsequent greeting (ciclo 4)
+
+When `memory.greeted === true` and the lead sends another greeting ("bom dia", "tudo bem?"), the bot replies with one of **5 social variations** (pool `GREETING_AFTER_GREETED`), not the explainer again. Does NOT count as fallback.
 
 ## OpenAI classifier system prompt
 

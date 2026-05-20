@@ -113,23 +113,24 @@ novo · em_conversa · qualificado · interessado · teste_aceito · convertido 
 Intents que o vendedor classifica (`SalesIntent`):
 
 ```
-pergunta_funcionamento · informa_volume_ticket · pergunta_preco · pergunta_faq · small_talk · confirmacao_neutra · vai_pensar · quer_humano · quer_testar · sem_interesse · fora_escopo
+pergunta_funcionamento · informa_volume_ticket · pergunta_preco · pergunta_faq · small_talk · social_test · confirmacao_neutra · vai_pensar · quer_humano · quer_testar · sem_interesse · fora_escopo
 ```
 
-**Ordem de detecção em `classifySalesMessage`** (13 passos):
+**Ordem de detecção em `classifySalesMessage`** (atualizada ciclo 4):
 1. `isExplicitLossMessage` → `sem_interesse` (vence tudo, até dor).
-2. **`detectPain` → `pergunta_funcionamento`** (override forte: dor relatada sempre vira explicação do produto, exceto quando explicit loss).
-3. **`detectQuerHumano` → `quer_humano`** (pedido explícito de atendente).
-4. **`detectVaiPensar` → `vai_pensar`** (hesitação: "vou pensar", "depois te falo").
-5. **`detectBasicGreeting` → `fora_escopo`** com confidence ALTA (0.9) — evita ir pro OpenAI fallback. Saudação simples ("oi", "ola", "bom dia"), mensagens vazias (sticker/emoji), "tudo bem?".
-6. `detectPriceQuestion` → `pergunta_preco`.
-7. `extractVolumeOrTicket` → `informa_volume_ticket`.
-8. Regex de funcionamento ("como funciona", etc.) → `pergunta_funcionamento`.
-9. Regex de interesse ("quero testar", etc.) → `quer_testar`.
-10. **`detectNeutralAck` → `confirmacao_neutra`** (depois de quer_testar pra "topa" não conflitar).
-11. **`detectSmallTalk` → `small_talk`** (off-topic explícito: time, futebol, piada). Pergunta sobre o bot ("voce e robo") foi movida pra FAQ.
-12. `matchFaq` → `pergunta_faq`.
-13. Default → `fora_escopo`.
+2. **`detectPain` → `pergunta_funcionamento`** (override forte).
+3. **`detectQuerHumano` → `quer_humano`**.
+4. **`detectVaiPensar` → `vai_pensar`**.
+5. **`detectBasicGreeting` → `fora_escopo`** (confidence 0.9). Saudação simples e body vazio.
+6. **`detectNeutralAck` → `confirmacao_neutra`** (vem antes do social_test pra "blz" não cair como social).
+7. **`detectSocialTest` → `social_test`** (mensagens ≤3 chars não-cobertas, "kkkk", "testando").
+8. `detectPriceQuestion` → `pergunta_preco`.
+9. `extractVolumeOrTicket` → `informa_volume_ticket`.
+10. Regex de funcionamento → `pergunta_funcionamento`.
+11. Regex de interesse → `quer_testar`.
+12. **`detectSmallTalk` → `small_talk`** (off-topic explícito: time, futebol, piada).
+13. `matchFaq` → `pergunta_faq`.
+14. Default → `fora_escopo`.
 
 Há um segundo gate dentro de `WhatsappSalesAgent.generateReply`: se o OpenAI fallback classificar como `sem_interesse` mas a mensagem disparar `detectPain` sem `isExplicitLossMessage`, o agente sobrescreve para `pergunta_funcionamento`.
 
@@ -142,6 +143,7 @@ Transições válidas (decisão determinística, não LLM):
 | `pergunta_preco` | mantém status atual | nunca rebaixa lead; incrementa contador; se memória tem volume+ticket, conecta com ROI |
 | `pergunta_faq` | mantém status atual | resposta vem de `faq_vendas` por match de palavra-chave |
 | `small_talk` | mantém status atual | resposta curta de redirect; não conta como fallback |
+| `social_test` | mantém status atual | "kkkk", "testando", mensagens muito curtas; resposta paciente (5 variações rotacionadas); **conta como fallback** |
 | `confirmacao_neutra` | mantém status atual | "ok"/"blz"/"entendi"; resposta curta se já explicou, senão cai pro fluxo padrão |
 | `vai_pensar` | mantém status atual | "vou pensar"/"depois te falo"; copy "sem pressa", sem handoff |
 | `quer_humano` | mantém status atual | "passa pro Anderson"; **handoff direto** com `wa.me` |
@@ -150,6 +152,10 @@ Transições válidas (decisão determinística, não LLM):
 | `fora_escopo` | mantém status atual | nunca rebaixa lead `interessado`; copy curta na 2ª aparição |
 
 **Saudação no primeiro turno:** quando `context.sales.greeted !== true`, as respostas de `pergunta_funcionamento` e `fora_escopo` (que são os "explicadores") recebem o prefixo *"Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico."*. Flag persistida no contexto.
+
+**Saudação subsequente (ciclo 4):** quando `memory.greeted === true` e o lead manda outra saudação ("bom dia", "tudo bem?"), o bot responde com uma das **5 variações** sociais em vez de repetir o explicador. Não conta como fallback.
+
+**Contador `consecutive_fallback` (ciclo 4):** incrementado a cada `fora_escopo` ou `social_test` consecutivo; resetado por qualquer outro intent. Ao atingir **7**, dispara handoff automático para o WhatsApp comercial com `handoffReason = "fallback_loop"`. As 5 variações de `FALLBACK_VARIATIONS` rotacionam baseadas nesse contador.
 
 - Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-sales-agent.md`](../.codex/prompts/whatsapp-sales-agent.md), `lib/whatsapp/sales-agent.ts`.
 
