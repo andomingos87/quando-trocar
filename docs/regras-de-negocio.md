@@ -66,6 +66,9 @@ O usuário decide. Não atualize por conta própria nem ignore por conta própri
 - [11. Painel admin e auditoria](#11-painel-admin-e-auditoria)
 - [12. Multi-tenancy e segurança](#12-multi-tenancy-e-segurança)
 - [13. Comportamento do bot (resumo das proibições)](#13-comportamento-do-bot-resumo-das-proibições)
+- [14. Modo suporte (`agent_mode='suporte'`)](#14-modo-suporte-agent_modesuporte)
+- [15. Modo cobrança (`agent_mode='cobranca'`)](#15-modo-cobrança-agent_modecobranca)
+- [16. Inteligência de mercado](#16-inteligência-de-mercado)
 
 ---
 
@@ -97,6 +100,9 @@ Quatro invariantes que valem em todo o sistema. Se uma regra parece conflitar co
 ---
 
 ## 1. Vendas e ciclo do lead
+
+### 1.0 Escopo do produto na conversa (ciclo 5)
+O bot fala "qualquer peça ou serviço automotivo com retorno previsível" — óleo, amortecedor, filtro, revisão, alinhamento, freio. Não restringe a troca de óleo. Suportado no banco via `TipoServico` enum (`troca_oleo · amortecedor · revisao · outro`).
 
 ### 1.1 Origem do lead
 - Frases-gatilho que marcam `origem = landing_page` são configuráveis em `configuracoes_vendedor.frases_landing` (painel admin). Default: `"oi quero testar o quando trocar"`.
@@ -160,10 +166,13 @@ Transições válidas (decisão determinística, não LLM):
 - Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-sales-agent.md`](../.codex/prompts/whatsapp-sales-agent.md), `lib/whatsapp/sales-agent.ts`.
 
 ### 1.3 Cálculo de ROI exibido ao lead
-- Fórmula: `receita_recuperada = trocas_mês × ticket_médio × taxa_recuperacao_roi`.
+- Fórmula: `receita_recuperada = serviços_mês × ticket_médio × taxa_recuperacao_roi`.
 - **Taxa default: 15%**, configurável no painel em `configuracoes_vendedor.taxa_recuperacao_roi`.
 - Bot apresenta como tendência ("oficinas do seu tamanho costumam trazer de volta uns X%"), não como promessa.
+- **Ciclo 5 — caminho B (sem fricção):** o bot **NÃO pergunta** volume/ticket na abertura. A abertura termina com CTA pros 14 dias grátis. O ROI só é calculado quando o lead voluntariamente passa os números numa mensagem.
 - Volume + ticket podem ser informados em mensagens separadas — o bot memoriza no `conversas.context.sales`.
+- Quando o lead dá só um dos dois, o bot pergunta o complemento **com saída fácil pro teste** ("sem stress — bora pro teste de 14 dias grátis").
+- Body do ROI fala "**serviços/mês**" (não "trocas/mês"), refletindo o escopo amplo.
 - Registrado em `agent_tool_calls` como `calculate_roi`.
 - Fonte: [PRD §7](./product/PRD-whatsapp-bot.md), `calculateRoi()` em `lib/whatsapp/sales-agent.ts`, `/admin/configuracoes`.
 
@@ -179,6 +188,7 @@ Transições válidas (decisão determinística, não LLM):
 - Match por palavra-chave: para cada FAQ ativa, conta quantas `palavras_chave` aparecem na mensagem normalizada (sem acento, lower-case). FAQ com mais matches vence; empate desempata pela menor `ordem`.
 - Cache de 60s no agente (`SupabaseWhatsappRepository.listActiveFaqs`). Edições no admin demoram até 1 minuto pra refletir no bot.
 - Tool call registrada como `faq_lookup`.
+- **Escopo amplo na saudação (revisado ciclo 5):** a saudação inicial **menciona o escopo completo** — óleo, amortecedor, filtro, revisão, alinhamento, freio. Essa decisão sobrescreve o desenho anterior de "posicionamento estratificado / saudação só com óleo", a pedido do sócio que considerou que esconder o escopo perdia oportunidade. A FAQ `serve_para_outros_servicos` (slug interno, seedada em `20260523000000_faq_serve_outros_servicos.sql`) **continua existindo** para detalhar quando o lead pergunta especificamente.
 - Fonte: `lib/whatsapp/sales-agent.ts`, `lib/admin/faq.ts`.
 
 ### 1.6 Handoff comercial direto
@@ -240,12 +250,16 @@ Ação atômica via RPC `convert_lead_to_oficina_manual`:
 3. `veiculo`
 4. `servico`
 5. `data_servico`
+6. `tipo_servico` — enum fechado `troca_oleo | amortecedor | revisao | outro`. Classificado deterministicamente do texto de `servico`; LLM apenas classifica (ADR-0001). Default histórico = `troca_oleo`.
 
 Opcional: `valor`.
 
+Condicional:
+- `marca_peca` — **só obrigatório quando `tipo_servico = amortecedor`**. Enum fechado `perfect | monroe | cofap | nakata | outra`. Se a oficina mencionar a marca espontaneamente, o parser extrai. Se faltar, agente pergunta uma vez com as 5 opções em ordem alfabética (`Cofap, Monroe, Nakata, Perfect, outra`) — Perfect nunca aparece primeiro, para evitar viés nos relatórios de mercado.
+
 Se faltar algum, o bot pergunta **só o primeiro faltante**, persiste o draft parcial em `conversas.context.service_draft`, e completa multi-turn.
 
-- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-onboarding-agent.md`](../.codex/prompts/whatsapp-onboarding-agent.md), `lib/whatsapp/onboarding-agent.ts`.
+- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-onboarding-agent.md`](../.codex/prompts/whatsapp-onboarding-agent.md), `lib/whatsapp/onboarding-agent.ts`, migration `20260521000000_tipo_servico_marca_peca.sql`.
 
 ### 3.3 Guardrails operacionais
 Bot **não** inicia cadastro nem preenche campo quando:
@@ -277,10 +291,19 @@ Mesmo se a oficina mandar novo cadastro do mesmo número.
 
 ## 4. Lembretes automáticos
 
-### 4.1 Prazo padrão
-- `proximo_lembrete = data_servico + dias_lembrete_padrao` (default 90 dias, por oficina).
-- Configurável por oficina em `oficinas.dias_lembrete_padrao`.
-- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md).
+### 4.1 Prazo padrão por tipo de serviço
+- `proximo_lembrete = data_servico + tipos_servico_default.dias_lembrete` (resolvido pelo `tipo_servico` do serviço cadastrado).
+- Tabela global `tipos_servico_default` (gerenciada em `/admin/tipos-servico`):
+
+| `tipo_servico` | `dias_lembrete` | `template_name` |
+|---|---|---|
+| `troca_oleo` | 90 | `lembrete_troca_oleo` |
+| `amortecedor` | 730 | `lembrete_amortecedor` |
+| `revisao` | 180 | `lembrete_revisao_geral` |
+| `outro` | 180 | `lembrete_revisao_geral` |
+
+- **Fallback**: se o tipo estiver `ativo = false` (admin desativou), usa `oficinas.dias_lembrete_padrao` (default 90). Mantido por compatibilidade.
+- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [ADR-0014](./adr/0014-cadencia-e-template-por-tipo-de-servico.md), migration `20260522000000_tipos_servico_default.sql`.
 
 ### 4.2 Estados do lembrete
 ```
@@ -306,9 +329,11 @@ Um lembrete só é enfileirado pelo scheduler (`enqueue_due_whatsapp_reminders`)
 
 ### 4.4 Envio via template aprovado
 - Lembretes são sempre enviados fora da janela de 24h → **sempre via template Meta**.
-- Template: `lembrete_troca_oleo` (parâmetros: nome cliente, nome oficina, veículo).
-- Texto renderizado salvo em `outbound_messages` para auditoria.
-- Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), `lib/whatsapp/reminder-agent.ts`.
+- Template e idioma resolvidos pelo `tipo_servico` em `tipos_servico_default` (ver §4.1). Scheduler grava `template_name`, `template_language` e `template_params` em `outbound_messages` por linha — worker apenas lê.
+- Parâmetros (todos os tipos no MVP): `[nome_cliente, nome_oficina, descricao_veiculo]`.
+- Texto renderizado salvo em `outbound_messages.body` para auditoria (varia por tipo).
+- Templates exigidos aprovados na Meta: `lembrete_troca_oleo` (existente), `lembrete_amortecedor` (novo), `lembrete_revisao_geral` (novo).
+- Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), [ADR-0014](./adr/0014-cadencia-e-template-por-tipo-de-servico.md), `lib/whatsapp/reminder-agent.ts`, `lib/whatsapp/reminder-worker.ts`.
 
 ### 4.5 Retry com backoff
 Falha temporária do provedor → retry escalonado:
@@ -729,6 +754,30 @@ Lista das coisas que o bot **nunca** faz, com fonte:
 - Nunca gerar link de pagamento novo. Só reusa o existente.
 
 - Fonte: `lib/whatsapp/cobranca-agent.ts`, `lib/whatsapp/inadimplencia-guard.ts`, `.codex/prompts/whatsapp-cobranca.md`.
+
+---
+
+## 16. Inteligência de mercado
+
+### 16.1 Escopo
+- Painel `/admin/inteligencia-mercado` mostra agregações de cadastros (não de receita) extraídas de `servicos.tipo_servico` e `servicos.marca_peca`.
+- Quatro cards: mix por tipo, market-share de amortecedor, top cidades, cohort Perfect.
+- Filtro de período (default últimos 90 dias) e cidade (afeta apenas market-share).
+- Fonte: `lib/admin/inteligencia-mercado.ts`, `app/admin/(autenticado)/inteligencia-mercado/page.tsx`.
+
+### 16.2 Regras anti-viés Perfect
+- Market-share renderizado em **ordem alfabética** (Cofap, Monroe, Nakata, outra, Perfect). Perfect **nunca** aparece primeiro em UI ou em qualquer pergunta do bot.
+- Pergunta do `onboarding-agent` quando `tipo='amortecedor'` segue a mesma ordem (ver §3.2).
+- Lista fechada com `'outra'` explícito reduz pressão de escolher Perfect quando a oficina não sabe a marca.
+
+### 16.3 Política de uso externo
+- **Admin-only**. Dados de cadastros são internos do Quando Trocar.
+- **Não compartilhar relatórios externos** (ex: enviar pra Perfect ou outro fabricante) sem revisão jurídica/contratual. Mesmo agregado, market-share pode revelar oficinas individuais em cidades pequenas (re-identificação).
+- Decisão de monetizar dado de mercado (vender relatório) exige nova ADR antes da primeira venda.
+
+### 16.4 Performance
+- Queries usam o índice `servicos_tipo_servico_idx` `(oficina_id, tipo_servico, data_servico desc)` criado na Fase 1 (`20260521000000_tipo_servico_marca_peca.sql`).
+- Agregações in-memory no Node (não SQL `group by`) — vale até ~100k linhas de `servicos`. Acima disso, mover para RPC.
 
 ---
 

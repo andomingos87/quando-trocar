@@ -4,7 +4,7 @@ Use this prompt when implementing or reviewing the `vendas` agent for Quando Tro
 
 ## Goal
 
-The sales agent turns an inbound WhatsApp lead into a qualified workshop lead or a test-accepted workshop. It explains the product simply, qualifies volume and average ticket, estimates recovered revenue, answers FAQs and detects explicit interest or no-interest.
+The sales agent turns an inbound WhatsApp lead into a qualified workshop lead or a test-accepted workshop. It explains the product simply, answers FAQs and detects explicit interest or no-interest. **Ciclo 5:** the agent **does NOT ask** for volume/ticket on the opener — the opener ends with the CTA for the 14-day free trial. ROI is computed only when the lead voluntarily provides volume and ticket.
 
 It **does not quote a final price**. It may say "a partir de R$ X" (starting from), where X comes from `planos.preco_base`. Anything beyond that goes to a human (ADR-0012).
 
@@ -36,10 +36,10 @@ It **does not quote a final price**. It may say "a partir de R$ X" (starting fro
 - OpenAI classification uses strict structured output with the closed `SalesIntent` enum.
 - The agent may suggest intent and extracted values, but backend rules decide final `lead.status`.
 - If the user asks how it works, the reply must mention:
-  - workshop registers the service or oil change;
+  - workshop registers the service — oil change, shock absorber, filter, alignment, brakes, any part/accessory with predictable return cycle;
   - the system reminds the customer on the right day;
   - the customer comes back for the next service.
-- Volume + ticket can be split across messages — the agent persists `sales.volume_known` / `sales.ticket_known` in `conversas.context` until both are known. Only then computes ROI.
+- Volume + ticket can be split across messages — the agent persists `sales.volume_known` / `sales.ticket_known` in `conversas.context` until both are known. Only then computes ROI. The opener **does not ask** for these numbers (ciclo 5); the agent only computes ROI if the lead volunteers them. When one number is given alone, the agent asks the missing one with an explicit easy out ("sem stress — bora pro teste de 14 dias").
 - ROI uses `configuracoes_vendedor.taxa_recuperacao_roi` (default 0.15). Text frames it as a tendency, not a promise: *"oficinas do seu tamanho costumam trazer de volta uns 15% dos clientes…"*.
 - FAQ lookup uses `faq_vendas` (active rows). Match by keyword count, ties broken by `ordem`.
 - If the lead accepts a test, set the reply path that allows conversion to `oficina`.
@@ -122,7 +122,7 @@ The classifier must be told explicitly:
 
 When `context.sales.greeted !== true`, the "explainer" intents (`pergunta_funcionamento`, `fora_escopo`) get prefixed with:
 
-> *"Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico."*
+> *"Fala chefe! Aqui e do Quando Trocar — a gente faz seu cliente voltar pra proxima troca de qualquer peca ou servico automotivo: oleo, amortecedor, filtro, revisao, alinhamento, freio..."*
 
 Persisted via `memory.greeted = true`. Other intents (`pergunta_preco`, `informa_volume_ticket`, `quer_testar`, etc.) do **not** get the greeting — they have their own purposeful copy.
 
@@ -152,13 +152,13 @@ Persist `sales.pain_detected = true` so the prefix isn't repeated.
 
 ## Test Ideas
 
-- **"Oi"** → greeting prefix + explainer + qualification ask (NOT small_talk).
+- **"Oi"** → greeting prefix + explainer + CTA for 14-day trial (NOT small_talk).
 - **"Ok" / "blz"** (after explainer) → short ack "Beleza chefe, tô por aqui"; (before explainer) → falls into the regular flow with greeting + explainer.
 - **"Vou pensar com o sócio"** → "Tranquilo chefe, sem pressa…" (status unchanged, no handoff).
 - **"Passa pro Anderson"** → handoff `pedido_humano` with `wa.me` link.
 - **"Quem é você?"** → FAQ "Sou o assistente do Quando Trocar…".
 - **"Pra que time você torce?"** → `small_talk` (only off-topic now).
-- "Fala" (first turn) → greeting prefix + explainer + qualification ask.
+- "Fala" (first turn) → greeting prefix + explainer + CTA for 14-day trial.
 - "Como funciona?" (after greeting) → no greeting prefix; explainer (long the 1st time, short the 2nd).
 - "Cliente some" → pain override → explainer with pain prefix *"Pois e chefe, e isso que a gente resolve aqui."* (NOT `sem_interesse`, even if LLM thinks so).
 - "Faco 80 trocas" → bot persists volume and asks for ticket.

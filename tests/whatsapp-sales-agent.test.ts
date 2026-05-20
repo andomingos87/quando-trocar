@@ -54,6 +54,26 @@ const faqs: FaqVendasRecord[] = [
     palavras_chave: ["quem e voce", "voce e ia", "voce e robo", "qual seu nome"],
     ordem: 240,
   },
+  {
+    id: "faq-serve-outros-servicos",
+    pergunta: "Serve para outros servicos alem de troca de oleo?",
+    resposta:
+      "O carro-chefe e troca de oleo chefe. Mas a gente tambem traz de volta cliente de revisao, troca de amortecedor e qualquer servico com retorno previsivel (3 meses a 2 anos).",
+    palavras_chave: [
+      "outros servicos",
+      "amortecedor",
+      "revisao",
+      "alinhamento",
+      "suspensao",
+      "freio",
+      "filtro",
+      "alem de oleo",
+      "alem do oleo",
+      "so faz oleo",
+      "tipos de servico",
+    ],
+    ordem: 250,
+  },
 ];
 
 describe("whatsapp sales agent — deterministic detectors", () => {
@@ -151,6 +171,24 @@ describe("whatsapp sales agent — generateReply", () => {
     });
 
     expect(reply.body).toContain("Nao precisa nao chefe");
+    expect(reply.toolCalls).toEqual([
+      expect.objectContaining({ toolName: "faq_lookup" }),
+    ]);
+  });
+
+  test("FAQ amortecedor: lead pergunta sobre outros servicos e recebe resposta estratificada", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "voces servem para troca de amortecedor tambem?",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body.toLowerCase()).toContain("oleo");
+    expect(reply.body.toLowerCase()).toContain("amortecedor");
+    expect(reply.body.toLowerCase()).toContain("revisao");
     expect(reply.toolCalls).toEqual([
       expect.objectContaining({ toolName: "faq_lookup" }),
     ]);
@@ -699,5 +737,68 @@ describe("whatsapp sales agent — Ciclo 4 (greeting subsequente + contador + va
 
     expect(reply.body.toLowerCase()).toMatch(/hahaha|td bem|tamo aqui|beleza chefe|chefe/);
     expect(reply.status).toBe("em_conversa");
+  });
+});
+
+describe("whatsapp sales agent — Ciclo 5 (escopo amplo + zero friction na abertura)", () => {
+  test("Ciclo 5: abertura NAO pergunta volume/ticket — termina com CTA pros 14 dias", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "como funciona?",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    // Sem pergunta de qualificacao na abertura
+    expect(reply.body.toLowerCase()).not.toMatch(
+      /quantas trocas voce faz|quantos servicos voce faz|qual o ticket medio/,
+    );
+    // Termina com CTA pros 14 dias
+    expect(reply.body.toLowerCase()).toContain("14 dias gratis");
+  });
+
+  test("Ciclo 5: abertura menciona escopo amplo (alem de oleo)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "oi",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    // Pelo menos uma das palavras de escopo amplo deve aparecer
+    expect(reply.body.toLowerCase()).toMatch(/amortecedor|filtro|peca|servico/);
+  });
+
+  test("Ciclo 5: ROI calculado usa 'servicos/mes' (nao 'trocas/mes')", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "faco 80 trocas a 180",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body).toContain("servicos/mes");
+    expect(reply.body).not.toContain("trocas/mes");
+  });
+
+  test("Ciclo 5: pergunta de complemento (so volume veio) tem saida facil pro teste", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "faco 80 trocas por mes",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body).toMatch(/ticket medio/i);
+    // Saida facil
+    expect(reply.body.toLowerCase()).toMatch(/sem stress|sem pressao|teste de 14 dias|bora/);
   });
 });

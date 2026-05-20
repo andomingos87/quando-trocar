@@ -385,7 +385,7 @@ function commercialHandoff(handoffWhatsapp: string) {
 }
 
 const GREETING_PREFIX =
-  "Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico.";
+  "Fala chefe! Aqui e do Quando Trocar — a gente faz seu cliente voltar pra proxima troca de qualquer peca ou servico automotivo: oleo, amortecedor, filtro, revisao, alinhamento, freio...";
 
 // Saudacao subsequente (greeted=true): 5 variacoes pra alternar
 const GREETING_AFTER_GREETED = [
@@ -599,11 +599,11 @@ function buildReply(
     }
 
     if (volume === undefined || ticket === undefined) {
-      const ask = volume === undefined ? "quantas trocas voce faz por mes?" : "qual o ticket medio?";
+      const ask = volume === undefined ? "quantos servicos voce faz por mes?" : "qual o ticket medio?";
       const reply = withPain(
         memory,
         context.message,
-        `Beleza chefe, me ajuda com um numero: ${ask}`,
+        `Show chefe, sabe me dizer ${ask} Se nao tiver de cabeca, sem stress — bora pro teste de 14 dias gratis.`,
       );
       memory.pain_detected = reply.painDetected;
       return {
@@ -620,7 +620,7 @@ function buildReply(
     const ticketFmt = formatBrl(ticket);
     const pct = Math.round(recoveryRate * 100);
 
-    const body = `Olha chefe, oficinas do seu tamanho costumam trazer de volta uns ${pct}% dos clientes que somem. Com ${volume} trocas/mes e ticket de ${ticketFmt}, pra voce isso seria uns ${recoveredFmt}/mes caindo de novo na oficina. Bora ativar 14 dias gratis pra testar?`;
+    const body = `Olha chefe, oficinas do seu tamanho costumam trazer de volta uns ${pct}% dos clientes que somem. Com ${volume} servicos/mes e ticket de ${ticketFmt}, pra voce isso seria uns ${recoveredFmt}/mes caindo de novo na oficina. Bora ativar 14 dias gratis pra testar?`;
     const reply = withPain(memory, context.message, body);
     memory.pain_detected = reply.painDetected;
 
@@ -674,8 +674,8 @@ function buildReply(
   // Pergunta funcionamento — copy longa na 1a, curta nas seguintes; saudacao se for 1o turno
   if (classification.intent === "pergunta_funcionamento") {
     const baseBody = memory.funcionamento_explained
-      ? "Lembra chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra testar?"
-      : "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Pra eu te mostrar quanto isso vale pra sua oficina, quantas trocas voce faz por mes e qual o ticket medio?";
+      ? "Lembra chefe: voce cadastra o servico aqui, o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra testar?"
+      : "Funciona assim chefe: voce cadastra o servico aqui (oleo, amortecedor, qualquer peca com retorno previsivel), o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra voce ver rodando na sua oficina?";
 
     const painWrapped = withPain(memory, context.message, baseBody);
     const greeted = withGreeting(memory, painWrapped.body);
@@ -716,7 +716,7 @@ function buildReply(
   // Primeira aparicao (greeted=false): explainer + saudacao. Marca como fallback #1.
   if (!memory.greeted) {
     const baseBody =
-      "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo e te avisa quem voltou. Pra eu te dar um numero, quantas trocas voce faz por mes e qual o ticket medio?";
+      "Funciona assim chefe: voce cadastra o servico aqui (oleo, amortecedor, qualquer peca com retorno previsivel), o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra ver rodando na sua oficina?";
     const fallbackPain = withPain(memory, context.message, baseBody);
     const fallbackGreeted = withGreeting(memory, fallbackPain.body);
 
