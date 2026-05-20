@@ -22,6 +22,8 @@ describe("WhatsappOnboardingAgent", () => {
       dataServico: "2026-04-25",
       valor: null,
       consentimentoWhatsapp: true,
+      tipoServico: "troca_oleo",
+      marcaPeca: null,
     });
     expect(result.context).toEqual({});
     expect(result.nextAgentMode).toBe("operacao");
@@ -49,6 +51,7 @@ describe("WhatsappOnboardingAgent", () => {
         data_servico: "2026-04-25",
         valor: null,
         consentimento_whatsapp: true,
+        tipo_servico: "troca_oleo",
       },
     });
   });
@@ -83,6 +86,8 @@ describe("WhatsappOnboardingAgent", () => {
       dataServico: "2026-04-25",
       valor: null,
       consentimentoWhatsapp: true,
+      tipoServico: "troca_oleo",
+      marcaPeca: null,
     });
     expect(result.context).toEqual({});
   });
@@ -197,6 +202,7 @@ describe("WhatsappOnboardingAgent", () => {
         data_servico: "2026-04-25",
         valor: null,
         consentimento_whatsapp: true,
+        tipo_servico: "troca_oleo",
       },
     };
 
@@ -210,5 +216,131 @@ describe("WhatsappOnboardingAgent", () => {
     expect(result.registerServiceInput).toBeNull();
     expect(result.body).toBe("Certo. Qual e o carro do cliente?");
     expect(result.context).toEqual(context);
+  });
+
+  test("amortecedor com marca informada na mesma mensagem registra direto", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: "Maria, Onix 2020, amortecedor dianteiro Perfect, hoje, 11988887777",
+      mode: "operacao",
+      context: {},
+      today: "2026-05-20",
+    });
+
+    expect(result.registerServiceInput).toMatchObject({
+      nomeCliente: "Maria",
+      veiculo: "Onix 2020",
+      tipoServico: "amortecedor",
+      marcaPeca: "perfect",
+    });
+    expect(result.context).toEqual({});
+  });
+
+  test("amortecedor sem marca pergunta com 5 opcoes em ordem alfabetica", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: "Maria, Onix 2020, amortecedor, hoje, 11988887777",
+      mode: "operacao",
+      context: {},
+      today: "2026-05-20",
+    });
+
+    expect(result.registerServiceInput).toBeNull();
+    expect(result.body).toBe(
+      "Anotei amortecedor. Qual a marca da peca? (Cofap, Monroe, Nakata, Perfect, outra)",
+    );
+    expect(result.context.missing_field).toBe("marca_peca");
+    expect(result.context.service_draft).toMatchObject({
+      nome_cliente: "Maria",
+      veiculo: "Onix 2020",
+      tipo_servico: "amortecedor",
+    });
+  });
+
+  test("follow-up de marca completa o draft e gera registerServiceInput", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+    const context: ConversationContext = {
+      pending_action: "registrar_primeira_troca",
+      missing_field: "marca_peca",
+      service_draft: {
+        nome_cliente: "Maria",
+        whatsapp_cliente: "+5511988887777",
+        veiculo: "Onix 2020",
+        servico: "amortecedor",
+        data_servico: "2026-05-20",
+        valor: null,
+        consentimento_whatsapp: true,
+        tipo_servico: "amortecedor",
+      },
+    };
+
+    const result = await agent.generateReply({
+      message: "perfect",
+      mode: "operacao",
+      context,
+      today: "2026-05-20",
+    });
+
+    expect(result.registerServiceInput).toMatchObject({
+      tipoServico: "amortecedor",
+      marcaPeca: "perfect",
+    });
+    expect(result.context).toEqual({});
+  });
+
+  test("variacoes de marca (PERFECT, perfec) normalizam para perfect", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+    const baseContext: ConversationContext = {
+      pending_action: "registrar_primeira_troca",
+      missing_field: "marca_peca",
+      service_draft: {
+        nome_cliente: "Maria",
+        whatsapp_cliente: "+5511988887777",
+        veiculo: "Onix 2020",
+        servico: "amortecedor",
+        data_servico: "2026-05-20",
+        valor: null,
+        consentimento_whatsapp: true,
+        tipo_servico: "amortecedor",
+      },
+    };
+
+    for (const variation of ["PERFECT", "perfec", "Perfect"]) {
+      const result = await agent.generateReply({
+        message: variation,
+        mode: "operacao",
+        context: baseContext,
+        today: "2026-05-20",
+      });
+      expect(result.registerServiceInput?.marcaPeca).toBe("perfect");
+    }
+  });
+
+  test("revisao e outros tipos nao disparam pergunta de marca", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const revisao = await agent.generateReply({
+      message: "Carlos, Corolla 2019, revisao, hoje, 21999998888",
+      mode: "operacao",
+      context: {},
+      today: "2026-05-20",
+    });
+    expect(revisao.registerServiceInput).toMatchObject({
+      tipoServico: "revisao",
+      marcaPeca: null,
+    });
+
+    const outro = await agent.generateReply({
+      message: "Pedro, HB20, alinhamento, hoje, 11977776666",
+      mode: "operacao",
+      context: {},
+      today: "2026-05-20",
+    });
+    expect(outro.registerServiceInput).toMatchObject({
+      tipoServico: "outro",
+      marcaPeca: null,
+    });
   });
 });

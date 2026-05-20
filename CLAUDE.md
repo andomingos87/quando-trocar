@@ -17,6 +17,7 @@ Read `AGENTS.md` first. It is the canonical, prescriptive guide for any agent (C
 - **Bot architecture**: `docs/architecture/whatsapp-bot-technical-plan.md`
 - **Active execution / phase tracking**: `docs/backlog-whatsapp-bot/`
 - **Decision history**: `docs/CONTEXT_CHANGELOG.md`
+- **Business rules index**: `docs/regras-de-negocio.md`
 
 ## Language convention
 
@@ -48,3 +49,4 @@ npm run lint       # next lint
 - Add or update tests when changing parsing, routing, status transitions, repository writes or webhook behaviour.
 - Never let LLM output alone change `lead.status`, `participant_type`, `agent_mode`, payment state, opt-out state or reminder status (see ADR-0001).
 - Run `git status --short` before and after work to avoid overwriting local edits.
+- **Keep `docs/regras-de-negocio.md` in sync with code.** Any change that alters product behaviour — new/changed status, intent, enum, guardrail, flow, threshold, agent rule, billing logic, opt-out trigger — must update the matching entry in the same change. When uncertain whether a change qualifies, ask the user before implementing. Pure refactors, renames, or fixes that do not change behaviour do not require an update.

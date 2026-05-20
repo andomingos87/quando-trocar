@@ -4,10 +4,12 @@ import { normalizeText, normalizeWhatsappPhone } from "./sales-agent";
 import type {
   ConversationAgentMode,
   ConversationContext,
+  MarcaAmortecedor,
   OnboardingAgent,
   OnboardingAgentReply,
   RegisterServiceInput,
   ServiceDraft,
+  TipoServico,
 } from "./types";
 
 type MissingField = NonNullable<ConversationContext["missing_field"]>;
@@ -15,10 +17,58 @@ type MissingField = NonNullable<ConversationContext["missing_field"]>;
 const WEEKDAY_PATTERN = /\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/;
 const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
 const SERVICE_PATTERN =
-  /\b(troca|oleo|óleo|revisao|revisão|filtro|pastilha|freio|alinhamento|balanceamento|servico|serviço)\b/;
+  /\b(troca|oleo|óleo|revisao|revisão|filtro|pastilha|freio|alinhamento|balanceamento|servico|serviço|amortecedor)\b/;
 const NEUTRAL_PATTERN = /^(ok|okay|obrigado|obrigada|valeu|beleza|bom dia|boa tarde|boa noite|certo)$/;
 const PROMPT_INJECTION_PATTERN =
   /\b(ignore|ignora|instrucoes|instruções|prompt|sistema|system|developer|delete|apague|drop table|sql|senha|token|segredo)\b/;
+
+const TIPO_AMORTECEDOR_PATTERN = /\bamortecedor(es)?\b/;
+const TIPO_OLEO_PATTERN = /\b(troca\s+de\s+oleo|oleo|filtro\s+de\s+oleo)\b/;
+const TIPO_REVISAO_PATTERN = /\b(revisao|revisar)\b/;
+
+const MARCA_VALIDAS: ReadonlyArray<MarcaAmortecedor> = [
+  "perfect",
+  "monroe",
+  "cofap",
+  "nakata",
+  "outra",
+];
+
+function detectTipoServico(servico: string | undefined | null): TipoServico {
+  if (!servico) return "troca_oleo";
+  const normalized = normalizeText(servico);
+  if (TIPO_AMORTECEDOR_PATTERN.test(normalized)) return "amortecedor";
+  if (TIPO_OLEO_PATTERN.test(normalized)) return "troca_oleo";
+  if (TIPO_REVISAO_PATTERN.test(normalized)) return "revisao";
+  if (/\b(alinhamento|balanceamento|freio|pastilha|suspensao|pneu)\b/.test(normalized)) {
+    return "outro";
+  }
+  return "troca_oleo";
+}
+
+function normalizeMarca(input: string | null | undefined): MarcaAmortecedor | null {
+  if (!input) return null;
+  const n = normalizeText(input).replace(/\s+/g, "");
+  if (!n) return null;
+  if (/perfec/.test(n)) return "perfect";
+  if (/monroe|monro/.test(n)) return "monroe";
+  if (/cofap/.test(n)) return "cofap";
+  if (/nakat/.test(n)) return "nakata";
+  if (/^(outra|outro|outras|outros|naosei|nao\s*sei)$/.test(n)) return "outra";
+  return null;
+}
+
+function extractMarcaFromMessage(message: string): MarcaAmortecedor | null {
+  const normalized = normalizeText(message);
+  for (const marca of MARCA_VALIDAS) {
+    const aliases =
+      marca === "perfect" ? "perfec" : marca === "nakata" ? "nakat" : marca === "monroe" ? "monro" : marca;
+    if (new RegExp(`\\b${aliases}\\w*\\b`).test(normalized)) {
+      return marca;
+    }
+  }
+  return null;
+}
 
 function isoDateOffset(today: string, offsetDays: number) {
   const date = new Date(`${today}T12:00:00.000Z`);
@@ -132,6 +182,15 @@ function parseDeterministic(message: string, today: string): ServiceDraft {
   if (phone) draft.whatsapp_cliente = normalizeWhatsappPhone(phone);
   if (parsedDate.date) draft.data_servico = parsedDate.date;
 
+  if (service) {
+    const tipo = detectTipoServico(service);
+    draft.tipo_servico = tipo;
+    if (tipo === "amortecedor") {
+      const marca = extractMarcaFromMessage(message);
+      if (marca) draft.marca_peca = marca;
+    }
+  }
+
   return draft;
 }
 
@@ -178,6 +237,20 @@ function applyFollowUp(
     }
   }
 
+  if (context.missing_field === "marca_peca") {
+    const marca = normalizeMarca(message) ?? extractMarcaFromMessage(message);
+    if (marca) {
+      draft.marca_peca = marca;
+    } else if (!isNeutralMessage(message) && !isQuestionLike(message)) {
+      // Resposta livre que nao casa com lista fechada vira 'outra'.
+      draft.marca_peca = "outra";
+    }
+  }
+
+  if (draft.servico && !draft.tipo_servico) {
+    draft.tipo_servico = detectTipoServico(draft.servico);
+  }
+
   return draft;
 }
 
@@ -187,6 +260,8 @@ function missingFieldForDraft(draft: ServiceDraft): MissingField | null {
   if (!draft.veiculo) return "veiculo";
   if (!draft.servico) return "servico";
   if (!draft.data_servico) return "data_servico";
+  const tipo = draft.tipo_servico ?? detectTipoServico(draft.servico);
+  if (tipo === "amortecedor" && !draft.marca_peca) return "marca_peca";
   return null;
 }
 
@@ -199,12 +274,15 @@ function questionForMissingField(field: MissingField) {
   if (field === "whatsapp_cliente") return "Perfeito. Agora me passe o WhatsApp do cliente.";
   if (field === "veiculo") return "Certo. Qual e o carro do cliente?";
   if (field === "servico") return "Certo. Qual servico foi feito?";
-  return "Certo. Qual foi a data do servico?";
+  if (field === "data_servico") return "Certo. Qual foi a data do servico?";
+  return "Anotei amortecedor. Qual a marca da peca? (Cofap, Monroe, Nakata, Perfect, outra)";
 }
 
 function draftToRegisterInput(
   draft: ServiceDraft,
 ): Omit<RegisterServiceInput, "oficinaId"> {
+  const tipoServico = draft.tipo_servico ?? detectTipoServico(draft.servico);
+  const marcaPeca = tipoServico === "amortecedor" ? draft.marca_peca ?? null : null;
   return {
     nomeCliente: draft.nome_cliente!,
     whatsappCliente: draft.whatsapp_cliente!,
@@ -213,6 +291,8 @@ function draftToRegisterInput(
     dataServico: draft.data_servico!,
     valor: draft.valor ?? null,
     consentimentoWhatsapp: draft.consentimento_whatsapp ?? true,
+    tipoServico,
+    marcaPeca,
   };
 }
 
@@ -235,9 +315,22 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
         data_servico?: string | null;
         valor?: number | null;
         consentimento_whatsapp?: boolean | null;
+        tipo_servico?: string | null;
+        marca_peca?: string | null;
       };
     };
     if (!parsed.data) return null;
+    const tipoRaw = parsed.data.tipo_servico ?? null;
+    const tipo: TipoServico | undefined =
+      tipoRaw === "troca_oleo" ||
+      tipoRaw === "amortecedor" ||
+      tipoRaw === "revisao" ||
+      tipoRaw === "outro"
+        ? tipoRaw
+        : parsed.data.servico
+          ? detectTipoServico(parsed.data.servico)
+          : undefined;
+    const marca = normalizeMarca(parsed.data.marca_peca ?? null);
     return {
       nome_cliente: parsed.data.nome_cliente ?? undefined,
       whatsapp_cliente: parsed.data.whatsapp_cliente
@@ -248,6 +341,8 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
       data_servico: parsed.data.data_servico ?? undefined,
       valor: parsed.data.valor ?? null,
       consentimento_whatsapp: parsed.data.consentimento_whatsapp ?? true,
+      tipo_servico: tipo,
+      marca_peca: tipo === "amortecedor" ? marca : null,
     };
   } catch {
     return null;
@@ -410,6 +505,14 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
                     data_servico: { type: ["string", "null"] },
                     valor: { type: ["number", "null"] },
                     consentimento_whatsapp: { type: ["boolean", "null"] },
+                    tipo_servico: {
+                      type: ["string", "null"],
+                      enum: ["troca_oleo", "amortecedor", "revisao", "outro", null],
+                    },
+                    marca_peca: {
+                      type: ["string", "null"],
+                      enum: ["perfect", "monroe", "cofap", "nakata", "outra", null],
+                    },
                   },
                   required: [
                     "nome_cliente",
@@ -419,6 +522,8 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
                     "data_servico",
                     "valor",
                     "consentimento_whatsapp",
+                    "tipo_servico",
+                    "marca_peca",
                   ],
                 },
               },

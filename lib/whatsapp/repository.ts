@@ -10,6 +10,7 @@ import type {
   RegisterServiceInput,
   RegisteredService,
   SavedConversation,
+  TipoServico,
   WhatsappRepository,
 } from "./types";
 
@@ -664,6 +665,8 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       p_data_servico: input.dataServico,
       p_valor: input.valor,
       p_consentimento_whatsapp: input.consentimentoWhatsapp,
+      p_tipo_servico: input.tipoServico,
+      p_marca_peca: input.marcaPeca,
     })) as SupabaseResult<{
       cliente_id: string;
       veiculo_id: string;
@@ -1047,6 +1050,9 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         workshop_name: string;
         vehicle_description: string;
         attempts: number;
+        template_name?: string | null;
+        template_language?: string | null;
+        tipo_servico?: string | null;
       }>
     >;
 
@@ -1064,6 +1070,9 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       workshopName: row.workshop_name,
       vehicleDescription: row.vehicle_description,
       attempts: row.attempts,
+      templateName: row.template_name ?? null,
+      templateLanguage: row.template_language ?? null,
+      tipoServico: (row.tipo_servico as TipoServico | undefined) ?? null,
     }));
   }
 

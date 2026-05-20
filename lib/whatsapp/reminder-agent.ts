@@ -38,7 +38,18 @@ export function renderReminderTemplate(input: {
   customerName: string;
   workshopName: string;
   vehicleDescription: string;
+  tipoServico?: "troca_oleo" | "amortecedor" | "revisao" | "outro" | null;
 }) {
+  const tipo = input.tipoServico ?? "troca_oleo";
+  if (tipo === "amortecedor") {
+    return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa faz um tempo que voce trocou os amortecedores do seu ${input.vehicleDescription}. Recomendamos uma checagem. Quer agendar?`;
+  }
+  if (tipo === "revisao") {
+    return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa esta na hora da proxima revisao do seu ${input.vehicleDescription}. Quer agendar?`;
+  }
+  if (tipo === "outro") {
+    return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nEsta na hora do proximo servico do seu ${input.vehicleDescription}. Quer agendar?`;
+  }
   return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa esta na hora da proxima troca de oleo do seu ${input.vehicleDescription}.\nQuer agendar?`;
 }
 

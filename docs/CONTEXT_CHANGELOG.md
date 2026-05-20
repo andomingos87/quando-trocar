@@ -19,6 +19,51 @@ Não registrar:
 
 ---
 
+## 2026-05-23 — Cadência/template por tipo + FAQ amortecedor + dashboard mercado (Fases 2-4)
+
+### Adicionado
+
+- **`tipos_servico_default`** (migration `20260522000000_tipos_servico_default.sql`): tabela global com cadência (`dias_lembrete`) e template Meta (`template_name`/`template_language`) por tipo. Seed: óleo=90d, amortecedor=730d, revisão=180d, outro=180d.
+- **`enqueue_due_whatsapp_reminders` recriado** para resolver template, idioma e body dinamicamente via join com `tipos_servico_default`. Worker passou a ler `templateName`/`templateLanguage` do dequeue em vez do hard-code.
+- **`/admin/tipos-servico`** — painel para o admin editar cadência e template_name por tipo, com auditoria. Auditoria grava em `admin_audit_log` como `tipo_servico.update`.
+- **FAQ `serve_para_outros_servicos`** (migration `20260523000000_faq_serve_outros_servicos.sql`) — vendedor responde quando lead pergunta sobre outros serviços (amortecedor, revisão, alinhamento, etc.). Saudação inicial **não muda** — pitch principal continua focado em óleo.
+- **`/admin/inteligencia-mercado`** — dashboard com mix por tipo, market-share Perfect/Monroe/Cofap/Nakata, top cidades e cohort Perfect. Filtros de período e cidade.
+- **[ADR-0014](./adr/0014-cadencia-e-template-por-tipo-de-servico.md)** — Cadência e template Meta por tipo de serviço.
+
+### Decidido
+
+- **Cadência global, sem override por oficina no MVP** — admin altera, valor vale pra todas as oficinas. Override fica como evolução futura.
+- **Anti-viés Perfect** vira regra escrita: ordem alfabética em qualquer UI ou pergunta de marca (Cofap, Monroe, Nakata, outra, Perfect). Dashboard admin-only, sem compartilhamento externo sem revisão jurídica.
+- **Fallback do scheduler** continua sendo `oficinas.dias_lembrete_padrao` + `lembrete_troca_oleo` quando linha em `tipos_servico_default` está desativada — preserva continuidade.
+
+### Pendências externas
+
+- **Aprovação Meta** dos templates `lembrete_amortecedor` e `lembrete_revisao_geral` é pré-requisito pra ativar os tipos `amortecedor` e `revisao`/`outro` em produção. Enquanto não aprovado, manter `ativo=false` nessas linhas ou aceitar envios falhando com `132001` (template inexistente).
+
+---
+
+## 2026-05-21 — Tipo de serviço estruturado (Fase 1 de "3 níveis de produto")
+
+### Adicionado
+
+- **`servicos.tipo_servico`** (enum fechado `troca_oleo | amortecedor | revisao | outro`, default `troca_oleo`) e **`servicos.marca_peca`** (nullable, enum fechado `perfect | monroe | cofap | nakata | outra`) na migration `20260521000000_tipo_servico_marca_peca.sql`. Constraint garante que `marca_peca` só é populada quando `tipo_servico = 'amortecedor'`.
+- **Pergunta ativa de marca** no `onboarding-agent` quando `tipo='amortecedor'` e marca ausente. Lista alfabética (Cofap, Monroe, Nakata, Perfect, outra) — Perfect nunca primeiro, para evitar viés.
+- **Índice `servicos_tipo_servico_idx`** preparando dashboard de inteligência de mercado (Fase 4 do mesmo plano).
+
+### Decidido
+
+- **Posicionamento estratificado**: troca de óleo continua sendo o carro-chefe da comunicação. Amortecedor é vitrine de coleta de dados (parceria estratégica com marca Perfect). Revisão/outros são catch-all.
+- **LLM classifica, backend valida**: agente extrai `tipo_servico` e `marca_peca` do texto, mas backend reforça enum (ADR-0001 preservado).
+- **Cadência e templates por tipo virão na Fase 2** — esta fase deixa o dado estruturado sem mudar comportamento de lembrete (continua 90 dias + template óleo).
+
+### Próximo
+
+- Fase 2: tabela `tipos_servico_default` + cadência/template por tipo + admin `/tipos-servico`. Bloqueada por aprovação Meta de 2 templates novos (`lembrete_amortecedor`, `lembrete_revisao_geral`).
+- Fase 3: FAQ `serve_para_outros_servicos` no vendedor.
+- Fase 4: dashboard `/admin/inteligencia-mercado`.
+
+---
+
 ## 2026-05-17 — Painel admin especificado (ADR-0013, PRD, backlog dedicado)
 
 ### Adicionado

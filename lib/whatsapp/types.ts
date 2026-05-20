@@ -95,6 +95,10 @@ export type ConfiguracoesVendedor = {
   precoPartida: number;
 };
 
+export type TipoServico = "troca_oleo" | "amortecedor" | "revisao" | "outro";
+
+export type MarcaAmortecedor = "perfect" | "monroe" | "cofap" | "nakata" | "outra";
+
 export type ServiceDraft = {
   nome_cliente?: string;
   whatsapp_cliente?: string;
@@ -103,6 +107,8 @@ export type ServiceDraft = {
   data_servico?: string;
   valor?: number | null;
   consentimento_whatsapp?: boolean;
+  tipo_servico?: TipoServico;
+  marca_peca?: MarcaAmortecedor | null;
 };
 
 export type ConversationContext = {
@@ -112,7 +118,8 @@ export type ConversationContext = {
     | "whatsapp_cliente"
     | "veiculo"
     | "servico"
-    | "data_servico";
+    | "data_servico"
+    | "marca_peca";
   service_draft?: ServiceDraft;
   lastReminderId?: string;
   ambiguousReminderLookup?: boolean;
@@ -129,6 +136,8 @@ export type RegisterServiceInput = {
   dataServico: string;
   valor: number | null;
   consentimentoWhatsapp: boolean;
+  tipoServico: TipoServico;
+  marcaPeca: MarcaAmortecedor | null;
 };
 
 export type RegisteredService = {
@@ -381,6 +390,9 @@ export type WhatsappRepository = {
       workshopName: string;
       vehicleDescription: string;
       attempts?: number;
+      templateName?: string | null;
+      templateLanguage?: string | null;
+      tipoServico?: TipoServico | null;
     }>
   >;
   archiveReminderQueueMessage?(input: { queueMessageId: number }): Promise<boolean>;

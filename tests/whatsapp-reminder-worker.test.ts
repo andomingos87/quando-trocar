@@ -209,4 +209,112 @@ describe("whatsapp reminder worker", () => {
       lastAttemptAt: expect.any(String),
     });
   });
+
+  test("usa template_name e template_language vindos do dequeue (amortecedor)", async () => {
+    const repository = {
+      dequeueReminderQueueMessages: vi.fn(async () => [
+        {
+          queueMessageId: 20,
+          outboundMessageId: "outbound-id",
+          lembreteId: "lembrete-id",
+          conversaId: "conversation-id",
+          oficinaId: "oficina-id",
+          clienteId: "cliente-id",
+          toWhatsapp: "+5511988887777",
+          customerName: "Maria",
+          workshopName: "Oficina X",
+          vehicleDescription: "Onix 2020",
+          templateName: "lembrete_amortecedor",
+          templateLanguage: "pt_BR",
+          tipoServico: "amortecedor" as const,
+        },
+      ]),
+      markOutboundSent: vi.fn(async () => undefined),
+      saveOutboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "m" })),
+      updateReminderStatus: vi.fn(async () => undefined),
+      archiveReminderQueueMessage: vi.fn(async () => true),
+      requeueReminderQueueMessage: vi.fn(async () => 0),
+      markOutboundRetryScheduled: vi.fn(async () => undefined),
+      markOutboundFailed: vi.fn(async () => undefined),
+      saveAgentToolCall: vi.fn(async () => undefined),
+    };
+    const whatsapp = {
+      sendTemplateMessage: vi.fn(async () => ({
+        whatsappMessageId: "wamid.am-1",
+        response: {},
+      })),
+    };
+
+    await processReminderQueueBatch({
+      repository: repository as never,
+      whatsapp: whatsapp as never,
+      batchSize: 10,
+    });
+
+    expect(whatsapp.sendTemplateMessage).toHaveBeenCalledWith({
+      to: "+5511988887777",
+      templateName: "lembrete_amortecedor",
+      languageCode: "pt_BR",
+      bodyParameters: ["Maria", "Oficina X", "Onix 2020"],
+    });
+    expect(repository.saveOutboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("amortecedores"),
+      }),
+    );
+  });
+
+  test("usa template_name e template_language vindos do dequeue (revisao)", async () => {
+    const repository = {
+      dequeueReminderQueueMessages: vi.fn(async () => [
+        {
+          queueMessageId: 21,
+          outboundMessageId: "outbound-id-2",
+          lembreteId: "lembrete-id-2",
+          conversaId: "conv-2",
+          oficinaId: "oficina-id",
+          clienteId: "cliente-id",
+          toWhatsapp: "+5521999998888",
+          customerName: "Carlos",
+          workshopName: "Oficina Y",
+          vehicleDescription: "Corolla 2019",
+          templateName: "lembrete_revisao_geral",
+          templateLanguage: "pt_BR",
+          tipoServico: "revisao" as const,
+        },
+      ]),
+      markOutboundSent: vi.fn(async () => undefined),
+      saveOutboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "m" })),
+      updateReminderStatus: vi.fn(async () => undefined),
+      archiveReminderQueueMessage: vi.fn(async () => true),
+      requeueReminderQueueMessage: vi.fn(async () => 0),
+      markOutboundRetryScheduled: vi.fn(async () => undefined),
+      markOutboundFailed: vi.fn(async () => undefined),
+      saveAgentToolCall: vi.fn(async () => undefined),
+    };
+    const whatsapp = {
+      sendTemplateMessage: vi.fn(async () => ({
+        whatsappMessageId: "wamid.rev-1",
+        response: {},
+      })),
+    };
+
+    await processReminderQueueBatch({
+      repository: repository as never,
+      whatsapp: whatsapp as never,
+      batchSize: 10,
+    });
+
+    expect(whatsapp.sendTemplateMessage).toHaveBeenCalledWith({
+      to: "+5521999998888",
+      templateName: "lembrete_revisao_geral",
+      languageCode: "pt_BR",
+      bodyParameters: ["Carlos", "Oficina Y", "Corolla 2019"],
+    });
+    expect(repository.saveOutboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("revisao"),
+      }),
+    );
+  });
 });

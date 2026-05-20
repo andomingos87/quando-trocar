@@ -178,6 +178,8 @@ describe("whatsapp webhook phase 2", () => {
           dataServico: "2026-04-25",
           valor: null,
           consentimentoWhatsapp: true,
+          tipoServico: "troca_oleo" as const,
+          marcaPeca: null,
         },
         nextAgentMode: "operacao" as const,
         toolCalls: [],
@@ -209,6 +211,8 @@ describe("whatsapp webhook phase 2", () => {
       dataServico: "2026-04-25",
       valor: null,
       consentimentoWhatsapp: true,
+      tipoServico: "troca_oleo",
+      marcaPeca: null,
     });
     expect(repository.updateConversationModeAndContext).toHaveBeenCalledWith({
       conversationId: "conversation-id",

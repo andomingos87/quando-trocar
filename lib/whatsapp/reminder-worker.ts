@@ -72,13 +72,17 @@ export async function processReminderQueueBatch(input: {
       customerName: message.customerName,
       workshopName: message.workshopName,
       vehicleDescription: message.vehicleDescription,
+      tipoServico: message.tipoServico ?? null,
     });
+
+    const templateName = message.templateName ?? "lembrete_troca_oleo";
+    const templateLanguage = message.templateLanguage ?? "pt_BR";
 
     try {
       const response = await input.whatsapp.sendTemplateMessage({
         to: message.toWhatsapp,
-        templateName: "lembrete_troca_oleo",
-        languageCode: "pt_BR",
+        templateName,
+        languageCode: templateLanguage,
         bodyParameters: [
           message.customerName,
           message.workshopName,

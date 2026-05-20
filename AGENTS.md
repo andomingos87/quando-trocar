@@ -23,6 +23,7 @@ Important project docs:
 - Domain glossary: `docs/glossary.md`.
 - Runbooks (env, deploy, Meta setup, Supabase migrations): `docs/runbooks/`.
 - Decision and context history: `docs/CONTEXT_CHANGELOG.md`.
+- Business rules index: `docs/regras-de-negocio.md` (must stay in sync with code — see Development Workflow).
 
 ## Setup Commands
 
@@ -108,6 +109,7 @@ For schema, RLS or performance work, consult the Supabase project docs and the S
 - Do not refactor unrelated UI or bot code while changing agent behavior.
 - Add or update tests when changing parsing, routing, status transitions, repository writes or webhook behavior.
 - Do not overwrite unrelated local modifications. Check `git status --short` before and after work.
+- **Keep `docs/regras-de-negocio.md` synced with code in the same change.** Any change that alters product behavior — new/changed status, intent, enum, guardrail, flow, threshold, agent rule, billing logic, opt-out trigger, new bot prohibition — must update the matching entry in that doc. When uncertain whether a change qualifies, ask the user before implementing (default question: "Does this change alter rule X in regras-de-negocio.md? Update the doc together?"). Pure refactors, renames, or behavior-preserving fixes do not require an update. See the "Quando atualizar este doc" section at the top of `docs/regras-de-negocio.md` for the full trigger list.
 
 ## Testing Instructions
 

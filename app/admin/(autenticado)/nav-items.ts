@@ -13,6 +13,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { href: "/admin/mensagens", label: "Mensagens enviadas" },
   { href: "/admin/tool-calls", label: "Tool calls" },
   { href: "/admin/faq", label: "FAQ vendedor" },
+  { href: "/admin/tipos-servico", label: "Tipos de servico" },
+  { href: "/admin/inteligencia-mercado", label: "Inteligencia mercado" },
   { href: "/admin/planos", label: "Planos" },
   { href: "/admin/pagamentos", label: "Pagamentos" },
   { href: "/admin/admins", label: "Admins" },
