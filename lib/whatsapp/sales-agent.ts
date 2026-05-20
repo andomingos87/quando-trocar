@@ -77,10 +77,62 @@ export function isExplicitLossMessage(message: string) {
 
 export function detectSmallTalk(message: string) {
   const normalized = normalizeText(message);
+  // OBS: pergunta sobre o bot ("voce e robo", "qual seu nome") foi movida pra FAQ
+  // ("Quem e voce?"). Aqui ficam apenas off-topics explicitos.
   return [
     /\b(que time|futebol|torce|jogo|copa|brasileirao|flamengo|corinthians|palmeiras|sao paulo|santos|gremio|internacional|atletico|cruzeiro|fluminense|botafogo|vasco)\b/,
-    /\b(voce e (um )?(robo|bot)|voce eh (um )?(robo|bot)|e robo|eh robo|robo ou humano|humano ou robo|voce e humano|voce eh humano|e um robo|eh um robo)\b/,
-    /\b(piada|brincadeira|de boa|tudo certo por ai|td certo|como vai|como esta|qual seu nome|seu nome|de onde voce e)\b/,
+    /\b(piada|brincadeira|tudo certo por ai|td certo)\b/,
+  ].some((re) => re.test(normalized));
+}
+
+export function detectBasicGreeting(message: string) {
+  const normalized = normalizeText(message);
+  // Body vazio (sticker, emoji solto) tambem conta como greeting.
+  if (normalized.length === 0) return true;
+  return [
+    /^(oi|oie|ola|ei|eai|e ai|opa|fala|fala ai|fala mano|fala chefe|alo|alou)$/,
+    /^(bom dia|boa tarde|boa noite|bdia|btarde|bnoite)$/,
+    /^(tudo bem|td bem|tudo certo|tudo joia|tudo tranquilo|de boa|como vai|como esta)\??$/,
+    /^(ta ai|esta ai|alguem|alguem ai)\??$/,
+  ].some((re) => re.test(normalized));
+}
+
+export function detectNeutralAck(message: string) {
+  const normalized = normalizeText(message);
+  return [
+    /^(ok|okay|okk+|blz|beleza|show|top|legal|bacana|joia|massa)$/,
+    /^(entendi|entendido|saquei|sacou|certo)$/,
+    /^(ta|ta bom|ta certo|tah|tah bom)$/,
+    /^(uhum|aham|ahum|hmm+|hum)$/,
+    /^(obrigado|obrigada|valeu|vlw|obg|grato|brigado)$/,
+  ].some((re) => re.test(normalized));
+}
+
+export function detectVaiPensar(message: string) {
+  const normalized = normalizeText(message);
+  return [
+    /\bvou pensar\b/,
+    /\bdeixa eu (pensar|ver|analisar)\b/,
+    /\bvou (ver|analisar|olhar|conversar) (com|sobre|isso|melhor|depois|amanha|antes)\b/,
+    /\bdepois (eu )?(te (falo|respondo|aviso)|vejo|olho|volto)\b/,
+    /\bagora nao (da|posso|consigo)\b/,
+    /\bmais (tarde|pra frente|adiante)\b/,
+    /\btalvez (depois|mais tarde|mais pra frente|outra hora)\b/,
+    /\bpreciso (ver|conversar|alinhar|pensar)\b/,
+    /\bvou (conversar|alinhar) com (o |a |meu |minha )?(socio|socia|equipe|chefe|esposa|marido)\b/,
+  ].some((re) => re.test(normalized));
+}
+
+export function detectQuerHumano(message: string) {
+  const normalized = normalizeText(message);
+  return [
+    /\b(quero|posso|gostaria|preciso) falar com (humano|pessoa|atendente|vendedor|responsavel|gerente|alguem)\b/,
+    /\bpassa pro?( |s )?(anderson|vendedor|responsavel|humano|chefe|gerente)\b/,
+    /\b(tem|tinha) (alguem|atendente|pessoa) (de verdade|real|humano)\b/,
+    /\b(quero|prefiro) (atendente|humano|pessoa) (real|de verdade)\b/,
+    /\bfala com o anderson\b/,
+    /\bchama o anderson\b/,
+    /\bme chama (no |numa )?(reuniao|call|ligacao)\b/,
   ].some((re) => re.test(normalized));
 }
 
@@ -202,11 +254,12 @@ export function classifySalesMessage(
   message: string,
   faqs: ReadonlyArray<FaqVendasRecord> = [],
 ): SalesClassification {
+  // 1. Recusa explicita -> sem_interesse (vence tudo, ate dor)
   if (isExplicitLossMessage(message)) {
     return { intent: "sem_interesse", confidence: 0.9 };
   }
 
-  // Fix #1: dor é override forte — fora explicit loss, dor sempre vira pergunta_funcionamento
+  // 2. Dor expressa -> pergunta_funcionamento (override forte; ciclo 2)
   if (detectPain(message)) {
     return {
       intent: "pergunta_funcionamento",
@@ -215,10 +268,28 @@ export function classifySalesMessage(
     };
   }
 
+  // 3. Pedido de humano -> quer_humano (ciclo 3)
+  if (detectQuerHumano(message)) {
+    return { intent: "quer_humano", confidence: 0.92 };
+  }
+
+  // 4. Hesitacao ("vou pensar") -> vai_pensar (ciclo 3, antes de pricing)
+  if (detectVaiPensar(message)) {
+    return { intent: "vai_pensar", confidence: 0.9 };
+  }
+
+  // 5. Saudacao basica -> fora_escopo com confidence ALTA (ciclo 3)
+  //    Confidence >= 0.85 evita ir pro OpenAI fallback (que pode escolher small_talk).
+  if (detectBasicGreeting(message)) {
+    return { intent: "fora_escopo", confidence: 0.9 };
+  }
+
+  // 6. Pergunta de preco
   if (detectPriceQuestion(message)) {
     return { intent: "pergunta_preco", confidence: 0.92 };
   }
 
+  // 7. Volume/ticket
   const numbers = extractVolumeOrTicket(message);
   if (numbers.monthlyChanges !== undefined || numbers.averageTicket !== undefined) {
     return {
@@ -230,24 +301,34 @@ export function classifySalesMessage(
 
   const normalized = normalizeText(message);
 
+  // 8. "como funciona?"
   if (/\b(como funciona|funciona|explica|explique|o que e|o que faz)\b/.test(normalized)) {
     return { intent: "pergunta_funcionamento", confidence: 0.86 };
   }
 
+  // 9. "quero testar"
   if (/\b(quero testar|teste|proximo passo|vamos|tenho interesse|bora|topo)\b/.test(normalized)) {
     return { intent: "quer_testar", confidence: 0.86 };
   }
 
-  // Fix #4: small talk vence FAQ pra evitar match espúrio em mensagens humanas
+  // 10. Confirmacao neutra ("ok", "blz", "entendi") — depois de quer_testar pra
+  //     "topa" e similares nao baterem aqui erroneamente.
+  if (detectNeutralAck(message)) {
+    return { intent: "confirmacao_neutra", confidence: 0.9 };
+  }
+
+  // 11. Small talk (off-topic explicito: futebol, piada)
   if (detectSmallTalk(message)) {
     return { intent: "small_talk", confidence: 0.88 };
   }
 
+  // 12. FAQ por palavra-chave
   const faqMatch = matchFaq(message, faqs);
   if (faqMatch) {
     return { intent: "pergunta_faq", confidence: 0.85, faqId: faqMatch.id };
   }
 
+  // 13. Default
   return { intent: "fora_escopo", confidence: 0.6 };
 }
 
@@ -327,6 +408,44 @@ function buildReply(
       toolCalls: [],
       updatedContext: { sales: memory },
     };
+  }
+
+  // Pedido explicito de humano — handoff direto, status mantem
+  if (classification.intent === "quer_humano") {
+    return {
+      status: context.leadStatus,
+      body: `Beleza chefe! Vou pedir pro Anderson te chamar direto agora: ${whatsappLink({ phone: context.salesConfig.whatsappHandoffComercial })}`,
+      toolCalls: [],
+      handoffRequired: true,
+      handoffReason: "pedido_humano",
+      updatedContext: { sales: memory },
+    };
+  }
+
+  // Hesitacao ("vou pensar") — copy de respeito ao tempo do lead, sem handoff
+  if (classification.intent === "vai_pensar") {
+    return {
+      status: context.leadStatus,
+      body:
+        "Tranquilo chefe, sem pressa. Deixo aqui sem compromisso. Se quiser, te chamo daqui uns dias pra saber como ta pensando — ou e so me chamar quando der.",
+      toolCalls: [],
+      updatedContext: { sales: memory },
+    };
+  }
+
+  // Confirmacao neutra ("ok", "blz") — curta se ja explicou; senao cai pro fluxo padrao
+  if (classification.intent === "confirmacao_neutra") {
+    if (memory.funcionamento_explained) {
+      return {
+        status: context.leadStatus,
+        body:
+          "Beleza chefe, to por aqui. Se quiser saber mais ou ja topar testar 14 dias gratis, e so me chamar.",
+        toolCalls: [],
+        updatedContext: { sales: memory },
+      };
+    }
+    // Ainda nao explicou — cai pro fluxo de fora_escopo (saudacao + explicador)
+    classification = { intent: "fora_escopo", confidence: 0.6 };
   }
 
   // Pergunta de preco — soft redirect na 1a, handoff na 2a
@@ -539,6 +658,9 @@ function parseOpenAIClassification(text: string): SalesClassification | null {
       parsed.intent === "pergunta_preco" ||
       parsed.intent === "pergunta_faq" ||
       parsed.intent === "small_talk" ||
+      parsed.intent === "confirmacao_neutra" ||
+      parsed.intent === "vai_pensar" ||
+      parsed.intent === "quer_humano" ||
       parsed.intent === "quer_testar" ||
       parsed.intent === "sem_interesse" ||
       parsed.intent === "fora_escopo"
@@ -665,8 +787,17 @@ export class WhatsappSalesAgent {
         input: [
           {
             role: "system",
-            content:
-              "Classifique mensagens comerciais de uma oficina interessada no produto Quando Trocar. Responda apenas JSON compacto com intent, confidence, monthlyChanges e averageTicket quando existirem.",
+            content: [
+              "Classifique mensagens comerciais de uma oficina interessada no produto Quando Trocar. Use o intent mais especifico.",
+              "Diretrizes:",
+              "- small_talk e APENAS para off-topic explicito (time, futebol, piada). NUNCA use small_talk para saudacoes simples ou mensagens curtas vazias.",
+              "- Saudacoes simples (\"oi\", \"ola\", \"bom dia\", \"alo\") -> fora_escopo (o backend trata com saudacao dedicada).",
+              "- Confirmacao curta (\"ok\", \"blz\", \"entendi\", \"valeu\") -> confirmacao_neutra.",
+              "- Hesitacao (\"vou pensar\", \"depois te falo\", \"vou ver com o socio\") -> vai_pensar.",
+              "- Pedido de humano (\"passa pro Anderson\", \"quero falar com vendedor\") -> quer_humano.",
+              "- Pergunta sobre o bot (\"quem e voce\", \"voce e IA\") -> pergunta_faq (FAQ dedicada).",
+              "Responda apenas JSON compacto com intent, confidence, monthlyChanges e averageTicket quando existirem.",
+            ].join("\n"),
           },
           {
             role: "user",
@@ -690,6 +821,9 @@ export class WhatsappSalesAgent {
                     "pergunta_preco",
                     "pergunta_faq",
                     "small_talk",
+                    "confirmacao_neutra",
+                    "vai_pensar",
+                    "quer_humano",
                     "quer_testar",
                     "sem_interesse",
                     "fora_escopo",

@@ -29,6 +29,9 @@ export type SalesIntent =
   | "pergunta_preco"
   | "pergunta_faq"
   | "small_talk"
+  | "confirmacao_neutra"
+  | "vai_pensar"
+  | "quer_humano"
   | "quer_testar"
   | "sem_interesse"
   | "fora_escopo";

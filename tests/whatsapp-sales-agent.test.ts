@@ -3,11 +3,15 @@ import { describe, expect, test } from "vitest";
 import {
   WhatsappSalesAgent,
   classifySalesMessage,
+  detectBasicGreeting,
   detectLeadOrigin,
+  detectNeutralAck,
   detectPain,
   detectPriceQuestion,
+  detectQuerHumano,
   detectScaleHandoff,
   detectSmallTalk,
+  detectVaiPensar,
   extractVolumeOrTicket,
   matchFaq,
 } from "@/lib/whatsapp/sales-agent";
@@ -34,6 +38,20 @@ const faqs: FaqVendasRecord[] = [
     resposta: "Nao precisa nao chefe. Funciona a parte. Integracao especifica a gente ve caso a caso depois.",
     palavras_chave: ["integrar", "integracao", "sistema", "erp"],
     ordem: 120,
+  },
+  {
+    id: "faq-prova-social",
+    pergunta: "Voces tem cliente?",
+    resposta: "Produto novo chefe, to abrindo as primeiras oficinas agora.",
+    palavras_chave: ["tem cliente", "quem usa", "cases", "referencia"],
+    ordem: 200,
+  },
+  {
+    id: "faq-quem-e-voce",
+    pergunta: "Quem e voce? E IA?",
+    resposta: "Sou o assistente do Quando Trocar chefe, ajudo a oficina a entender o produto.",
+    palavras_chave: ["quem e voce", "voce e ia", "voce e robo", "qual seu nome"],
+    ordem: 240,
   },
 ];
 
@@ -376,17 +394,19 @@ describe("whatsapp sales agent — post-test fixes (1-5)", () => {
     expect(reply.body).not.toContain("Funciona assim");
   });
 
-  test("fix #4 detector: detectSmallTalk catches typical human chatter", () => {
+  test("fix #4 detector: detectSmallTalk catches off-topic chatter only", () => {
     expect(detectSmallTalk("pra que time voce torce")).toBe(true);
-    expect(detectSmallTalk("voce e um robo?")).toBe(true);
-    expect(detectSmallTalk("voce eh humano?")).toBe(true);
+    expect(detectSmallTalk("isso e brincadeira")).toBe(true);
+    // No ciclo 3, "voce e robo" foi movido pra FAQ ("Quem e voce?") — nao bate mais em small_talk
+    expect(detectSmallTalk("voce e um robo?")).toBe(false);
     expect(detectSmallTalk("faco 80 trocas por mes")).toBe(false);
   });
 
   test("fix #5: fora_escopo on subsequent turns returns short variation", async () => {
     const agent = new WhatsappSalesAgent({ openai: null });
+    // Uma mensagem que cai em fora_escopo de verdade (nao "blz" — agora isso e confirmacao_neutra).
     const reply = await agent.generateReply({
-      message: "blz ok",
+      message: "manda ai entao kkk",
       leadStatus: "em_conversa",
       context: { sales: { greeted: true, funcionamento_explained: true } },
       salesConfig: baseConfig,
@@ -396,5 +416,158 @@ describe("whatsapp sales agent — post-test fixes (1-5)", () => {
     expect(reply.body.toLowerCase()).toContain("nao entendi muito bem chefe");
     expect(reply.body).not.toContain("Funciona assim");
     expect(reply.body).not.toContain("Aqui e do Quando Trocar");
+  });
+});
+
+describe("whatsapp sales agent — Ciclo 3 (TIER 1 + TIER 2 criticos)", () => {
+  test("detectBasicGreeting catches saudacoes puras and empty bodies", () => {
+    expect(detectBasicGreeting("oi")).toBe(true);
+    expect(detectBasicGreeting("Ola!")).toBe(true);
+    expect(detectBasicGreeting("Bom dia")).toBe(true);
+    expect(detectBasicGreeting("E ai?")).toBe(true);
+    expect(detectBasicGreeting("tudo bem?")).toBe(true);
+    expect(detectBasicGreeting("")).toBe(true); // sticker/emoji
+    expect(detectBasicGreeting("oi tudo bem, como funciona?")).toBe(false); // contem mais conteudo
+    expect(detectBasicGreeting("faco 80 trocas")).toBe(false);
+  });
+
+  test("detectNeutralAck catches short confirmations only", () => {
+    expect(detectNeutralAck("ok")).toBe(true);
+    expect(detectNeutralAck("blz")).toBe(true);
+    expect(detectNeutralAck("entendi")).toBe(true);
+    expect(detectNeutralAck("valeu")).toBe(true);
+    expect(detectNeutralAck("ok pode me ligar")).toBe(false); // string maior
+    expect(detectNeutralAck("quero testar")).toBe(false);
+  });
+
+  test("detectVaiPensar catches hesitation patterns", () => {
+    expect(detectVaiPensar("vou pensar e depois te falo")).toBe(true);
+    expect(detectVaiPensar("preciso conversar com o socio")).toBe(true);
+    expect(detectVaiPensar("agora nao da, mais tarde")).toBe(true);
+    expect(detectVaiPensar("depois eu vejo")).toBe(true);
+    expect(detectVaiPensar("nao quero")).toBe(false); // explicit loss, nao hesitation
+    expect(detectVaiPensar("quero testar")).toBe(false);
+  });
+
+  test("detectQuerHumano catches requests for human attendant", () => {
+    expect(detectQuerHumano("quero falar com humano")).toBe(true);
+    expect(detectQuerHumano("passa pro Anderson por favor")).toBe(true);
+    expect(detectQuerHumano("fala com o anderson")).toBe(true);
+    expect(detectQuerHumano("tem alguem de verdade?")).toBe(true);
+    expect(detectQuerHumano("prefiro humano real")).toBe(true);
+    expect(detectQuerHumano("quanto custa?")).toBe(false);
+  });
+
+  test('classifySalesMessage routes "oi" to fora_escopo with high confidence', () => {
+    const cls = classifySalesMessage("oi", faqs);
+    expect(cls.intent).toBe("fora_escopo");
+    expect(cls.confidence).toBeGreaterThanOrEqual(0.85);
+  });
+
+  test("classifySalesMessage routes confirmation to confirmacao_neutra", () => {
+    expect(classifySalesMessage("ok", faqs).intent).toBe("confirmacao_neutra");
+    expect(classifySalesMessage("blz", faqs).intent).toBe("confirmacao_neutra");
+  });
+
+  test("classifySalesMessage routes hesitation to vai_pensar", () => {
+    expect(classifySalesMessage("vou pensar com o socio", faqs).intent).toBe("vai_pensar");
+  });
+
+  test("classifySalesMessage routes human request to quer_humano", () => {
+    expect(classifySalesMessage("quero falar com humano", faqs).intent).toBe("quer_humano");
+    expect(classifySalesMessage("passa pro anderson", faqs).intent).toBe("quer_humano");
+  });
+
+  test('"oi" returns greeting + explainer (not small_talk)', async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "oi",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body).toContain("Fala chefe!");
+    expect(reply.body).toContain("Aqui e do Quando Trocar");
+    expect(reply.body.toLowerCase()).not.toContain("nao to aqui pra isso");
+  });
+
+  test("neutral ack after explainer returns short reply (no pitch repeat)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "ok",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body.toLowerCase()).toContain("to por aqui");
+    expect(reply.body).not.toContain("Funciona assim");
+    expect(reply.body).not.toContain("Aqui e do Quando Trocar");
+  });
+
+  test("neutral ack BEFORE explainer falls into the regular flow (greeting + explainer)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "ok",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    // Sem funcionamento_explained, cai em fora_escopo: greeting + explainer
+    expect(reply.body).toContain("Fala chefe!");
+    expect(reply.body).toContain("Funciona assim");
+  });
+
+  test('"vou pensar" returns sem pressa copy, status unchanged, no handoff', async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "vou pensar e depois te falo",
+      leadStatus: "qualificado",
+      context: { sales: { greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).toBe("qualificado");
+    expect(reply.handoffRequired).toBeFalsy();
+    expect(reply.body.toLowerCase()).toContain("sem pressa");
+  });
+
+  test('"quero falar com humano" triggers handoff with wa.me', async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "passa pro Anderson por favor",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.handoffRequired).toBe(true);
+    expect(reply.handoffReason).toBe("pedido_humano");
+    expect(reply.body).toMatch(/wa\.me\/5511945207618/);
+  });
+
+  test("FAQ matching: question about the bot routes to 'Quem e voce' FAQ", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "quem e voce?",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body).toContain("assistente do Quando Trocar");
+  });
+
+  test("FAQ matching: question about clients routes to prova social FAQ", () => {
+    const match = matchFaq("voces tem cliente que ja usa?", faqs);
+    expect(match?.id).toBe("faq-prova-social");
   });
 });

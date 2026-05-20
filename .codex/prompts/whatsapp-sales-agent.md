@@ -69,24 +69,42 @@ The bot does not invent ranges, does not say "depende", does not commit to a fin
 - `informa_volume_ticket` → `qualificado` **once both volume and ticket are known**
 - `pergunta_preco` → status unchanged; soft redirect on 1st (connects with known ROI if memory has it), handoff on 2nd
 - `pergunta_faq` → status unchanged; response from `faq_vendas`
-- `small_talk` → status unchanged; dedicated short response, does not repeat pitch
+- `small_talk` → status unchanged; dedicated short response, does not repeat pitch (off-topic only: futebol, piada)
+- `confirmacao_neutra` → status unchanged; short ack if `funcionamento_explained`, else falls into the regular flow
+- `vai_pensar` → status unchanged; "sem pressa" copy, no handoff
+- `quer_humano` → status unchanged; **direct handoff** to commercial `wa.me`
 - `quer_testar` → `teste_aceito` and conversion path
 - `sem_interesse` → `perdido` only when explicit (`isExplicitLossMessage`)
 - `fora_escopo` → do not destroy an existing higher-value status; short copy when already explained
 
-## Detection order (classifySalesMessage)
+## Detection order (classifySalesMessage) — 13 steps
 
-1. `isExplicitLossMessage` → `sem_interesse` (highest priority).
+1. `isExplicitLossMessage` → `sem_interesse` (highest priority, beats even pain).
 2. **`detectPain` → `pergunta_funcionamento`** (override: pain always wins unless explicit loss).
-3. `detectPriceQuestion` → `pergunta_preco`.
-4. `extractVolumeOrTicket` → `informa_volume_ticket`.
-5. Regex of "how does it work" → `pergunta_funcionamento`.
-6. Regex of "I want to try" → `quer_testar`.
-7. **`detectSmallTalk` → `small_talk`** (human chatter — team, robô, etc.).
-8. `matchFaq` → `pergunta_faq`.
-9. Default → `fora_escopo`.
+3. **`detectQuerHumano` → `quer_humano`** (explicit attendant request).
+4. **`detectVaiPensar` → `vai_pensar`** (hesitation: "vou pensar", "depois te falo").
+5. **`detectBasicGreeting` → `fora_escopo`** confidence 0.9 — avoids OpenAI fallback for "oi/ola/bom dia/" and empty bodies.
+6. `detectPriceQuestion` → `pergunta_preco`.
+7. `extractVolumeOrTicket` → `informa_volume_ticket`.
+8. Regex of "how does it work" → `pergunta_funcionamento`.
+9. Regex of "I want to try" → `quer_testar`.
+10. **`detectNeutralAck` → `confirmacao_neutra`** (after quer_testar so "topa" doesn't conflict).
+11. `detectSmallTalk` → `small_talk` (futebol, piada — only).
+12. `matchFaq` → `pergunta_faq`.
+13. Default → `fora_escopo`.
 
 Second gate inside `WhatsappSalesAgent.generateReply`: if OpenAI returns `sem_interesse` but `detectPain` matches and message is not explicit loss → override to `pergunta_funcionamento`.
+
+## OpenAI classifier system prompt
+
+The classifier must be told explicitly:
+
+- `small_talk` is ONLY for off-topic chatter (futebol, piada). NEVER for greetings or short empty messages.
+- Greetings ("oi", "ola", "bom dia") → `fora_escopo` (backend handles with dedicated greeting).
+- Short acks ("ok", "blz", "entendi") → `confirmacao_neutra`.
+- Hesitation ("vou pensar", "depois te falo") → `vai_pensar`.
+- Human request ("passa pro Anderson") → `quer_humano`.
+- Bot identity ("quem e voce", "voce e IA") → `pergunta_faq` (dedicated FAQ).
 
 ## Greeting on first turn
 
@@ -122,6 +140,12 @@ Persist `sales.pain_detected = true` so the prefix isn't repeated.
 
 ## Test Ideas
 
+- **"Oi"** → greeting prefix + explainer + qualification ask (NOT small_talk).
+- **"Ok" / "blz"** (after explainer) → short ack "Beleza chefe, tô por aqui"; (before explainer) → falls into the regular flow with greeting + explainer.
+- **"Vou pensar com o sócio"** → "Tranquilo chefe, sem pressa…" (status unchanged, no handoff).
+- **"Passa pro Anderson"** → handoff `pedido_humano` with `wa.me` link.
+- **"Quem é você?"** → FAQ "Sou o assistente do Quando Trocar…".
+- **"Pra que time você torce?"** → `small_talk` (only off-topic now).
 - "Fala" (first turn) → greeting prefix + explainer + qualification ask.
 - "Como funciona?" (after greeting) → no greeting prefix; explainer (long the 1st time, short the 2nd).
 - "Cliente some" → pain override → explainer with pain prefix *"Pois e chefe, e isso que a gente resolve aqui."* (NOT `sem_interesse`, even if LLM thinks so).
