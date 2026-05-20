@@ -58,7 +58,7 @@ export function detectLeadOrigin(
   return normalizedPhrases.includes(normalized) ? "landing_page" : "manual_whatsapp";
 }
 
-function isExplicitLossMessage(message: string) {
+export function isExplicitLossMessage(message: string) {
   const normalized = normalizeText(message);
   return [
     /\bnao tenho interesse\b/,
@@ -73,6 +73,15 @@ function isExplicitLossMessage(message: string) {
     /\bdescadastrar\b/,
     /\bnao me chama\b/,
   ].some((pattern) => pattern.test(normalized));
+}
+
+export function detectSmallTalk(message: string) {
+  const normalized = normalizeText(message);
+  return [
+    /\b(que time|futebol|torce|jogo|copa|brasileirao|flamengo|corinthians|palmeiras|sao paulo|santos|gremio|internacional|atletico|cruzeiro|fluminense|botafogo|vasco)\b/,
+    /\b(voce e (um )?(robo|bot)|voce eh (um )?(robo|bot)|e robo|eh robo|robo ou humano|humano ou robo|voce e humano|voce eh humano|e um robo|eh um robo)\b/,
+    /\b(piada|brincadeira|de boa|tudo certo por ai|td certo|como vai|como esta|qual seu nome|seu nome|de onde voce e)\b/,
+  ].some((re) => re.test(normalized));
 }
 
 export function detectPriceQuestion(message: string) {
@@ -197,6 +206,15 @@ export function classifySalesMessage(
     return { intent: "sem_interesse", confidence: 0.9 };
   }
 
+  // Fix #1: dor é override forte — fora explicit loss, dor sempre vira pergunta_funcionamento
+  if (detectPain(message)) {
+    return {
+      intent: "pergunta_funcionamento",
+      confidence: 0.9,
+      painDetected: true,
+    };
+  }
+
   if (detectPriceQuestion(message)) {
     return { intent: "pergunta_preco", confidence: 0.92 };
   }
@@ -218,6 +236,11 @@ export function classifySalesMessage(
 
   if (/\b(quero testar|teste|proximo passo|vamos|tenho interesse|bora|topo)\b/.test(normalized)) {
     return { intent: "quer_testar", confidence: 0.86 };
+  }
+
+  // Fix #4: small talk vence FAQ pra evitar match espúrio em mensagens humanas
+  if (detectSmallTalk(message)) {
+    return { intent: "small_talk", confidence: 0.88 };
   }
 
   const faqMatch = matchFaq(message, faqs);
@@ -260,6 +283,16 @@ function commercialHandoff(handoffWhatsapp: string) {
   return `Chefe, pra esse caso eu prefiro o Anderson conversar direto contigo. Posso pedir pra ele te chamar agora: ${link}`;
 }
 
+const GREETING_PREFIX =
+  "Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico.";
+
+function withGreeting(memory: SalesConversationMemory, body: string) {
+  if (memory.greeted) {
+    return { body, greeted: true as const };
+  }
+  return { body: `${GREETING_PREFIX}\n\n${body}`, greeted: true as const };
+}
+
 type ReplyContext = {
   message: string;
   leadStatus: LeadStatus;
@@ -285,6 +318,17 @@ function buildReply(
     };
   }
 
+  // Small talk — resposta gentil, sem mudar status nem repetir pitch
+  if (classification.intent === "small_talk") {
+    return {
+      status: context.leadStatus,
+      body:
+        "Hahaha nao to aqui pra isso chefe :) Mas se quiser ver como funciona ou ja topa testar 14 dias gratis, e so me chamar.",
+      toolCalls: [],
+      updatedContext: { sales: memory },
+    };
+  }
+
   // Pergunta de preco — soft redirect na 1a, handoff na 2a
   if (classification.intent === "pergunta_preco") {
     const previous = memory.price_mentions ?? 0;
@@ -293,11 +337,22 @@ function buildReply(
 
     if (nextCount === 1) {
       const partida = formatBrl(context.salesConfig.precoPartida);
-      const reply = withPain(
-        memory,
-        context.message,
-        `Olha chefe, parte de ${partida}/mes. O valor final a gente fecha olhando o tamanho da sua oficina, mas antes de combinar preco, bora ativar 14 dias gratis pra voce ver rodando?`,
-      );
+
+      // Fix #3: se ja temos volume + ticket no contexto, conecta o custo com a recuperacao
+      let bodyText: string;
+      if (memory.volume_known !== undefined && memory.ticket_known !== undefined) {
+        const roi = calculateRoi({
+          monthlyChanges: memory.volume_known,
+          averageTicket: memory.ticket_known,
+          recoveryRate: context.salesConfig.taxaRecuperacaoRoi,
+        });
+        const recoveredFmt = formatBrl(roi.recoveredRevenue);
+        bodyText = `${partida}/mes chefe, parte dai. Pra voce que ta recuperando uns ${recoveredFmt}/mes, sai praticamente de graca. Bora ativar 14 dias gratis pra testar?`;
+      } else {
+        bodyText = `Olha chefe, parte de ${partida}/mes. O valor final a gente fecha olhando o tamanho da sua oficina, mas antes de combinar preco, bora ativar 14 dias gratis pra voce ver rodando?`;
+      }
+
+      const reply = withPain(memory, context.message, bodyText);
       memory.pain_detected = reply.painDetected;
       return {
         status: context.leadStatus,
@@ -422,17 +477,22 @@ function buildReply(
     };
   }
 
-  // Pergunta funcionamento
+  // Pergunta funcionamento — copy longa na 1a, curta nas seguintes; saudacao se for 1o turno
   if (classification.intent === "pergunta_funcionamento") {
-    const reply = withPain(
-      memory,
-      context.message,
-      "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Pra eu te mostrar quanto isso vale pra sua oficina, quantas trocas voce faz por mes e qual o ticket medio?",
-    );
-    memory.pain_detected = reply.painDetected;
+    const baseBody = memory.funcionamento_explained
+      ? "Lembra chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra testar?"
+      : "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Pra eu te mostrar quanto isso vale pra sua oficina, quantas trocas voce faz por mes e qual o ticket medio?";
+
+    const painWrapped = withPain(memory, context.message, baseBody);
+    const greeted = withGreeting(memory, painWrapped.body);
+
+    memory.pain_detected = painWrapped.painDetected;
+    memory.funcionamento_explained = true;
+    memory.greeted = greeted.greeted;
+
     return {
       status: statusForIntent(classification.intent),
-      body: reply.body,
+      body: greeted.body,
       toolCalls: [],
       updatedContext: { sales: memory },
     };
@@ -448,16 +508,23 @@ function buildReply(
     };
   }
 
-  const fallback = withPain(
-    memory,
-    context.message,
-    "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo e te avisa quem voltou. Pra eu te dar um numero, quantas trocas voce faz por mes e qual o ticket medio?",
-  );
-  memory.pain_detected = fallback.painDetected;
+  // Fallback geral (fora_escopo) — variacao por funcionamento_explained, com saudacao se 1o turno
+  const fallbackBaseBody = memory.funcionamento_explained
+    ? "Nao entendi muito bem chefe. Se quiser ver como funciona ou ja topa testar 14 dias gratis, me fala."
+    : "Funciona assim chefe: voce cadastra a troca aqui, o sistema chama o cliente no dia certo e te avisa quem voltou. Pra eu te dar um numero, quantas trocas voce faz por mes e qual o ticket medio?";
+
+  const fallbackPain = withPain(memory, context.message, fallbackBaseBody);
+  const fallbackGreeted = withGreeting(memory, fallbackPain.body);
+
+  memory.pain_detected = fallbackPain.painDetected;
+  if (!memory.funcionamento_explained) {
+    memory.funcionamento_explained = true;
+  }
+  memory.greeted = fallbackGreeted.greeted;
 
   return {
     status: statusForIntent(classification.intent),
-    body: fallback.body,
+    body: fallbackGreeted.body,
     toolCalls: [],
     updatedContext: { sales: memory },
   };
@@ -471,6 +538,7 @@ function parseOpenAIClassification(text: string): SalesClassification | null {
       parsed.intent === "informa_volume_ticket" ||
       parsed.intent === "pergunta_preco" ||
       parsed.intent === "pergunta_faq" ||
+      parsed.intent === "small_talk" ||
       parsed.intent === "quer_testar" ||
       parsed.intent === "sem_interesse" ||
       parsed.intent === "fora_escopo"
@@ -522,8 +590,20 @@ export class WhatsappSalesAgent {
     if (deterministic.confidence < 0.85) {
       const fromOpenAI = await this.classifyWithOpenAI(input.message);
       if (fromOpenAI) {
-        // Se o LLM disser pergunta_faq, prefiro o match deterministico.
-        if (fromOpenAI.intent === "pergunta_faq") {
+        // Fix #1 (segunda camada): se LLM diz sem_interesse mas a mensagem
+        // tem dor sem ser explicit loss, sobrescreve pra pergunta_funcionamento.
+        if (
+          fromOpenAI.intent === "sem_interesse" &&
+          detectPain(input.message) &&
+          !isExplicitLossMessage(input.message)
+        ) {
+          classification = {
+            intent: "pergunta_funcionamento",
+            confidence: 0.85,
+            painDetected: true,
+          };
+        } else if (fromOpenAI.intent === "pergunta_faq") {
+          // Se o LLM disser pergunta_faq, prefiro o match deterministico.
           const faq = matchFaq(input.message, faqs);
           classification = faq
             ? { ...fromOpenAI, faqId: faq.id }
@@ -609,6 +689,7 @@ export class WhatsappSalesAgent {
                     "informa_volume_ticket",
                     "pergunta_preco",
                     "pergunta_faq",
+                    "small_talk",
                     "quer_testar",
                     "sem_interesse",
                     "fora_escopo",

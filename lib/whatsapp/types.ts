@@ -20,13 +20,15 @@ export type ConversationAgentMode =
   | "onboarding"
   | "operacao"
   | "cliente_final_lembrete"
-  | "suporte";
+  | "suporte"
+  | "cobranca";
 
 export type SalesIntent =
   | "pergunta_funcionamento"
   | "informa_volume_ticket"
   | "pergunta_preco"
   | "pergunta_faq"
+  | "small_talk"
   | "quer_testar"
   | "sem_interesse"
   | "fora_escopo";
@@ -69,6 +71,8 @@ export type SalesConversationMemory = {
   ticket_known?: number;
   price_mentions?: number;
   pain_detected?: boolean;
+  greeted?: boolean;
+  funcionamento_explained?: boolean;
 };
 
 export type FaqVendasRecord = {
@@ -239,6 +243,13 @@ export type WhatsappRepository = {
     conversationId: string;
     reason: string;
   }): Promise<void>;
+  getLatestPendingPagamento?(input: {
+    oficinaId: string;
+  }): Promise<{
+    valor: number;
+    vencimento: string | null;
+    mpPreferenceId: string | null;
+  } | null>;
   convertLeadToOficina?(input: {
     leadId: string;
     conversationId: string;
@@ -460,4 +471,66 @@ export type ReminderAgent = {
     message: string;
     conversationContext: ConversationContext;
   }): Promise<ReminderAgentReply>;
+};
+
+export type SupportIntent =
+  | "duvida_uso"
+  | "bug_ou_travamento"
+  | "cobranca"
+  | "outro";
+
+export type SupportAgentReply = {
+  intent: SupportIntent;
+  confidence: number;
+  replyBody: string;
+  handoffRequired: boolean;
+  handoffReason: string | null;
+  toolCalls: ToolCallRecord[];
+};
+
+export type SupportAgent = {
+  generateReply(input: {
+    message: string;
+    context: ConversationContext;
+    oficinaNome: string | null;
+  }): Promise<SupportAgentReply>;
+};
+
+export type CobrancaSubmode = "cobranca_inadimplente" | "cobranca_winback";
+
+export type CobrancaIntent =
+  | "pediu_link"
+  | "vai_pagar"
+  | "ja_paguei"
+  | "negocia_prazo"
+  | "quer_voltar"
+  | "nao_quer_voltar"
+  | "disputa"
+  | "outro";
+
+export type CobrancaPendingPayment = {
+  valor: number;
+  vencimento: string | null;
+  mpPreferenceId: string | null;
+};
+
+export type CobrancaAgentReply = {
+  intent: CobrancaIntent;
+  confidence: number;
+  submode: CobrancaSubmode;
+  replyBody: string;
+  handoffRequired: boolean;
+  handoffReason: string | null;
+  toolCalls: ToolCallRecord[];
+};
+
+export type CobrancaAgent = {
+  generateReply(input: {
+    message: string;
+    submode: CobrancaSubmode;
+    oficinaNome: string | null;
+    proximoVencimento: string | null;
+    pendingPayment: CobrancaPendingPayment | null;
+    context: ConversationContext;
+  }): Promise<CobrancaAgentReply>;
 };

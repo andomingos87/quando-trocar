@@ -65,13 +65,36 @@ The bot does not invent ranges, does not say "depende", does not commit to a fin
 
 ## Status / Intent Rules
 
-- `pergunta_funcionamento` → `em_conversa`
+- `pergunta_funcionamento` → `em_conversa`; long copy on 1st, short on 2nd (`funcionamento_explained` flag)
 - `informa_volume_ticket` → `qualificado` **once both volume and ticket are known**
-- `pergunta_preco` → status unchanged; soft redirect on 1st, handoff on 2nd
+- `pergunta_preco` → status unchanged; soft redirect on 1st (connects with known ROI if memory has it), handoff on 2nd
 - `pergunta_faq` → status unchanged; response from `faq_vendas`
+- `small_talk` → status unchanged; dedicated short response, does not repeat pitch
 - `quer_testar` → `teste_aceito` and conversion path
 - `sem_interesse` → `perdido` only when explicit (`isExplicitLossMessage`)
-- `fora_escopo` → do not destroy an existing higher-value status
+- `fora_escopo` → do not destroy an existing higher-value status; short copy when already explained
+
+## Detection order (classifySalesMessage)
+
+1. `isExplicitLossMessage` → `sem_interesse` (highest priority).
+2. **`detectPain` → `pergunta_funcionamento`** (override: pain always wins unless explicit loss).
+3. `detectPriceQuestion` → `pergunta_preco`.
+4. `extractVolumeOrTicket` → `informa_volume_ticket`.
+5. Regex of "how does it work" → `pergunta_funcionamento`.
+6. Regex of "I want to try" → `quer_testar`.
+7. **`detectSmallTalk` → `small_talk`** (human chatter — team, robô, etc.).
+8. `matchFaq` → `pergunta_faq`.
+9. Default → `fora_escopo`.
+
+Second gate inside `WhatsappSalesAgent.generateReply`: if OpenAI returns `sem_interesse` but `detectPain` matches and message is not explicit loss → override to `pergunta_funcionamento`.
+
+## Greeting on first turn
+
+When `context.sales.greeted !== true`, the "explainer" intents (`pergunta_funcionamento`, `fora_escopo`) get prefixed with:
+
+> *"Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico."*
+
+Persisted via `memory.greeted = true`. Other intents (`pergunta_preco`, `informa_volume_ticket`, `quer_testar`, etc.) do **not** get the greeting — they have their own purposeful copy.
 
 ## Forced handoff signals
 
@@ -99,14 +122,18 @@ Persist `sales.pain_detected = true` so the prefix isn't repeated.
 
 ## Test Ideas
 
-- "Como funciona?" explains the three required product mechanics, with optional pain prefix if pain detected.
+- "Fala" (first turn) → greeting prefix + explainer + qualification ask.
+- "Como funciona?" (after greeting) → no greeting prefix; explainer (long the 1st time, short the 2nd).
+- "Cliente some" → pain override → explainer with pain prefix *"Pois e chefe, e isso que a gente resolve aqui."* (NOT `sem_interesse`, even if LLM thinks so).
 - "Faco 80 trocas" → bot persists volume and asks for ticket.
 - "Ticket 180" (next message) → bot joins with memorized volume and returns ROI 15%.
+- "Quanto custa?" after ROI was shown → reply connects price with recovered revenue: *"R$ 59/mes, pra voce que ta recuperando uns R$ X/mes sai praticamente de graca…"*
+- "Mas preciso saber o preco" (after first ask) → handoff `preco_insistente` with `wa.me` link.
 - "Faco 500 trocas" → handoff `volume_alto`.
 - "Tenho uma rede" → handoff `rede_ou_franquia`.
-- "Quanto custa?" → reply with "a partir de R$ 59" + trial CTA; **no final price**.
-- "Mas preciso saber o preco" (after first ask) → handoff `preco_insistente` with `wa.me` link.
+- "Pra que time voce torce?" → `small_talk` short redirect, status unchanged, no pitch repeated.
 - "Preciso integrar com meu ERP" → FAQ response from `faq_vendas`.
 - "Quero testar" → `teste_aceito` and conversion flag.
 - "Nao tenho interesse" → `perdido`.
+- "Ok" / "Blz" (after explainer already shown) → short fallback, does not repeat full pitch.
 - Ambiguous text does not downgrade an interested lead.

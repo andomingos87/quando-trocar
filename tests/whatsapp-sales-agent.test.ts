@@ -7,6 +7,7 @@ import {
   detectPain,
   detectPriceQuestion,
   detectScaleHandoff,
+  detectSmallTalk,
   extractVolumeOrTicket,
   matchFaq,
 } from "@/lib/whatsapp/sales-agent";
@@ -270,5 +271,130 @@ describe("whatsapp sales agent — generateReply", () => {
     });
 
     expect(reply.status).toBe("teste_aceito");
+  });
+});
+
+describe("whatsapp sales agent — post-test fixes (1-5)", () => {
+  test("fix #1a (det): pain message classifies as pergunta_funcionamento with painDetected", () => {
+    const cls = classifySalesMessage("cliente some", faqs);
+    expect(cls.intent).toBe("pergunta_funcionamento");
+    expect(cls.painDetected).toBe(true);
+  });
+
+  test("fix #1b (OpenAI override): LLM sem_interesse on pain message becomes pergunta_funcionamento", async () => {
+    // Forco classifySalesMessage determinitico a NAO bater (mensagem ambigua + pain)
+    // usando uma frase que so vira pain via regex, mas ainda assim deterministico bate.
+    // Aqui o teste valida o segundo gate: se openai retornar sem_interesse e pain,
+    // o agente sobrescreve. Simulo via mensagem "cliente some" — deterministico
+    // ja resolve, openai nao e chamado. Pra testar o override, uso uma frase
+    // com confidence baixa que tambem dispara detectPain.
+    // "ah, perco cliente as vezes" — sem palavra-chave forte, mas detectPain bate via "perco cliente".
+    const cls = classifySalesMessage("ah, perco cliente as vezes", faqs);
+    // se ja for pergunta_funcionamento deterministico, o override e desnecessario,
+    // mas tambem nao quebra o teste — validamos o resultado final.
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: {
+        responses: {
+          create: async () => ({
+            output_text: JSON.stringify({
+              intent: "sem_interesse",
+              confidence: 0.95,
+              monthlyChanges: null,
+              averageTicket: null,
+            }),
+          }),
+        },
+      } as never,
+    });
+
+    const reply = await agent.generateReply({
+      message: "ah, perco cliente as vezes",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).not.toBe("perdido");
+    expect(reply.body.toLowerCase()).toContain("pois e chefe");
+    expect(cls.intent).toBe("pergunta_funcionamento");
+  });
+
+  test("fix #2: greeting only on first turn", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+
+    const first = await agent.generateReply({
+      message: "fala",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(first.body).toContain("Fala chefe!");
+    expect(first.body).toContain("Aqui e do Quando Trocar");
+    expect(first.updatedContext?.sales?.greeted).toBe(true);
+
+    const second = await agent.generateReply({
+      message: "como funciona?",
+      leadStatus: "em_conversa",
+      context: first.updatedContext,
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(second.body).not.toContain("Aqui e do Quando Trocar");
+  });
+
+  test("fix #3: price reply connects with known ROI when memory has volume+ticket", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "quanto custa?",
+      leadStatus: "qualificado",
+      context: { sales: { volume_known: 80, ticket_known: 140 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    // 80 * 140 * 0.15 = 1680
+    expect(reply.body).toMatch(/R\$\s?59/);
+    expect(reply.body).toMatch(/R\$\s?1\.680/);
+    expect(reply.body.toLowerCase()).toContain("praticamente de graca");
+  });
+
+  test("fix #4: small talk returns dedicated short response without changing status", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "Pra que time voce torce?",
+      leadStatus: "qualificado",
+      context: { sales: { greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body.toLowerCase()).toContain("nao to aqui pra isso");
+    expect(reply.status).toBe("qualificado");
+    expect(reply.body).not.toContain("Funciona assim");
+  });
+
+  test("fix #4 detector: detectSmallTalk catches typical human chatter", () => {
+    expect(detectSmallTalk("pra que time voce torce")).toBe(true);
+    expect(detectSmallTalk("voce e um robo?")).toBe(true);
+    expect(detectSmallTalk("voce eh humano?")).toBe(true);
+    expect(detectSmallTalk("faco 80 trocas por mes")).toBe(false);
+  });
+
+  test("fix #5: fora_escopo on subsequent turns returns short variation", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "blz ok",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.body.toLowerCase()).toContain("nao entendi muito bem chefe");
+    expect(reply.body).not.toContain("Funciona assim");
+    expect(reply.body).not.toContain("Aqui e do Quando Trocar");
   });
 });

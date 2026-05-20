@@ -113,20 +113,36 @@ novo · em_conversa · qualificado · interessado · teste_aceito · convertido 
 Intents que o vendedor classifica (`SalesIntent`):
 
 ```
-pergunta_funcionamento · informa_volume_ticket · pergunta_preco · pergunta_faq · quer_testar · sem_interesse · fora_escopo
+pergunta_funcionamento · informa_volume_ticket · pergunta_preco · pergunta_faq · small_talk · quer_testar · sem_interesse · fora_escopo
 ```
+
+**Ordem de detecção em `classifySalesMessage`:**
+1. `isExplicitLossMessage` → `sem_interesse` (com confidence alta).
+2. **`detectPain` → `pergunta_funcionamento`** (override forte: dor relatada sempre vira explicação do produto, exceto quando explicit loss).
+3. `detectPriceQuestion` → `pergunta_preco`.
+4. `extractVolumeOrTicket` → `informa_volume_ticket`.
+5. Regex de funcionamento ("como funciona", etc.) → `pergunta_funcionamento`.
+6. Regex de interesse ("quero testar", etc.) → `quer_testar`.
+7. **`detectSmallTalk` → `small_talk`** (mensagens humanas tipo "que time você torce").
+8. `matchFaq` → `pergunta_faq`.
+9. Default → `fora_escopo`.
+
+Há um segundo gate dentro de `WhatsappSalesAgent.generateReply`: se o OpenAI fallback classificar como `sem_interesse` mas a mensagem disparar `detectPain` sem `isExplicitLossMessage`, o agente sobrescreve para `pergunta_funcionamento`.
 
 Transições válidas (decisão determinística, não LLM):
 
 | Intent classificado | Status resultante | Regra determinística |
 |---|---|---|
-| `pergunta_funcionamento` | `em_conversa` | sempre |
+| `pergunta_funcionamento` | `em_conversa` | sempre; copy curta na 2ª aparição (`funcionamento_explained`) |
 | `informa_volume_ticket` | `qualificado` | quando há volume + ticket válidos (memorizados ao longo de várias mensagens) |
-| `pergunta_preco` | mantém status atual | nunca rebaixa lead; incrementa contador de menções no contexto |
+| `pergunta_preco` | mantém status atual | nunca rebaixa lead; incrementa contador; se memória tem volume+ticket, conecta com ROI |
 | `pergunta_faq` | mantém status atual | resposta vem de `faq_vendas` por match de palavra-chave |
+| `small_talk` | mantém status atual | resposta curta de redirect; não conta como fallback |
 | `quer_testar` | `teste_aceito` | dispara conversão |
 | `sem_interesse` | `perdido` | **só** se mensagem passa em `isExplicitLossMessage()` |
-| `fora_escopo` | mantém status atual | nunca rebaixa lead `interessado` |
+| `fora_escopo` | mantém status atual | nunca rebaixa lead `interessado`; copy curta na 2ª aparição |
+
+**Saudação no primeiro turno:** quando `context.sales.greeted !== true`, as respostas de `pergunta_funcionamento` e `fora_escopo` (que são os "explicadores") recebem o prefixo *"Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico."*. Flag persistida no contexto.
 
 - Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-sales-agent.md`](../.codex/prompts/whatsapp-sales-agent.md), `lib/whatsapp/sales-agent.ts`.
 
@@ -466,14 +482,20 @@ Quando `status = 'pausada'`, campo adicional `motivo_pausa`:
 - Seta `motivo_pausa = 'inadimplencia'`.
 
 ### 10.3 Comportamento do bot em oficina pausada
-Quando inbound chega para uma oficina pausada por inadimplência:
-- Bot **não opera normalmente** (não vende, não cadastra, não responde com IA).
-- Responde com **mensagem padrão de cobrança** (definida no prompt).
-- Continua persistindo a mensagem para auditoria.
+Quando inbound chega para uma oficina pausada, o webhook chama `getOficinaPauseState` em `lib/whatsapp/inadimplencia-guard.ts` e roteia:
 
-Implementado em `lib/whatsapp/inadimplencia-guard.ts`, chamado no `webhook-handler.ts` antes do despacho para o agente.
+| `motivo_pausa` | Participant | Comportamento |
+|---|---|---|
+| `inadimplencia` | `oficina_cliente` | `cobranca-agent` em submode `cobranca_inadimplente` (item 15) |
+| `voluntaria` | `oficina_cliente` | `cobranca-agent` em submode `cobranca_winback` (item 15) |
+| `admin` | qualquer | Mensagem fixa de suspensão administrativa, bot **não** entra em cobrança |
+| `inadimplencia` ou `voluntaria` | `cliente_final` / outro | Mensagem fixa de inadimplência (bot não conversa em cobrança com não-oficina) |
 
-- Fonte: [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
+`agent_mode='cobranca'` é um **override de runtime** dentro do webhook — não persiste em `conversas.agent_mode`. Quando a oficina é reativada (webhook MP confirma pagamento), a próxima mensagem cai naturalmente no modo `operacao` / `onboarding`.
+
+Inbound sempre é persistido em `mensagens` para auditoria, independentemente do tratamento.
+
+- Fonte: [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md), `lib/whatsapp/inadimplencia-guard.ts`, `lib/whatsapp/cobranca-agent.ts`.
 
 ### 10.4 Lembretes pausados
 Quando `oficinas.status != 'ativa'`, o scheduler **não enfileira** lembretes dessa oficina (item 4.3).
@@ -556,13 +578,43 @@ Lista das coisas que o bot **nunca** faz, com fonte:
 | Enviar lembrete sem `consentimento_whatsapp = true` | [PRD §18](./product/PRD-whatsapp-bot.md) |
 | Enviar lembrete para cliente em `opt_out` ou `numero_errado` | Item 7.2, 7.3 |
 | Enviar mensagem fora do horário configurado da oficina | [PRD §11](./product/PRD-whatsapp-bot.md) |
-| Operar normalmente quando oficina está pausada por inadimplência | [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md) |
+| Operar normalmente quando oficina está pausada com `motivo_pausa='admin'` | Item 10.3 |
 | Inventar integrações, endereço, dados de outra oficina | [PRD §16](./product/PRD-whatsapp-bot.md) |
 | Enviar mensagem livre fora da janela de 24h | [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md) |
 | Tomar decisão por prompt injection (`ignore`, `system`, etc.) | `lib/whatsapp/onboarding-agent.ts` |
 | Cadastrar troca com mensagem neutra (`ok`, `obrigado`) | Item 3.3 |
 | Escolher arbitrariamente entre duas oficinas com mesmo cliente | Item 5.4 |
 | Expor secret server-only para client component | Item 12.3 |
+| Suporte: prometer prazo de retorno, reabrir acesso, mudar `oficinas.status` ou tocar `pagamentos` | Item 14 |
+| Cobrança: prometer prazo, parcelamento, desconto ou condição comercial; gerar link MP novo | Item 15 |
+
+---
+
+## 14. Modo suporte (`agent_mode='suporte'`)
+
+### 14.1 Entrada e saída
+- **Entrada**: oficina-cliente em `agent_mode='operacao'` envia exatamente `/suporte` (case-insensitive, após `trim()`). O webhook flipa o modo e responde uma saudação fixa.
+- **Saída pelo cliente**: oficina envia `/voltar` → modo volta a `operacao`.
+- **Saída pelo admin**: rota `POST /api/admin/conversas/[id]/resolver-handoff` marca handoff como resolvido e, se o modo atual for `suporte`, volta automaticamente para `operacao`.
+
+### 14.2 Escopo v1
+- Só `participant_type='oficina_cliente'`. Cliente final e contato desconhecido ficam fora.
+
+### 14.3 Intenções fechadas
+- `duvida_uso` → responde direto, sem handoff.
+- `bug_ou_travamento` → responde + handoff (`handoff_reason='bug_ou_travamento'`).
+- `cobranca` → responde encaminhando + handoff (`handoff_reason='duvida_cobranca'`).
+- `outro` → resposta neutra + handoff (`handoff_reason='mensagem_ambigua'`).
+
+### 14.4 Proibições adicionais do suporte
+- Nunca prometer prazo de retorno ("respondo em 5 minutos").
+- Nunca reabrir acesso, mudar `oficinas.status` ou tocar `pagamentos`.
+- Nunca prometer correção de bug — apenas escalar.
+- Nunca oferecer desconto, parcelamento ou condição comercial.
+
+- Fonte: `lib/whatsapp/support-agent.ts`, `.codex/prompts/whatsapp-suporte.md`.
+
+---
 
 ---
 
