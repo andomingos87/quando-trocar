@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
+  ConfiguracoesVendedor,
   ConversationAgentMode,
   ConversationContext,
+  FaqVendasRecord,
   LeadStatus,
   ParticipantType,
   RegisterServiceInput,
@@ -10,6 +12,9 @@ import type {
   SavedConversation,
   WhatsappRepository,
 } from "./types";
+
+const FAQ_CACHE_TTL_MS = 60_000;
+const CONFIG_CACHE_TTL_MS = 60_000;
 
 type SupabaseResult<T> = {
   data: T | null;
@@ -68,7 +73,80 @@ export function mergeLeadForInbound(
 }
 
 export class SupabaseWhatsappRepository implements WhatsappRepository {
+  private faqCache: { value: FaqVendasRecord[]; loadedAt: number } | null = null;
+  private configCache: { value: ConfiguracoesVendedor; loadedAt: number } | null = null;
+
   constructor(private readonly supabase: SupabaseClient) {}
+
+  async listActiveFaqs(): Promise<FaqVendasRecord[]> {
+    if (this.faqCache && Date.now() - this.faqCache.loadedAt < FAQ_CACHE_TTL_MS) {
+      return this.faqCache.value;
+    }
+
+    const result = (await this.supabase
+      .from("faq_vendas")
+      .select("id,pergunta,resposta,palavras_chave,ordem")
+      .eq("ativo", true)
+      .order("ordem", { ascending: true })) as SupabaseResult<
+      Array<{
+        id: string;
+        pergunta: string;
+        resposta: string;
+        palavras_chave: string[] | null;
+        ordem: number;
+      }>
+    >;
+
+    throwIfError(result);
+    const value: FaqVendasRecord[] = (result.data ?? []).map((row) => ({
+      id: row.id,
+      pergunta: row.pergunta,
+      resposta: row.resposta,
+      palavras_chave: row.palavras_chave ?? [],
+      ordem: row.ordem,
+    }));
+    this.faqCache = { value, loadedAt: Date.now() };
+    return value;
+  }
+
+  async getConfiguracoesVendedor(): Promise<ConfiguracoesVendedor> {
+    if (this.configCache && Date.now() - this.configCache.loadedAt < CONFIG_CACHE_TTL_MS) {
+      return this.configCache.value;
+    }
+
+    const result = (await this.supabase
+      .from("configuracoes_vendedor")
+      .select("taxa_recuperacao_roi,whatsapp_handoff_comercial,frases_landing")
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{
+      taxa_recuperacao_roi: number | string;
+      whatsapp_handoff_comercial: string;
+      frases_landing: string[] | null;
+    }>;
+
+    throwIfError(result);
+
+    const planResult = (await this.supabase
+      .from("planos")
+      .select("preco_base")
+      .eq("ativo", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{ preco_base: number | string }>;
+
+    throwIfError(planResult);
+
+    const value: ConfiguracoesVendedor = {
+      taxaRecuperacaoRoi: Number(result.data?.taxa_recuperacao_roi ?? 0.15),
+      whatsappHandoffComercial: result.data?.whatsapp_handoff_comercial ?? "+5511945207618",
+      frasesLanding: result.data?.frases_landing ?? ["oi quero testar o quando trocar"],
+      precoPartida: Number(planResult.data?.preco_base ?? 59),
+    };
+
+    this.configCache = { value, loadedAt: Date.now() };
+    return value;
+  }
+
 
   async saveWhatsappEvent(input: {
     providerEventId: string | null;

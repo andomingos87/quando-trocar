@@ -25,6 +25,8 @@ export type ConversationAgentMode =
 export type SalesIntent =
   | "pergunta_funcionamento"
   | "informa_volume_ticket"
+  | "pergunta_preco"
+  | "pergunta_faq"
   | "quer_testar"
   | "sem_interesse"
   | "fora_escopo";
@@ -34,6 +36,9 @@ export type SalesClassification = {
   confidence: number;
   monthlyChanges?: number;
   averageTicket?: number;
+  faqId?: string;
+  painDetected?: boolean;
+  scaleHandoff?: boolean;
 };
 
 export type RoiCalculation = {
@@ -54,6 +59,31 @@ export type AgentReply = {
   status: LeadStatus;
   toolCalls: ToolCallRecord[];
   convertToOficina?: boolean;
+  updatedContext?: ConversationContext;
+  handoffRequired?: boolean;
+  handoffReason?: string;
+};
+
+export type SalesConversationMemory = {
+  volume_known?: number;
+  ticket_known?: number;
+  price_mentions?: number;
+  pain_detected?: boolean;
+};
+
+export type FaqVendasRecord = {
+  id: string;
+  pergunta: string;
+  resposta: string;
+  palavras_chave: string[];
+  ordem: number;
+};
+
+export type ConfiguracoesVendedor = {
+  taxaRecuperacaoRoi: number;
+  whatsappHandoffComercial: string;
+  frasesLanding: string[];
+  precoPartida: number;
 };
 
 export type ServiceDraft = {
@@ -78,6 +108,7 @@ export type ConversationContext = {
   lastReminderId?: string;
   ambiguousReminderLookup?: boolean;
   supportHandoffReason?: string;
+  sales?: SalesConversationMemory;
 };
 
 export type RegisterServiceInput = {
@@ -352,6 +383,8 @@ export type WhatsappRepository = {
     providerErrorMessage: string | null;
     response: unknown;
   }): Promise<void>;
+  listActiveFaqs?(): Promise<FaqVendasRecord[]>;
+  getConfiguracoesVendedor?(): Promise<ConfiguracoesVendedor>;
 };
 
 export type WhatsappSender = {
@@ -370,11 +403,16 @@ export type WhatsappSender = {
   }>;
 };
 
+export type SalesAgentInput = {
+  message: string;
+  leadStatus: LeadStatus;
+  context?: ConversationContext;
+  salesConfig?: ConfiguracoesVendedor;
+  faqs?: ReadonlyArray<FaqVendasRecord>;
+};
+
 export type SalesAgent = {
-  generateReply(input: {
-    message: string;
-    leadStatus: LeadStatus;
-  }): Promise<AgentReply>;
+  generateReply(input: SalesAgentInput): Promise<AgentReply>;
 };
 
 export type OnboardingAgent = {

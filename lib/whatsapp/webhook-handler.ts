@@ -193,6 +193,13 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
         }
       }
 
+      const salesConfig = deps.repository.getConfiguracoesVendedor
+        ? await deps.repository.getConfiguracoesVendedor()
+        : undefined;
+      const faqs = deps.repository.listActiveFaqs
+        ? await deps.repository.listActiveFaqs()
+        : [];
+
       for (const inbound of inboundMessages) {
         const resolved = await resolveWhatsappConversation({
           repository: deps.repository,
@@ -200,6 +207,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           contactName: inbound.contactName,
           body: inbound.body,
           contextWhatsappMessageId: inbound.contextWhatsappMessageId,
+          landingPhrases: salesConfig?.frasesLanding,
         });
         const savedInbound = await deps.repository.saveInboundMessage({
           conversationId: resolved.conversationId,
@@ -240,7 +248,31 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             const reply = await deps.agent.generateReply({
               message: inbound.body,
               leadStatus,
+              context: resolved.context,
+              salesConfig,
+              faqs,
             });
+
+            if (
+              reply.handoffRequired &&
+              deps.repository.markConversationHandoff
+            ) {
+              await deps.repository.markConversationHandoff({
+                conversationId: resolved.conversationId,
+                reason: reply.handoffReason ?? "handoff_vendas",
+              });
+            }
+
+            if (
+              reply.updatedContext &&
+              !reply.convertToOficina &&
+              deps.repository.updateConversationModeAndContext
+            ) {
+              await deps.repository.updateConversationModeAndContext({
+                conversationId: resolved.conversationId,
+                context: { ...resolved.context, ...reply.updatedContext },
+              });
+            }
 
             if (
               reply.convertToOficina &&

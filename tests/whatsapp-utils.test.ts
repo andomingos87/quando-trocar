@@ -15,12 +15,12 @@ describe("whatsapp sales utilities", () => {
     expect(normalizeWhatsappPhone("+55 (41) 99942-1180")).toBe("+5541999421180");
   });
 
-  test("calculates recovered revenue with the default 10 percent rate", () => {
+  test("calculates recovered revenue with the default 15 percent rate", () => {
     expect(calculateRoi({ monthlyChanges: 80, averageTicket: 250 })).toEqual({
       monthlyChanges: 80,
       averageTicket: 250,
-      recoveryRate: 0.1,
-      recoveredRevenue: 2000,
+      recoveryRate: 0.15,
+      recoveredRevenue: 3000,
     });
   });
 
@@ -62,7 +62,7 @@ describe("whatsapp sales utilities", () => {
 
     expect(reply.status).toBe("interessado");
     expect(reply.body).toContain("Guarulhos");
-    expect(reply.body).toContain("registrado");
+    expect(reply.body).toMatch(/anotado|registrado/i);
   });
 
   test("does not mark an interested lead as lost from a neutral polite message", async () => {

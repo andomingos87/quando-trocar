@@ -9,7 +9,12 @@ export const siteConfig = {
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://quandotrocar.com.br",
 } as const;
 
-export function whatsappLink(message: string) {
+export function whatsappLink(message: string): string;
+export function whatsappLink(input: { message?: string; phone?: string }): string;
+export function whatsappLink(input: string | { message?: string; phone?: string }) {
+  const message = typeof input === "string" ? input : input.message ?? "";
+  const rawPhone = typeof input === "string" ? siteConfig.whatsappNumber : input.phone ?? siteConfig.whatsappNumber;
+  const phone = rawPhone.replace(/\D/g, "");
   const text = encodeURIComponent(message);
-  return `https://wa.me/${siteConfig.whatsappNumber}?text=${text}`;
+  return text ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/${phone}`;
 }

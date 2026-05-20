@@ -19,6 +19,7 @@ type Phase2Repository = Pick<
   | "upsertLead"
   | "upsertConversation"
   | "upsertSalesLeadConversation"
+  | "getConfiguracoesVendedor"
 >;
 
 export type ResolvedWhatsappConversation = {
@@ -67,12 +68,14 @@ export async function resolveWhatsappConversation(input: {
   contactName: string | null;
   body: string;
   contextWhatsappMessageId?: string | null;
+  landingPhrases?: string[];
 }): Promise<ResolvedWhatsappConversation> {
+  const landingPhrases = input.landingPhrases;
   if (!hasRequiredPhase2Methods(input.repository)) {
     const lead = await input.repository.upsertLead({
       whatsapp: input.whatsapp,
       nome: input.contactName,
-      origem: detectLeadOrigin(input.body),
+      origem: detectLeadOrigin(input.body, landingPhrases),
       status: "em_conversa",
     });
     const conversation = await input.repository.upsertConversation({
