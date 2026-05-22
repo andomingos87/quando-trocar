@@ -147,6 +147,10 @@ export type RegisteredService = {
   lembreteId: string | null;
 };
 
+export type InboundMediaType = "text" | "audio";
+
+export type TranscriptionStatus = "success" | "failed" | "empty" | "timeout";
+
 export type InboundWhatsappMessage = {
   providerEventId: string;
   whatsappMessageId: string;
@@ -157,6 +161,12 @@ export type InboundWhatsappMessage = {
   body: string;
   timestamp: Date | null;
   rawMessage: Record<string, unknown>;
+  mediaType: InboundMediaType;
+  mediaId?: string | null;
+  transcription?: string | null;
+  transcriptionStatus?: TranscriptionStatus | null;
+  transcriptionError?: string | null;
+  audioDurationMs?: number | null;
 };
 
 export type WhatsappStatusEvent = {
@@ -284,6 +294,12 @@ export type WhatsappRepository = {
     body: string;
     rawMessage: unknown;
     sentAt: string | null;
+    mediaType?: InboundMediaType;
+    mediaId?: string | null;
+    transcription?: string | null;
+    transcriptionStatus?: TranscriptionStatus | null;
+    transcriptionError?: string | null;
+    audioDurationMs?: number | null;
   }): Promise<SavedMessage>;
   saveOutboundMessage(input: {
     conversationId: string;

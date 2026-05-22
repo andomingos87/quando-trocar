@@ -692,6 +692,12 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     body: string;
     rawMessage: unknown;
     sentAt: string | null;
+    mediaType?: "text" | "audio";
+    mediaId?: string | null;
+    transcription?: string | null;
+    transcriptionStatus?: "success" | "failed" | "empty" | "timeout" | null;
+    transcriptionError?: string | null;
+    audioDurationMs?: number | null;
   }) {
     const result = (await this.supabase
       .from("mensagens")
@@ -704,6 +710,12 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         body: input.body,
         raw_payload: input.rawMessage,
         sent_at: input.sentAt,
+        media_type: input.mediaType ?? "text",
+        media_id: input.mediaId ?? null,
+        transcription: input.transcription ?? null,
+        transcription_status: input.transcriptionStatus ?? null,
+        transcription_error: input.transcriptionError ?? null,
+        audio_duration_ms: input.audioDurationMs ?? null,
       })
       .select("id")
       .single()) as SupabaseResult<{ id: string }>;

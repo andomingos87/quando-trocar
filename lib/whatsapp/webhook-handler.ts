@@ -1,3 +1,6 @@
+import OpenAI from "openai";
+
+import { audioFallbackMessage } from "./audio-fallbacks";
 import { WhatsappCobrancaAgent } from "./cobranca-agent";
 import { resolveWhatsappConversation } from "./conversation-router";
 import {
@@ -9,20 +12,23 @@ import { WhatsappOnboardingAgent } from "./onboarding-agent";
 import { WhatsappReminderAgent } from "./reminder-agent";
 import { WhatsappSupportAgent } from "./support-agent";
 import {
-  extractInboundTextMessages,
+  extractInboundMessages,
   extractProviderEventId,
   extractStatusEvents,
   extractWhatsappMessageId,
 } from "./payload";
 import { verifyMetaSignature } from "./signature";
+import { transcribeAudio, type TranscriptionResult } from "./transcription";
 import type {
   CobrancaAgent,
   CobrancaSubmode,
   ConversationAgentMode,
+  InboundWhatsappMessage,
   OnboardingAgent,
   ReminderAgent,
   SalesAgent,
   SupportAgent,
+  TranscriptionStatus,
   WhatsappRepository,
   WhatsappSender,
 } from "./types";
@@ -31,6 +37,44 @@ type WebhookEnv = {
   WHATSAPP_VERIFY_TOKEN?: string;
   WHATSAPP_APP_SECRET?: string;
 };
+
+export type MediaDownloader = {
+  getMediaMetadata(mediaId: string): Promise<{ url: string; mimeType: string }>;
+  downloadMedia(url: string): Promise<Buffer>;
+};
+
+export type AudioTranscriber = {
+  transcribe(input: {
+    audioBuffer: Buffer;
+    mimeType: string;
+  }): Promise<TranscriptionResult>;
+};
+
+class OpenAiAudioTranscriber implements AudioTranscriber {
+  private readonly openai: OpenAI | null;
+
+  constructor(input?: { openai?: OpenAI | null }) {
+    this.openai =
+      input?.openai ??
+      (process.env.OPENAI_API_KEY
+        ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+        : null);
+  }
+
+  async transcribe(input: {
+    audioBuffer: Buffer;
+    mimeType: string;
+  }): Promise<TranscriptionResult> {
+    if (!this.openai) {
+      return { status: "failed", error: "missing_openai_key" };
+    }
+    return transcribeAudio({
+      openai: this.openai,
+      audioBuffer: input.audioBuffer,
+      mimeType: input.mimeType,
+    });
+  }
+}
 
 type HandlerDeps = {
   env: WebhookEnv;
@@ -41,6 +85,8 @@ type HandlerDeps = {
   reminderAgent?: ReminderAgent;
   supportAgent?: SupportAgent;
   cobrancaAgent?: CobrancaAgent;
+  mediaDownloader?: MediaDownloader;
+  audioTranscriber?: AudioTranscriber;
 };
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -101,11 +147,109 @@ function isOperationalMode(
   return mode === "onboarding" || mode === "operacao";
 }
 
+function isAudioMessage(inbound: InboundWhatsappMessage): inbound is InboundWhatsappMessage & {
+  mediaType: "audio";
+  mediaId: string;
+} {
+  return inbound.mediaType === "audio" && Boolean(inbound.mediaId);
+}
+
+async function processAudio(input: {
+  inbound: InboundWhatsappMessage & { mediaType: "audio"; mediaId: string };
+  mediaDownloader: MediaDownloader | null;
+  audioTranscriber: AudioTranscriber | null;
+}): Promise<{
+  status: TranscriptionStatus;
+  text: string;
+  durationMs: number | null;
+  error: string | null;
+}> {
+  if (!input.mediaDownloader || !input.audioTranscriber) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: "missing_audio_dependencies",
+    };
+  }
+
+  let metadata: { url: string; mimeType: string };
+  try {
+    metadata = await input.mediaDownloader.getMediaMetadata(input.inbound.mediaId);
+  } catch (error) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: error instanceof Error ? error.message : "media_metadata_failed",
+    };
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = await input.mediaDownloader.downloadMedia(metadata.url);
+  } catch (error) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: error instanceof Error ? error.message : "media_download_failed",
+    };
+  }
+
+  const result = await input.audioTranscriber.transcribe({
+    audioBuffer: buffer,
+    mimeType: metadata.mimeType,
+  });
+
+  if (result.status === "success") {
+    return {
+      status: "success",
+      text: result.text,
+      durationMs: result.durationMs,
+      error: null,
+    };
+  }
+
+  if (result.status === "empty") {
+    return {
+      status: "empty",
+      text: "",
+      durationMs: result.durationMs,
+      error: null,
+    };
+  }
+
+  if (result.status === "timeout") {
+    return {
+      status: "timeout",
+      text: "",
+      durationMs: null,
+      error: null,
+    };
+  }
+
+  return {
+    status: "failed",
+    text: "",
+    durationMs: null,
+    error: result.error,
+  };
+}
+
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   const onboardingAgent = deps.onboardingAgent ?? new WhatsappOnboardingAgent();
   const reminderAgent = deps.reminderAgent ?? new WhatsappReminderAgent();
   const supportAgent = deps.supportAgent ?? new WhatsappSupportAgent();
   const cobrancaAgent = deps.cobrancaAgent ?? new WhatsappCobrancaAgent();
+  const mediaDownloader: MediaDownloader | null =
+    deps.mediaDownloader ??
+    (typeof (deps.whatsapp as Partial<MediaDownloader>).getMediaMetadata === "function" &&
+    typeof (deps.whatsapp as Partial<MediaDownloader>).downloadMedia === "function"
+      ? (deps.whatsapp as unknown as MediaDownloader)
+      : null);
+  const audioTranscriber: AudioTranscriber =
+    deps.audioTranscriber ?? new OpenAiAudioTranscriber();
 
   return {
     async GET(request: Request) {
@@ -158,7 +302,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
         return jsonResponse({ ok: true, duplicate: true });
       }
 
-      const inboundMessages = extractInboundTextMessages(payload);
+      const inboundMessages = extractInboundMessages(payload);
       const statusEvents = extractStatusEvents(payload);
       const processingErrors: Array<{
         whatsappMessageId: string;
@@ -214,6 +358,27 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
         : [];
 
       for (const inbound of inboundMessages) {
+        // Transcrição de áudio (síncrona, timeout 15s). Resultado vira o
+        // `inbound.body` consumido pelos agentes; em caso de falha o handler
+        // envia um fallback contextual e não chama o agente.
+        if (isAudioMessage(inbound)) {
+          const audioResult = await processAudio({
+            inbound,
+            mediaDownloader,
+            audioTranscriber,
+          });
+          inbound.transcriptionStatus = audioResult.status;
+          inbound.transcriptionError = audioResult.error;
+          inbound.audioDurationMs = audioResult.durationMs;
+          if (audioResult.status === "success") {
+            inbound.transcription = audioResult.text;
+            inbound.body = audioResult.text;
+          } else {
+            inbound.transcription = null;
+            inbound.body = "";
+          }
+        }
+
         const resolved = await resolveWhatsappConversation({
           repository: deps.repository,
           whatsapp: inbound.normalizedFrom,
@@ -230,9 +395,66 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           body: inbound.body,
           rawMessage: inbound.rawMessage,
           sentAt: inbound.timestamp?.toISOString() ?? null,
+          mediaType: inbound.mediaType,
+          mediaId: inbound.mediaId ?? null,
+          transcription: inbound.transcription ?? null,
+          transcriptionStatus: inbound.transcriptionStatus ?? null,
+          transcriptionError: inbound.transcriptionError ?? null,
+          audioDurationMs: inbound.audioDurationMs ?? null,
         });
 
         if (savedInbound.duplicate) {
+          continue;
+        }
+
+        // Áudio que não transcreveu: responde com fallback do agente em cena
+        // e pula o roteamento normal. Roteamento foi feito acima só para
+        // resolvermos `agent_mode`. Persiste o outbound normalmente.
+        if (
+          inbound.mediaType === "audio" &&
+          inbound.transcriptionStatus &&
+          inbound.transcriptionStatus !== "success"
+        ) {
+          const fallbackBody = audioFallbackMessage(
+            resolved.agentMode,
+            inbound.transcriptionStatus,
+          );
+          const outbox = await deps.repository.createOutboundMessage({
+            conversationId: resolved.conversationId,
+            leadId: resolved.leadId,
+            oficinaId: resolved.oficinaId,
+            to: inbound.normalizedFrom,
+            body: fallbackBody,
+          });
+          try {
+            const sent = await deps.whatsapp.sendTextMessage({
+              to: inbound.normalizedFrom,
+              body: fallbackBody,
+            });
+            await deps.repository.markOutboundSent({
+              outboundMessageId: outbox.id,
+              whatsappMessageId: sent.whatsappMessageId,
+              response: sent.response ?? null,
+            });
+            await deps.repository.saveOutboundMessage({
+              conversationId: resolved.conversationId,
+              leadId: resolved.leadId,
+              oficinaId: resolved.oficinaId,
+              whatsappMessageId: sent.whatsappMessageId,
+              body: fallbackBody,
+              rawMessage: sent.response ?? null,
+              sentAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            const outboundError = errorDetails(error);
+            await deps.repository.markOutboundFailed({
+              outboundMessageId: outbox.id,
+              errorMessage: outboundError.message,
+              providerErrorCode: outboundError.code,
+              providerErrorMessage: outboundError.message,
+              response: outboundError.response,
+            });
+          }
           continue;
         }
 

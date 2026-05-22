@@ -69,6 +69,7 @@ O usuário decide. Não atualize por conta própria nem ignore por conta própri
 - [14. Modo suporte (`agent_mode='suporte'`)](#14-modo-suporte-agent_modesuporte)
 - [15. Modo cobrança (`agent_mode='cobranca'`)](#15-modo-cobrança-agent_modecobranca)
 - [16. Inteligência de mercado](#16-inteligência-de-mercado)
+- [17. Áudio e transcrição](#17-áudio-e-transcrição)
 
 ---
 
@@ -778,6 +779,36 @@ Lista das coisas que o bot **nunca** faz, com fonte:
 ### 16.4 Performance
 - Queries usam o índice `servicos_tipo_servico_idx` `(oficina_id, tipo_servico, data_servico desc)` criado na Fase 1 (`20260521000000_tipo_servico_marca_peca.sql`).
 - Agregações in-memory no Node (não SQL `group by`) — vale até ~100k linhas de `servicos`. Acima disso, mover para RPC.
+
+---
+
+## 17. Áudio e transcrição
+
+Fonte canônica: [ADR-0015](./adr/0015-suporte-audio-whisper.md), [Fase 5 do backlog](./backlog-whatsapp-bot/fase-5-audio.md).
+
+### 17.1 Aceitação de áudio
+- O bot **aceita** mensagens com `type === "audio"` (notas de voz e arquivos de áudio) de qualquer participante (`lead_oficina`, `oficina_cliente`, `cliente_final`, `contato_desconhecido`). Lead e oficina são tratados igualmente.
+- Outros tipos de mídia (`image`, `document`, `sticker`, `video`, `location`) continuam sendo descartados silenciosamente. Não responder a esses tipos é comportamento esperado no MVP.
+
+### 17.2 Transcrição
+- Áudios são transcritos via **OpenAI Whisper** (`model: whisper-1`, `language: "pt"`) de forma **síncrona** dentro do webhook.
+- **Timeout duro de 15s**. Acima disso a transcrição é abandonada e o bot envia um fallback.
+- A transcrição é tratada exatamente como uma mensagem de texto — passa por `conversation-router` e chega ao agente em cena (vendas/onboarding/operação/lembrete/suporte/cobrança) como `inbound.body`.
+
+### 17.3 Fallback contextual
+- Quando a transcrição falha (`failed`, `empty`, `timeout`), o bot envia uma mensagem fixa **no tom do agente em cena**, definida em `lib/whatsapp/audio-fallbacks.ts`. O agente **não** é chamado nesses casos.
+- Mensagens nunca expõem termos técnicos ("Whisper", "OpenAI", "timeout"); sempre pedem que o cliente mande por texto.
+
+### 17.4 Retenção e privacidade
+- **O áudio bruto não é armazenado**. Apenas a transcrição é persistida em `mensagens.transcription`. O `media_id` Meta original fica em `mensagens.raw_payload` para auditoria — mas a URL Meta expira em ~5min, então recuperação do áudio original não é possível depois disso.
+- Transcrição **nunca** vai para logs estruturados (PII). Logs registram apenas `transcription_status` e `audio_duration_ms`.
+
+### 17.5 Persistência
+- Colunas em `mensagens` (migration `20260524000000_phase_5_audio_transcription.sql`): `media_type` (`text`|`audio`, default `text`), `media_id`, `transcription`, `transcription_status` (`success`|`failed`|`empty`|`timeout`), `transcription_error`, `audio_duration_ms`.
+- `body` continua sendo `not null`: recebe a transcrição em caso de sucesso, ou string vazia em caso de falha (com `transcription_status` indicando o motivo).
+
+### 17.6 Idempotência
+- Áudio reentregue pelo Meta cai no mesmo `provider_event_id` UNIQUE — **não há segunda chamada ao Whisper**. Comportamento idêntico ao texto.
 
 ---
 

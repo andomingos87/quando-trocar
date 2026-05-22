@@ -19,6 +19,32 @@ Não registrar:
 
 ---
 
+## 2026-05-21 — Suporte a áudio via Whisper (Fase 5)
+
+### Adicionado
+
+- **[ADR-0015](./adr/0015-suporte-audio-whisper.md)** — bot passa a aceitar notas de voz e arquivos de áudio, transcritos via OpenAI Whisper (`whisper-1`, `language: "pt"`) de forma síncrona dentro do webhook, timeout 15s.
+- **[Fase 5 do backlog](./backlog-whatsapp-bot/fase-5-audio.md)** — escopo, decisões e critérios de aceite.
+- **Migration `20260524000000_phase_5_audio_transcription.sql`** — colunas em `mensagens`: `media_type`, `media_id`, `transcription`, `transcription_status`, `transcription_error`, `audio_duration_ms`.
+- **`lib/whatsapp/transcription.ts`** — helper `transcribeAudio` com timeout duro e discriminated union (`success`/`empty`/`timeout`/`failed`).
+- **`lib/whatsapp/audio-fallbacks.ts`** — mensagens de fallback contextuais por `agent_mode`, enviadas quando a transcrição não tem sucesso.
+- **`WhatsAppCloudApiClient`** — métodos `getMediaMetadata` e `downloadMedia` (Graph API v20, mesmo `WHATSAPP_ACCESS_TOKEN`).
+- **Seção 17 em `docs/regras-de-negocio.md`** — política de áudio.
+
+### Decisões registradas em ADR-0015
+
+- **Síncrono** dentro do webhook (sem fila/worker), timeout 15s.
+- **Não armazenar o áudio bruto** — só a transcrição. Sem dependência de Supabase Storage.
+- **Fallback contextual por agente** — vendas, onboarding, operação, lembrete, suporte e cobrança têm cada um seu próprio texto.
+- **Idioma fixo `pt`**, sem auto-detect.
+- **Lead e oficina** ambos transcritos, sem distinção.
+
+### Não muda
+
+- ADR-0001 (LLM não decide estado), ADR-0004 (webhook persiste antes de processar), ADR-0006 (idempotência via `provider_event_id`) seguem valendo. Transcrição é dado de entrada, idempotência herdada do `provider_event_id`.
+
+---
+
 ## 2026-05-23 — Cadência/template por tipo + FAQ amortecedor + dashboard mercado (Fases 2-4)
 
 ### Adicionado

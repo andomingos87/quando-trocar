@@ -8,6 +8,12 @@ type MetaMessage = {
   timestamp?: string;
   type?: string;
   text?: { body?: string };
+  audio?: {
+    id?: string;
+    mime_type?: string;
+    voice?: boolean;
+    sha256?: string;
+  };
 };
 
 type MetaContact = {
@@ -63,14 +69,14 @@ export function extractWhatsappMessageId(payload: unknown) {
   return value?.messages?.[0]?.id ?? value?.statuses?.[0]?.id ?? null;
 }
 
-export function extractInboundTextMessages(payload: unknown): InboundWhatsappMessage[] {
+export function extractInboundMessages(payload: unknown): InboundWhatsappMessage[] {
   const typed = payload as MetaPayload;
   const messages: InboundWhatsappMessage[] = [];
 
   for (const entry of typed.entry ?? []) {
     for (const change of entry.changes ?? []) {
       for (const message of change.value?.messages ?? []) {
-        if (message.type !== "text" || !message.text?.body || !message.from || !message.id) {
+        if (!message.from || !message.id) {
           continue;
         }
 
@@ -80,24 +86,52 @@ export function extractInboundTextMessages(payload: unknown): InboundWhatsappMes
         const timestamp = message.timestamp
           ? new Date(Number(message.timestamp) * 1000)
           : null;
+        const normalizedTimestamp =
+          timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp : null;
 
-        messages.push({
+        const common = {
           providerEventId: message.id,
           whatsappMessageId: message.id,
           contextWhatsappMessageId: message.context?.id ?? null,
           from: message.from,
           normalizedFrom: normalizeWhatsappPhone(message.from),
           contactName: contact?.profile?.name ?? null,
-          body: message.text.body,
-          timestamp: timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp : null,
+          timestamp: normalizedTimestamp,
           rawMessage: message as Record<string, unknown>,
-        });
+        };
+
+        if (message.type === "text" && message.text?.body) {
+          messages.push({
+            ...common,
+            body: message.text.body,
+            mediaType: "text",
+          });
+          continue;
+        }
+
+        if (message.type === "audio" && message.audio?.id) {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "audio",
+            mediaId: message.audio.id,
+          });
+          continue;
+        }
+
+        // Outros tipos (image, document, sticker, video, location...) seguem
+        // descartados silenciosamente — fora do escopo da Fase 5.
       }
     }
   }
 
   return messages;
 }
+
+// Retrocompatibilidade: o nome antigo apontava só para texto. Mantemos o
+// símbolo exportado para qualquer chamada externa (eg. testes) que ainda
+// dependa dele; novos consumidores devem usar `extractInboundMessages`.
+export const extractInboundTextMessages = extractInboundMessages;
 
 export function extractStatusEvents(payload: unknown): WhatsappStatusEvent[] {
   const typed = payload as MetaPayload;
