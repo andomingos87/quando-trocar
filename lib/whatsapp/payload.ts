@@ -1,6 +1,15 @@
 import { normalizeWhatsappPhone } from "./sales-agent";
 import type { InboundWhatsappMessage, WhatsappStatusEvent } from "./types";
 
+type MetaMediaAttachment = {
+  id?: string;
+  mime_type?: string;
+  sha256?: string;
+  caption?: string;
+  filename?: string;
+  voice?: boolean;
+};
+
 type MetaMessage = {
   from?: string;
   context?: { id?: string };
@@ -8,12 +17,13 @@ type MetaMessage = {
   timestamp?: string;
   type?: string;
   text?: { body?: string };
-  audio?: {
-    id?: string;
-    mime_type?: string;
-    voice?: boolean;
-    sha256?: string;
-  };
+  audio?: MetaMediaAttachment;
+  image?: MetaMediaAttachment;
+  document?: MetaMediaAttachment;
+  sticker?: MetaMediaAttachment;
+  video?: MetaMediaAttachment;
+  location?: Record<string, unknown>;
+  contacts?: unknown[];
 };
 
 type MetaContact = {
@@ -119,8 +129,88 @@ export function extractInboundMessages(payload: unknown): InboundWhatsappMessage
           continue;
         }
 
-        // Outros tipos (image, document, sticker, video, location...) seguem
-        // descartados silenciosamente — fora do escopo da Fase 5.
+        // Imagem e documento têm pipeline próprio (ADR-0016) — emitimos o
+        // mediaType e o webhook decide se processa (vision/PDF) ou envia
+        // fallback contextual.
+        if (message.type === "image" && message.image?.id) {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "image",
+            mediaId: message.image.id,
+            mediaMimeType: message.image.mime_type ?? null,
+            mediaCaption: message.image.caption ?? null,
+          });
+          continue;
+        }
+
+        if (message.type === "document" && message.document?.id) {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "document",
+            mediaId: message.document.id,
+            mediaMimeType: message.document.mime_type ?? null,
+            mediaCaption: message.document.caption ?? null,
+          });
+          continue;
+        }
+
+        // Tipos sem processamento — disparam apenas fallback contextual no
+        // webhook-handler. Mantemos o `mediaId` quando o payload trouxer
+        // (sticker/video sempre traz) por rastreabilidade no `raw_payload`,
+        // mas nenhum download é feito.
+        if (message.type === "sticker" && message.sticker?.id) {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "sticker",
+            mediaId: message.sticker.id,
+          });
+          continue;
+        }
+
+        if (message.type === "video" && message.video?.id) {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "video",
+            mediaId: message.video.id,
+          });
+          continue;
+        }
+
+        if (message.type === "location") {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "location",
+            mediaId: null,
+          });
+          continue;
+        }
+
+        if (message.type === "contacts") {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "contacts",
+            mediaId: null,
+          });
+          continue;
+        }
+
+        // Tipo desconhecido (ex.: reactions, system, novos tipos do Meta).
+        // Emitimos `unsupported` para que o webhook responda algo em vez de
+        // ficar mudo.
+        if (message.type) {
+          messages.push({
+            ...common,
+            body: "",
+            mediaType: "unsupported",
+            mediaId: null,
+          });
+        }
       }
     }
   }

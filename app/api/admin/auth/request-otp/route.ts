@@ -123,6 +123,10 @@ export async function POST(request: Request) {
       templateName,
       languageCode: "pt_BR",
       bodyParameters: [code],
+      // AUTHENTICATION template `qt_admin_otp` has a COPY_CODE URL button
+      // whose `{{1}}` must echo the OTP code, otherwise Meta rejects with
+      // error 132000.
+      urlButtonParameter: code,
     });
   } catch (err) {
     console.error("admin/request-otp template send failed", err);

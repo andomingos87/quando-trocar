@@ -788,7 +788,7 @@ Fonte canônica: [ADR-0015](./adr/0015-suporte-audio-whisper.md), [Fase 5 do bac
 
 ### 17.1 Aceitação de áudio
 - O bot **aceita** mensagens com `type === "audio"` (notas de voz e arquivos de áudio) de qualquer participante (`lead_oficina`, `oficina_cliente`, `cliente_final`, `contato_desconhecido`). Lead e oficina são tratados igualmente.
-- Outros tipos de mídia (`image`, `document`, `sticker`, `video`, `location`) continuam sendo descartados silenciosamente. Não responder a esses tipos é comportamento esperado no MVP.
+- Outros tipos de mídia (`image`, `document`, `sticker`, `video`, `location`, `contacts`, ou tipos desconhecidos) **não são mais descartados em silêncio** — o bot responde com um fallback contextual por agente em cena. Veja **17.7**.
 
 ### 17.2 Transcrição
 - Áudios são transcritos via **OpenAI Whisper** (`model: whisper-1`, `language: "pt"`) de forma **síncrona** dentro do webhook.
@@ -809,6 +809,29 @@ Fonte canônica: [ADR-0015](./adr/0015-suporte-audio-whisper.md), [Fase 5 do bac
 
 ### 17.6 Idempotência
 - Áudio reentregue pelo Meta cai no mesmo `provider_event_id` UNIQUE — **não há segunda chamada ao Whisper**. Comportamento idêntico ao texto.
+
+### 17.7 Pipeline de imagem e documento PDF
+
+Fonte canônica: [ADR-0016](./adr/0016-suporte-imagem-pdf-sem-storage.md).
+
+- **Imagem** (`mediaType === "image"`): o bot baixa o arquivo, chama `gpt-4o-mini` em modo vision com prompt contextualizado de oficina pt-BR, timeout 12s. Resultado vira `inbound.body = "[imagem] <descrição>"` (com legenda do usuário concatenada, se houver) e segue para o agente em cena, como faz com áudio. Em falha, empty, ou timeout, cai no fallback contextual abaixo.
+- **Documento** (`mediaType === "document"`): apenas `application/pdf`. Texto extraído com `unpdf` (local, sem custo OpenAI), timeout 8s, truncado em 2000 chars. PDFs escaneados ou com menos de 50 caracteres úteis caem em `empty` e disparam fallback (não roteiam para vision). Sucesso vira `inbound.body = "[documento] <texto>"`.
+- **Mídia bruta nunca é armazenada** — confirma ADR-0015 ponto 2. Apenas a transcrição/descrição/texto extraído fica em `mensagens.transcription`. `media_id` original em `raw_payload` para rastreabilidade.
+- A coluna `transcription` (nome herdado da Fase 5) comporta também imagem e PDF — não foi renomeada para evitar churn.
+
+### 17.8 Fallback para mídia sem pipeline próprio
+
+- O parser em `lib/whatsapp/payload.ts` emite `mediaType` para **todos** os tipos conhecidos do WhatsApp Cloud API. Nenhum tipo conhecido cai mais em descarte silencioso.
+- Quando o pipeline próprio (vision/PDF) falha, ou quando `mediaType` é `sticker`, `video`, `location`, `contacts` ou `unsupported`, o webhook **não chama agente**: envia um fallback contextual escolhido por `(agentMode, mediaType)` definido em `lib/whatsapp/unsupported-media-fallbacks.ts` e persiste a mensagem com `mediaType` correspondente.
+- A linha em `mensagens` é gravada normalmente — `media_type` corresponde ao tipo recebido, `body = ""`, e o `raw_payload` preserva o evento original para auditoria.
+- A constraint `mensagens_media_type_check` foi ampliada pela migration `20260525000000_mensagens_media_types_extra.sql` para aceitar todos os tipos.
+
+### 17.9 Rate limit de mídia paga
+
+- Imagem + documento combinados são limitados a **`WHATSAPP_MEDIA_DAILY_LIMIT` (default 50)** mensagens inbound por número de WhatsApp, em janela rolling de 24h.
+- Excedido o limite, o webhook **não chama** o pipeline (sem custo de vision/OpenAI), grava a mensagem com `transcription_status = 'failed'` e `transcription_error = 'rate_limit'`, e dispara o fallback contextual.
+- Áudio (Whisper) **não** tem rate limit — custo é uma ordem de magnitude menor.
+- Métricas para acompanhar: [runbook `whatsapp-media-metrics.md`](./runbooks/whatsapp-media-metrics.md).
 
 ---
 

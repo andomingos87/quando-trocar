@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import { audioFallbackMessage } from "./audio-fallbacks";
+import { unsupportedMediaFallback } from "./unsupported-media-fallbacks";
 import { WhatsappCobrancaAgent } from "./cobranca-agent";
 import { resolveWhatsappConversation } from "./conversation-router";
 import {
@@ -19,6 +20,11 @@ import {
 } from "./payload";
 import { verifyMetaSignature } from "./signature";
 import { transcribeAudio, type TranscriptionResult } from "./transcription";
+import { describeImage, type ImageVisionResult } from "./image-vision";
+import {
+  extractDocumentText,
+  type DocumentExtractionResult,
+} from "./document-text";
 import type {
   CobrancaAgent,
   CobrancaSubmode,
@@ -50,6 +56,21 @@ export type AudioTranscriber = {
   }): Promise<TranscriptionResult>;
 };
 
+export type ImageDescriber = {
+  describe(input: {
+    imageBuffer: Buffer;
+    mimeType: string;
+    caption?: string | null;
+  }): Promise<ImageVisionResult>;
+};
+
+export type DocumentExtractor = {
+  extract(input: {
+    documentBuffer: Buffer;
+    mimeType: string;
+  }): Promise<DocumentExtractionResult>;
+};
+
 class OpenAiAudioTranscriber implements AudioTranscriber {
   private readonly openai: OpenAI | null;
 
@@ -76,6 +97,46 @@ class OpenAiAudioTranscriber implements AudioTranscriber {
   }
 }
 
+class DefaultDocumentExtractor implements DocumentExtractor {
+  async extract(input: {
+    documentBuffer: Buffer;
+    mimeType: string;
+  }): Promise<DocumentExtractionResult> {
+    return extractDocumentText({
+      documentBuffer: input.documentBuffer,
+      mimeType: input.mimeType,
+    });
+  }
+}
+
+class OpenAiImageDescriber implements ImageDescriber {
+  private readonly openai: OpenAI | null;
+
+  constructor(input?: { openai?: OpenAI | null }) {
+    this.openai =
+      input?.openai ??
+      (process.env.OPENAI_API_KEY
+        ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+        : null);
+  }
+
+  async describe(input: {
+    imageBuffer: Buffer;
+    mimeType: string;
+    caption?: string | null;
+  }): Promise<ImageVisionResult> {
+    if (!this.openai) {
+      return { status: "failed", error: "missing_openai_key" };
+    }
+    return describeImage({
+      openai: this.openai,
+      imageBuffer: input.imageBuffer,
+      mimeType: input.mimeType,
+      caption: input.caption,
+    });
+  }
+}
+
 type HandlerDeps = {
   env: WebhookEnv;
   repository: WhatsappRepository;
@@ -87,6 +148,8 @@ type HandlerDeps = {
   cobrancaAgent?: CobrancaAgent;
   mediaDownloader?: MediaDownloader;
   audioTranscriber?: AudioTranscriber;
+  imageDescriber?: ImageDescriber;
+  documentExtractor?: DocumentExtractor;
 };
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -152,6 +215,20 @@ function isAudioMessage(inbound: InboundWhatsappMessage): inbound is InboundWhat
   mediaId: string;
 } {
   return inbound.mediaType === "audio" && Boolean(inbound.mediaId);
+}
+
+function isImageMessage(inbound: InboundWhatsappMessage): inbound is InboundWhatsappMessage & {
+  mediaType: "image";
+  mediaId: string;
+} {
+  return inbound.mediaType === "image" && Boolean(inbound.mediaId);
+}
+
+function isDocumentMessage(inbound: InboundWhatsappMessage): inbound is InboundWhatsappMessage & {
+  mediaType: "document";
+  mediaId: string;
+} {
+  return inbound.mediaType === "document" && Boolean(inbound.mediaId);
 }
 
 async function processAudio(input: {
@@ -237,6 +314,193 @@ async function processAudio(input: {
   };
 }
 
+// Processamento de imagem (ADR-0016). Mesmo formato de retorno de `processAudio`,
+// reusa a coluna `transcription` para armazenar a descrição extraída — o nome
+// da coluna fica "transcription" historicamente mas comporta também
+// imagem/PDF (documentado em regras-de-negocio.md §17.7).
+async function processImage(input: {
+  inbound: InboundWhatsappMessage & { mediaType: "image"; mediaId: string };
+  mediaDownloader: MediaDownloader | null;
+  imageDescriber: ImageDescriber | null;
+}): Promise<{
+  status: ImageVisionResult["status"];
+  text: string;
+  durationMs: number | null;
+  error: string | null;
+}> {
+  if (!input.mediaDownloader || !input.imageDescriber) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: "missing_image_dependencies",
+    };
+  }
+
+  let metadata: { url: string; mimeType: string };
+  try {
+    metadata = await input.mediaDownloader.getMediaMetadata(input.inbound.mediaId);
+  } catch (error) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: error instanceof Error ? error.message : "media_metadata_failed",
+    };
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = await input.mediaDownloader.downloadMedia(metadata.url);
+  } catch (error) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: error instanceof Error ? error.message : "media_download_failed",
+    };
+  }
+
+  const result = await input.imageDescriber.describe({
+    imageBuffer: buffer,
+    mimeType: metadata.mimeType,
+    caption: input.inbound.mediaCaption ?? null,
+  });
+
+  if (result.status === "success") {
+    return {
+      status: "success",
+      text: result.text,
+      durationMs: result.durationMs,
+      error: null,
+    };
+  }
+
+  if (result.status === "empty") {
+    return {
+      status: "empty",
+      text: "",
+      durationMs: result.durationMs,
+      error: null,
+    };
+  }
+
+  if (result.status === "timeout") {
+    return {
+      status: "timeout",
+      text: "",
+      durationMs: null,
+      error: null,
+    };
+  }
+
+  return {
+    status: "failed",
+    text: "",
+    durationMs: null,
+    error: result.error,
+  };
+}
+
+function formatImageBody(description: string, caption: string | null | undefined): string {
+  const captionFragment = caption?.trim()
+    ? ` (legenda do usuário: "${caption.trim()}")`
+    : "";
+  return `[imagem] ${description}${captionFragment}`;
+}
+
+function formatDocumentBody(extracted: string, caption: string | null | undefined): string {
+  const captionFragment = caption?.trim()
+    ? ` (legenda do usuário: "${caption.trim()}")`
+    : "";
+  return `[documento] ${extracted}${captionFragment}`;
+}
+
+// Processamento de documento PDF (ADR-0016). Mesma estrutura de retorno de
+// `processImage`/`processAudio`. Reusa as colunas `transcription`/`transcriptionStatus`.
+async function processDocument(input: {
+  inbound: InboundWhatsappMessage & { mediaType: "document"; mediaId: string };
+  mediaDownloader: MediaDownloader | null;
+  documentExtractor: DocumentExtractor | null;
+}): Promise<{
+  status: DocumentExtractionResult["status"];
+  text: string;
+  durationMs: number | null;
+  error: string | null;
+}> {
+  if (!input.mediaDownloader || !input.documentExtractor) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: "missing_document_dependencies",
+    };
+  }
+
+  let metadata: { url: string; mimeType: string };
+  try {
+    metadata = await input.mediaDownloader.getMediaMetadata(input.inbound.mediaId);
+  } catch (error) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: error instanceof Error ? error.message : "media_metadata_failed",
+    };
+  }
+
+  let buffer: Buffer;
+  try {
+    buffer = await input.mediaDownloader.downloadMedia(metadata.url);
+  } catch (error) {
+    return {
+      status: "failed",
+      text: "",
+      durationMs: null,
+      error: error instanceof Error ? error.message : "media_download_failed",
+    };
+  }
+
+  const result = await input.documentExtractor.extract({
+    documentBuffer: buffer,
+    mimeType: metadata.mimeType,
+  });
+
+  if (result.status === "success") {
+    return {
+      status: "success",
+      text: result.text,
+      durationMs: result.durationMs,
+      error: null,
+    };
+  }
+
+  if (result.status === "empty") {
+    return {
+      status: "empty",
+      text: "",
+      durationMs: result.durationMs,
+      error: null,
+    };
+  }
+
+  if (result.status === "timeout") {
+    return {
+      status: "timeout",
+      text: "",
+      durationMs: null,
+      error: null,
+    };
+  }
+
+  return {
+    status: "failed",
+    text: "",
+    durationMs: null,
+    error: result.error,
+  };
+}
+
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   const onboardingAgent = deps.onboardingAgent ?? new WhatsappOnboardingAgent();
   const reminderAgent = deps.reminderAgent ?? new WhatsappReminderAgent();
@@ -250,6 +514,10 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
       : null);
   const audioTranscriber: AudioTranscriber =
     deps.audioTranscriber ?? new OpenAiAudioTranscriber();
+  const imageDescriber: ImageDescriber =
+    deps.imageDescriber ?? new OpenAiImageDescriber();
+  const documentExtractor: DocumentExtractor =
+    deps.documentExtractor ?? new DefaultDocumentExtractor();
 
   return {
     async GET(request: Request) {
@@ -379,6 +647,88 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           }
         }
 
+        // Rate limit por conversa (image+document, 24h). Antes de qualquer
+        // chamada paga (vision/PDF) o webhook checa o contador. Excedido →
+        // marca como `failed` e cai no fallback contextual já existente.
+        // Configurável via `WHATSAPP_MEDIA_DAILY_LIMIT` (default 50).
+        if (
+          (isImageMessage(inbound) || isDocumentMessage(inbound)) &&
+          typeof deps.repository.countInboundMediaInLastDay === "function"
+        ) {
+          const limit = Number.parseInt(
+            process.env.WHATSAPP_MEDIA_DAILY_LIMIT ?? "50",
+            10,
+          );
+          const count = await deps.repository.countInboundMediaInLastDay({
+            whatsappFrom: inbound.normalizedFrom,
+          });
+          if (Number.isFinite(limit) && count >= limit) {
+            inbound.transcriptionStatus = "failed";
+            inbound.transcriptionError = "rate_limit";
+            inbound.transcription = null;
+            inbound.body = "";
+            // Pula image/document processing — o branch genérico de fallback
+            // abaixo enviará a mensagem contextual de `image`/`document`.
+          }
+        }
+
+        // Descrição de imagem (ADR-0016). Reusa `transcription` e
+        // `transcriptionStatus` para guardar a saída do vision — o agente em
+        // cena consome o `inbound.body` formatado como "[imagem] ...". Em
+        // falha/empty/timeout, o branch genérico abaixo (que cobre
+        // mediaType ≠ text/audio) envia o fallback contextual de `image`.
+        if (isImageMessage(inbound) && inbound.transcriptionError !== "rate_limit") {
+          const imageResult = await processImage({
+            inbound,
+            mediaDownloader,
+            imageDescriber,
+          });
+          inbound.transcriptionStatus =
+            imageResult.status === "success"
+              ? "success"
+              : imageResult.status === "empty"
+                ? "empty"
+                : imageResult.status === "timeout"
+                  ? "timeout"
+                  : "failed";
+          inbound.transcriptionError = imageResult.error;
+          if (imageResult.status === "success") {
+            inbound.transcription = imageResult.text;
+            inbound.body = formatImageBody(imageResult.text, inbound.mediaCaption);
+          } else {
+            inbound.transcription = null;
+            inbound.body = "";
+          }
+        }
+
+        // Extração de texto de PDF (ADR-0016). PDFs escaneados (texto útil
+        // < 50 chars) caem em `empty` e disparam fallback contextual. Não
+        // roteamos pra vision pra evitar custos imprevisíveis com PDFs
+        // grandes — fica como melhoria futura.
+        if (isDocumentMessage(inbound) && inbound.transcriptionError !== "rate_limit") {
+          const docResult = await processDocument({
+            inbound,
+            mediaDownloader,
+            documentExtractor,
+          });
+          inbound.transcriptionStatus =
+            docResult.status === "success"
+              ? "success"
+              : docResult.status === "empty"
+                ? "empty"
+                : docResult.status === "timeout"
+                  ? "timeout"
+                  : "failed";
+          inbound.transcriptionError = docResult.error;
+          if (docResult.status === "success") {
+            inbound.transcription = docResult.text;
+            inbound.body = formatDocumentBody(docResult.text, inbound.mediaCaption);
+          } else {
+            inbound.transcription = null;
+            inbound.body = "";
+          }
+        }
+
         const resolved = await resolveWhatsappConversation({
           repository: deps.repository,
           whatsapp: inbound.normalizedFrom,
@@ -418,6 +768,64 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           const fallbackBody = audioFallbackMessage(
             resolved.agentMode,
             inbound.transcriptionStatus,
+          );
+          const outbox = await deps.repository.createOutboundMessage({
+            conversationId: resolved.conversationId,
+            leadId: resolved.leadId,
+            oficinaId: resolved.oficinaId,
+            to: inbound.normalizedFrom,
+            body: fallbackBody,
+          });
+          try {
+            const sent = await deps.whatsapp.sendTextMessage({
+              to: inbound.normalizedFrom,
+              body: fallbackBody,
+            });
+            await deps.repository.markOutboundSent({
+              outboundMessageId: outbox.id,
+              whatsappMessageId: sent.whatsappMessageId,
+              response: sent.response ?? null,
+            });
+            await deps.repository.saveOutboundMessage({
+              conversationId: resolved.conversationId,
+              leadId: resolved.leadId,
+              oficinaId: resolved.oficinaId,
+              whatsappMessageId: sent.whatsappMessageId,
+              body: fallbackBody,
+              rawMessage: sent.response ?? null,
+              sentAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            const outboundError = errorDetails(error);
+            await deps.repository.markOutboundFailed({
+              outboundMessageId: outbox.id,
+              errorMessage: outboundError.message,
+              providerErrorCode: outboundError.code,
+              providerErrorMessage: outboundError.message,
+              response: outboundError.response,
+            });
+          }
+          continue;
+        }
+
+        // Mídia não-texto e não-áudio: imagem, documento, sticker, vídeo,
+        // localização, contatos ou tipo desconhecido. Imagem e documento têm
+        // pipeline próprio (ADR-0016) — se `transcriptionStatus === 'success'`
+        // foi processada com êxito antes deste branch e segue para o agente.
+        // Os demais (sticker/video/location/contacts/unsupported) e os casos
+        // de falha de image/document caem aqui em fallback contextual.
+        const imageOrDocumentProcessed =
+          (inbound.mediaType === "image" || inbound.mediaType === "document") &&
+          inbound.transcriptionStatus === "success";
+
+        if (
+          inbound.mediaType !== "text" &&
+          inbound.mediaType !== "audio" &&
+          !imageOrDocumentProcessed
+        ) {
+          const fallbackBody = unsupportedMediaFallback(
+            resolved.agentMode,
+            inbound.mediaType,
           );
           const outbox = await deps.repository.createOutboundMessage({
             conversationId: resolved.conversationId,

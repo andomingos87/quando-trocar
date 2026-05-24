@@ -75,9 +75,35 @@ export class WhatsAppCloudApiClient implements WhatsappSender, WhatsappMediaDown
     templateName: string;
     languageCode: string;
     bodyParameters: string[];
+    /**
+     * Optional value for a URL button that contains a `{{1}}` placeholder.
+     * Required by AUTHENTICATION templates with COPY_CODE one-tap buttons —
+     * Meta rejects the send with error 132000 if the button parameter is
+     * missing.
+     */
+    urlButtonParameter?: string;
   }) {
     if (!this.input.accessToken || !this.input.phoneNumberId) {
       throw new Error("Missing WhatsApp Cloud API environment variables");
+    }
+
+    const components: Array<Record<string, unknown>> = [
+      {
+        type: "body",
+        parameters: input.bodyParameters.map((text) => ({
+          type: "text",
+          text,
+        })),
+      },
+    ];
+
+    if (input.urlButtonParameter !== undefined) {
+      components.push({
+        type: "button",
+        sub_type: "url",
+        index: "0",
+        parameters: [{ type: "text", text: input.urlButtonParameter }],
+      });
     }
 
     const response = await fetch(
@@ -98,15 +124,7 @@ export class WhatsAppCloudApiClient implements WhatsappSender, WhatsappMediaDown
             language: {
               code: input.languageCode,
             },
-            components: [
-              {
-                type: "body",
-                parameters: input.bodyParameters.map((text) => ({
-                  type: "text",
-                  text,
-                })),
-              },
-            ],
+            components,
           },
         }),
       },

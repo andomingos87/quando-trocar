@@ -147,7 +147,27 @@ export type RegisteredService = {
   lembreteId: string | null;
 };
 
-export type InboundMediaType = "text" | "audio";
+export type InboundMediaType =
+  | "text"
+  | "audio"
+  | "image"
+  | "document"
+  | "sticker"
+  | "video"
+  | "location"
+  | "contacts"
+  | "unsupported";
+
+// Subconjunto de mediaType que o webhook responde com fallback fixo (sem chamar
+// agente). Mantemos separado de `audio` porque áudio tem seu próprio pipeline
+// de transcrição (ADR-0015); o pipeline de imagem/PDF (ADR-0016) também
+// recebe processamento próprio antes do fallback ser usado.
+export type UnsupportedInboundMediaType =
+  | "sticker"
+  | "video"
+  | "location"
+  | "contacts"
+  | "unsupported";
 
 export type TranscriptionStatus = "success" | "failed" | "empty" | "timeout";
 
@@ -163,6 +183,11 @@ export type InboundWhatsappMessage = {
   rawMessage: Record<string, unknown>;
   mediaType: InboundMediaType;
   mediaId?: string | null;
+  // Legenda enviada junto da mídia (apenas image/document/video trazem).
+  mediaCaption?: string | null;
+  // Mime declarado pelo Meta no webhook (pré-download). Útil para validação
+  // rápida antes de gastar uma chamada de download/vision.
+  mediaMimeType?: string | null;
   transcription?: string | null;
   transcriptionStatus?: TranscriptionStatus | null;
   transcriptionError?: string | null;
@@ -286,6 +311,12 @@ export type WhatsappRepository = {
     diasLembretePadrao: number;
   }>;
   registerServiceWithReminder?(input: RegisterServiceInput): Promise<RegisteredService>;
+  // Conta mensagens inbound dos tipos image/document recebidas nas últimas
+  // 24h da mesma conversa (whatsapp_from). Usado pelo rate limit de mídia.
+  // Opcional: quando ausente, o webhook não aplica rate limit.
+  countInboundMediaInLastDay?(input: {
+    whatsappFrom: string;
+  }): Promise<number>;
   saveInboundMessage(input: {
     conversationId: string;
     leadId: string | null;
@@ -441,6 +472,12 @@ export type WhatsappSender = {
     templateName: string;
     languageCode: string;
     bodyParameters: string[];
+    /**
+     * Optional value for a URL button that contains a `{{1}}` placeholder
+     * (used by AUTHENTICATION templates with COPY_CODE one-tap buttons).
+     * When provided, an extra `button` component is appended to the request.
+     */
+    urlButtonParameter?: string;
   }): Promise<{
     whatsappMessageId: string;
     response?: unknown;

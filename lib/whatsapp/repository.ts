@@ -5,6 +5,7 @@ import type {
   ConversationAgentMode,
   ConversationContext,
   FaqVendasRecord,
+  InboundMediaType,
   LeadStatus,
   ParticipantType,
   RegisterServiceInput,
@@ -684,6 +685,30 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     };
   }
 
+  async countInboundMediaInLastDay(input: { whatsappFrom: string }): Promise<number> {
+    // Conta image+document inbound da mesma conversa (resolvida via número).
+    // Janela rolling de 24h. Usamos `direction='inbound'` e
+    // `media_type in ('image','document')` filtrando via inner-join com
+    // `conversas.whatsapp_from`.
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { count, error } = await this.supabase
+      .from("mensagens")
+      .select("id, conversas!inner(whatsapp_from)", { count: "exact", head: true })
+      .eq("direction", "inbound")
+      .in("media_type", ["image", "document"])
+      .gte("created_at", cutoff)
+      .eq("conversas.whatsapp_from", input.whatsappFrom);
+
+    if (error) {
+      // Falha do rate limit não deve quebrar o webhook — log e devolve 0
+      // (permite a mensagem passar como se não houvesse limite).
+      console.error("countInboundMediaInLastDay failed", error.message);
+      return 0;
+    }
+    return count ?? 0;
+  }
+
   async saveInboundMessage(input: {
     conversationId: string;
     leadId: string | null;
@@ -692,7 +717,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     body: string;
     rawMessage: unknown;
     sentAt: string | null;
-    mediaType?: "text" | "audio";
+    mediaType?: InboundMediaType;
     mediaId?: string | null;
     transcription?: string | null;
     transcriptionStatus?: "success" | "failed" | "empty" | "timeout" | null;

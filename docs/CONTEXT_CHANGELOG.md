@@ -19,6 +19,54 @@ Não registrar:
 
 ---
 
+## 2026-05-21 — Suporte a imagem (vision) e PDF (texto) sem Storage
+
+### Adicionado
+
+- **[ADR-0016](./adr/0016-suporte-imagem-pdf-sem-storage.md)** — estende a ADR-0015 com pipeline próprio para imagem (gpt-4o-mini multimodal) e documento PDF (`unpdf`), mantendo a decisão de **não armazenar mídia bruta**.
+- **`lib/whatsapp/image-vision.ts`** — `describeImage` com timeout, sentinela "imagem sem conteúdo extraível" → `empty`, allowlist por mime, limite de 5MB.
+- **`lib/whatsapp/document-text.ts`** — `extractDocumentText` com `unpdf`, timeout, descarta PDFs escaneados (< 50 chars úteis) como `empty`, trunca em 2000 chars.
+- **Branches `processImage` e `processDocument` no webhook** — análogos a `processAudio`, populam `inbound.body` com `[imagem] ...` / `[documento] ...` quando bem-sucedidos. Falha cai no fallback contextual da F0.
+- **Rate limit por número de WhatsApp** — imagem + documento combinados, 50/dia por padrão (env `WHATSAPP_MEDIA_DAILY_LIMIT`). Aplicado antes da chamada paga; excedido grava `transcription_error = 'rate_limit'` e dispara fallback.
+- **Novo método repository** — `countInboundMediaInLastDay({ whatsappFrom })`. Opcional na interface (mocks de teste continuam compatíveis sem implementá-lo).
+- **Captura de `caption` e `mime_type`** no parser de payload para image/document.
+- **Seções 17.7, 17.8, 17.9 em `regras-de-negocio.md`** — política de imagem, fallback genérico e rate limit.
+- **Runbook `docs/runbooks/whatsapp-media-metrics.md`** — queries SQL para volume, distribuição de status, custo estimado, top oficinas, rate limit, latência, mídia caída no fallback.
+- **Cobertura de testes** — `tests/whatsapp-image-vision.test.ts`, `tests/whatsapp-route-image.test.ts`, `tests/whatsapp-document-text.test.ts`, `tests/whatsapp-route-document.test.ts`. Total: 334 testes verde, lint limpo.
+
+### Decisões registradas em ADR-0016
+
+- **Sem Supabase Storage** — bytes são processados em memória e descartados. Confirma e expande ADR-0015 ponto 2.
+- **`gpt-4o-mini` para vision** — mesma família dos classificadores em uso.
+- **`unpdf` para PDF** — pure-JS, sem binário, funciona em runtime serverless.
+- **Sem fallback vision em PDF escaneado** — evita custo imprevisível em PDFs grandes. Fica como melhoria futura.
+- **Reaproveitamento de `unsupported-media-fallbacks.ts`** — copy já cobre image e document. Sem duplicar lógica.
+- **Rate limit apenas em imagem+documento** — Whisper é mais barato e não precisa.
+
+---
+
+## 2026-05-21 — F0: fallback universal para mídia não suportada
+
+### Adicionado
+
+- **Migration `20260525000000_mensagens_media_types_extra.sql`** — amplia `mensagens_media_type_check` para aceitar `image`, `document`, `sticker`, `video`, `location`, `contacts`, `unsupported` (antes só `text`/`audio`).
+- **`lib/whatsapp/unsupported-media-fallbacks.ts`** — mensagens fixas por `(agent_mode, mediaType)` para tipos sem pipeline próprio. Estilo espelha `audio-fallbacks.ts`.
+- **`lib/whatsapp/payload.ts`** — `extractInboundMessages` agora emite `mediaType` para todos os tipos conhecidos do WhatsApp Cloud API (em vez de descarte silencioso). Tipos desconhecidos viram `unsupported`.
+- **`InboundMediaType`** estendido em `types.ts` para o conjunto completo.
+- **Branch de fallback em `webhook-handler.ts`** — quando `mediaType` ≠ `text`/`audio`, persiste o inbound, envia fallback contextual e pula o agente.
+- **Seção 17.7 em `docs/regras-de-negocio.md`** — política de fallback de mídia.
+- **Cobertura de testes** — `tests/whatsapp-payload-audio.test.ts` (estendido) e `tests/whatsapp-route-unsupported-media.test.ts` (novo).
+
+### Por que
+
+ADR-0015 deixou explícito que image/document/sticker/etc. ficavam fora do MVP. Na prática, o bot ficava **mudo** para esses tipos — pior cenário de UX. F0 elimina o silêncio sem decidir nada sobre processamento de imagem/PDF (essa decisão fica para ADR-0016).
+
+### Próxima fase
+
+- **ADR-0016** — decide pipeline próprio para imagem (vision) e PDF (extração de texto), mantendo a decisão da ADR-0015 de não armazenar mídia bruta.
+
+---
+
 ## 2026-05-21 — Suporte a áudio via Whisper (Fase 5)
 
 ### Adicionado

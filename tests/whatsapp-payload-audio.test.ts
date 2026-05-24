@@ -28,7 +28,7 @@ function payloadWithMessage(message: Record<string, unknown>) {
   };
 }
 
-describe("extractInboundMessages — áudio", () => {
+describe("extractInboundMessages — texto e áudio (ADR-0015)", () => {
   test("aceita type=audio e extrai mediaId", () => {
     const messages = extractInboundMessages(
       payloadWithMessage({
@@ -69,47 +69,7 @@ describe("extractInboundMessages — áudio", () => {
     expect(messages[0].mediaId).toBeUndefined();
   });
 
-  test("descarta type=image", () => {
-    const messages = extractInboundMessages(
-      payloadWithMessage({
-        from: "5541999999999",
-        id: "wamid.image-1",
-        timestamp: "1714070400",
-        type: "image",
-        image: { id: "image-id" },
-      }),
-    );
-
-    expect(messages).toHaveLength(0);
-  });
-
-  test("descarta type=document", () => {
-    const messages = extractInboundMessages(
-      payloadWithMessage({
-        from: "5541999999999",
-        id: "wamid.doc-1",
-        type: "document",
-        document: { id: "doc-id" },
-      }),
-    );
-
-    expect(messages).toHaveLength(0);
-  });
-
-  test("descarta type=sticker", () => {
-    const messages = extractInboundMessages(
-      payloadWithMessage({
-        from: "5541999999999",
-        id: "wamid.sticker-1",
-        type: "sticker",
-        sticker: { id: "sticker-id" },
-      }),
-    );
-
-    expect(messages).toHaveLength(0);
-  });
-
-  test("descarta audio sem audio.id (malformado)", () => {
+  test("audio sem audio.id (malformado) → mediaType=unsupported (fallback ao invés de silêncio)", () => {
     const messages = extractInboundMessages(
       payloadWithMessage({
         from: "5541999999999",
@@ -119,6 +79,134 @@ describe("extractInboundMessages — áudio", () => {
       }),
     );
 
-    expect(messages).toHaveLength(0);
+    expect(messages).toHaveLength(1);
+    expect(messages[0].mediaType).toBe("unsupported");
+  });
+});
+
+describe("extractInboundMessages — mídia adicional (F0 fallback / ADR-0016)", () => {
+  test("emite mediaType=image com mediaId", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.image-1",
+        type: "image",
+        image: { id: "image-id", mime_type: "image/jpeg" },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      mediaType: "image",
+      mediaId: "image-id",
+      body: "",
+    });
+  });
+
+  test("emite mediaType=document com mediaId", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.doc-1",
+        type: "document",
+        document: { id: "doc-id", mime_type: "application/pdf" },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      mediaType: "document",
+      mediaId: "doc-id",
+      body: "",
+    });
+  });
+
+  test("emite mediaType=sticker", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.sticker-1",
+        type: "sticker",
+        sticker: { id: "sticker-id" },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      mediaType: "sticker",
+      body: "",
+    });
+  });
+
+  test("emite mediaType=video", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.video-1",
+        type: "video",
+        video: { id: "video-id", mime_type: "video/mp4" },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].mediaType).toBe("video");
+  });
+
+  test("emite mediaType=location sem mediaId", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.loc-1",
+        type: "location",
+        location: { latitude: -25.4, longitude: -49.2 },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      mediaType: "location",
+      mediaId: null,
+      body: "",
+    });
+  });
+
+  test("emite mediaType=contacts", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.contacts-1",
+        type: "contacts",
+        contacts: [{ name: { formatted_name: "Alguém" } }],
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].mediaType).toBe("contacts");
+  });
+
+  test("emite mediaType=unsupported para tipo desconhecido", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.unknown-1",
+        type: "reaction",
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].mediaType).toBe("unsupported");
+  });
+
+  test("sticker sem sticker.id (malformado) → mediaType=unsupported", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.sticker-bad",
+        type: "sticker",
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].mediaType).toBe("unsupported");
   });
 });
