@@ -40,17 +40,18 @@ export function renderReminderTemplate(input: {
   vehicleDescription: string;
   tipoServico?: "troca_oleo" | "amortecedor" | "revisao" | "outro" | null;
 }) {
-  const tipo = input.tipoServico ?? "troca_oleo";
+  const tipo = input.tipoServico;
   if (tipo === "amortecedor") {
     return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa faz um tempo que voce trocou os amortecedores do seu ${input.vehicleDescription}. Recomendamos uma checagem. Quer agendar?`;
   }
   if (tipo === "revisao") {
     return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa esta na hora da proxima revisao do seu ${input.vehicleDescription}. Quer agendar?`;
   }
-  if (tipo === "outro") {
-    return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nEsta na hora do proximo servico do seu ${input.vehicleDescription}. Quer agendar?`;
+  if (tipo === "troca_oleo") {
+    return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa esta na hora da proxima troca de oleo do seu ${input.vehicleDescription}.\nQuer agendar?`;
   }
-  return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nJa esta na hora da proxima troca de oleo do seu ${input.vehicleDescription}.\nQuer agendar?`;
+  // `outro` e tipo desconhecido/null → copy generica, sem assumir troca de oleo.
+  return `Oi ${input.customerName}, aqui e da ${input.workshopName}.\nEsta na hora do proximo servico do seu ${input.vehicleDescription}. Quer agendar?`;
 }
 
 export function retryDelaySecondsForAttempt(attempt: number) {

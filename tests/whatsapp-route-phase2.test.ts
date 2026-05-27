@@ -90,6 +90,15 @@ function phase2Repository(overrides: Record<string, unknown> = {}) {
       servicoId: "servico-id",
       lembreteId: "lembrete-id",
     })),
+    upsertClienteFinalConversation: vi.fn(async () => ({
+      id: "cliente-conversation-id",
+      leadId: null,
+      oficinaId: "oficina-id",
+      clienteId: "cliente-id",
+      participantType: "cliente_final" as const,
+      agentMode: "cliente_final_lembrete" as const,
+      context: {},
+    })),
     updateConversationModeAndContext: vi.fn(async () => undefined),
     saveInboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "message-id" })),
     saveOutboundMessage: vi.fn(async () => ({ duplicate: false, messageId: "outbound-message-id" })),
@@ -221,7 +230,131 @@ describe("whatsapp webhook phase 2", () => {
     });
     expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
       to: "+5541999421180",
-      body: "Cliente cadastrado. Vou lembrar o Joao em 90 dias para voltar trocar óleo com você.",
+      body: "Cliente cadastrado. Vou lembrar o Joao em 90 dias pra voltar com você.",
+    });
+  });
+
+  test("sends a confirmation template to the customer when consent is given", async () => {
+    const repository = phase2Repository({
+      getOficinaByWhatsapp: vi.fn(async () => ({
+        id: "oficina-id",
+        nome: "Auto Center Silva",
+        whatsappPrincipal: "+5541999421180",
+        diasLembretePadrao: 90,
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+      sendTemplateMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.tmpl-1" })),
+    };
+    const onboardingAgent = {
+      generateReply: vi.fn(async () => ({
+        body: "",
+        context: {},
+        registerServiceInput: {
+          nomeCliente: "Joao",
+          whatsappCliente: "+5541999990000",
+          veiculo: "Civic 2018",
+          servico: "troca de oleo",
+          dataServico: "2026-04-25",
+          valor: null,
+          consentimentoWhatsapp: true,
+          tipoServico: "troca_oleo" as const,
+          marcaPeca: null,
+        },
+        nextAgentMode: "operacao" as const,
+        toolCalls: [],
+      })),
+    };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: { generateReply: vi.fn() },
+      onboardingAgent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("Joao, Civic 2018, troca de oleo hoje, 41999990000"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.upsertClienteFinalConversation).toHaveBeenCalledWith({
+      oficinaId: "oficina-id",
+      clienteId: "cliente-id",
+      whatsapp: "+5541999990000",
+    });
+    expect(whatsapp.sendTemplateMessage).toHaveBeenCalledWith({
+      to: "+5541999990000",
+      templateName: "confirmacao_servico",
+      languageCode: "pt_BR",
+      bodyParameters: ["Joao", "Auto Center Silva", "Civic 2018"],
+    });
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body:
+        "Cliente cadastrado. Vou lembrar o Joao em 90 dias pra voltar com você. Já avisei o Joao que o serviço foi registrado.",
+    });
+  });
+
+  test("does not message the customer without consent", async () => {
+    const repository = phase2Repository({
+      getOficinaByWhatsapp: vi.fn(async () => ({
+        id: "oficina-id",
+        nome: "Auto Center Silva",
+        whatsappPrincipal: "+5541999421180",
+        diasLembretePadrao: 90,
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+      sendTemplateMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.tmpl-1" })),
+    };
+    const onboardingAgent = {
+      generateReply: vi.fn(async () => ({
+        body: "",
+        context: {},
+        registerServiceInput: {
+          nomeCliente: "Joao",
+          whatsappCliente: "+5541999990000",
+          veiculo: "Civic 2018",
+          servico: "troca de oleo",
+          dataServico: "2026-04-25",
+          valor: null,
+          consentimentoWhatsapp: false,
+          tipoServico: "troca_oleo" as const,
+          marcaPeca: null,
+        },
+        nextAgentMode: "operacao" as const,
+        toolCalls: [],
+      })),
+    };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: { generateReply: vi.fn() },
+      onboardingAgent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("Joao, Civic 2018, troca de oleo hoje, 41999990000"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTemplateMessage).not.toHaveBeenCalled();
+    expect(repository.upsertClienteFinalConversation).not.toHaveBeenCalled();
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: "Cliente cadastrado. Vou lembrar o Joao em 90 dias pra voltar com você.",
     });
   });
 });

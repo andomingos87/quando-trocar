@@ -235,6 +235,16 @@ Ação atômica via RPC `convert_lead_to_oficina_manual`:
 - Se houver conversa ligada ao lead, transita para `participant_type = oficina_cliente` e `agent_mode = onboarding`.
 - Fonte: `convertLeadManual` em `lib/admin/leads.ts`, migration `20260520120000_admin_lead_cliente_actions.sql`.
 
+### 2.5 Edição do cadastro de oficina (painel admin)
+Admin edita o cadastro de uma oficina por um modal aberto ao clicar na oficina na listagem (`/admin/oficinas`). Campos editáveis: `nome`, `whatsapp_principal`, `cidade`, `responsavel`, `plano_id`, `preco_negociado`, `status` (e `motivo_pausa` quando pausada).
+
+Regras:
+- `nome` obrigatório (não vazio); `cidade` e `responsavel` aceitam vazio → gravam `null`.
+- `whatsapp_principal` é normalizado para E.164 e validado contra unicidade — bloqueia (409) se já estiver em uso por outra oficina não-cancelada.
+- Mudança de `status` segue as mesmas regras de [§10](#10-inadimplência-e-pausa-de-oficina): cancelar exige confirmar o nome e é irreversível por esta tela; oficina cancelada não volta atrás aqui.
+- Auditoria: uma entrada por ação distinta (`oficina.update_cadastro`, `oficina.update_status`, `oficina.update_plano`, `oficina.update_preco`).
+- Fonte: `patchOficina` em `lib/admin/oficinas.ts`, `OficinaEditModal` em `components/admin/oficina-edit-modal.tsx`, rota `PATCH /api/admin/oficinas/[id]`.
+
 ---
 
 ## 3. Onboarding e operação
@@ -257,6 +267,8 @@ Opcional: `valor`.
 
 Condicional:
 - `marca_peca` — **só obrigatório quando `tipo_servico = amortecedor`**. Enum fechado `perfect | monroe | cofap | nakata | outra`. Se a oficina mencionar a marca espontaneamente, o parser extrai. Se faltar, agente pergunta uma vez com as 5 opções em ordem alfabética (`Cofap, Monroe, Nakata, Perfect, outra`) — Perfect nunca aparece primeiro, para evitar viés nos relatórios de mercado.
+
+O `nome_cliente` é **normalizado na captura** (`normalizeNomeCliente` em `lib/whatsapp/onboarding-agent.ts`): remove frases de intenção/rótulo que a oficina às vezes envia junto (ex.: "Quero cadastrar o cliente Luca Marcilli" → `Luca Marcilli`), apara pontuação nas pontas e aplica caixa de nome próprio (partículas `de/da/do/das/dos/e` em minúsculas). Aplica-se aos três pontos de captura: parser determinístico, resposta de follow-up e extração via LLM. Se sobrar vazio após normalizar, o campo continua faltante e o bot pergunta o nome.
 
 Se faltar algum, o bot pergunta **só o primeiro faltante**, persiste o draft parcial em `conversas.context.service_draft`, e completa multi-turn.
 
@@ -287,6 +299,16 @@ RPC `register_service_with_reminder` **não reativa** cliente que já está em:
 Mesmo se a oficina mandar novo cadastro do mesmo número.
 
 - Fonte: migration `20260426130513_phase_3_real_reminders.sql`.
+
+### 3.6 Confirmação ao cliente no cadastro
+Logo após o cadastro do serviço (RPC bem-sucedida), o bot envia uma **confirmação ao cliente final**:
+- **Só com consentimento**: dispara apenas se `consentimento_whatsapp = true` (mesma regra dos lembretes — [§7.1](#71-consentimento-obrigatório)).
+- **Sempre via template aprovado**: o cliente é um número "frio" (nunca iniciou conversa), então o envio cai fora da janela de 24h → template Meta obrigatório ([ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md)). Template: `confirmacao_servico` / `pt_BR` (configurável via `WHATSAPP_CONFIRMACAO_TEMPLATE` e `WHATSAPP_CONFIRMACAO_TEMPLATE_LANGUAGE`). Parâmetros do corpo: `[nome_cliente, nome_oficina, descricao_veiculo]`.
+- **Não bloqueante**: qualquer falha de envio (template não aprovado, erro do provedor) é registrada (`outbound_messages` em `failed` + `agent_tool_calls.notify_cliente_confirmacao`) mas **não** derruba a resposta de confirmação para a oficina.
+- **Reflexo na resposta à oficina**: quando a confirmação é enviada, o bot acrescenta "Já avisei o {cliente} que o serviço foi registrado." à mensagem de cadastro.
+- A conversa do cliente final é criada/reusada em `conversas` (`participant_type = cliente_final`, `agent_mode = cliente_final_lembrete`).
+
+- Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), `lib/whatsapp/service-confirmation.ts`, `sendServiceConfirmation()` em `lib/whatsapp/webhook-handler.ts`.
 
 ---
 
@@ -484,7 +506,10 @@ Decisão é feita **no backend antes de enviar**, baseada em `conversas.last_mes
 ### 8.2 Templates necessários
 | Template | Categoria Meta | Quando usar |
 |---|---|---|
-| `lembrete_troca_oleo` | Utility | Lembrete automático |
+| `lembrete_troca_oleo` | Utility | Lembrete automático (troca de óleo) |
+| `lembrete_amortecedor` | Utility | Lembrete automático (amortecedor) |
+| `lembrete_revisao_geral` | Utility | Lembrete automático (revisão/outro) |
+| `confirmacao_servico` | Utility | Confirmação ao cliente no cadastro do serviço ([§3.6](#36-confirmação-ao-cliente-no-cadastro)) |
 | `WHATSAPP_TEMPLATE_OTP_NAME` | Authentication | OTP do painel (oficina e admin) |
 | `WHATSAPP_TEMPLATE_COBRANCA_NAME` | Utility | Aviso de cobrança/vencimento |
 

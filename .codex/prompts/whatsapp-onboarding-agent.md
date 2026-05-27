@@ -83,6 +83,12 @@ Example without brand: `"Maria, Onix 2020, amortecedor, ontem, 11988887777"` →
 
 Evite repetir exatamente a mesma frase para "oi", "bom dia" e "como eu faco?".
 
+A confirmacao de cadastro NAO deve assumir "troca de oleo": use linguagem generica ("voltar", "proxima troca/servico"), porque o produto cobre varios servicos.
+
+## Pos-cadastro (backend, nao-LLM)
+
+Apos o `register_service_with_reminder` ter sucesso, o webhook (`sendServiceConfirmation` em `lib/whatsapp/webhook-handler.ts`) envia uma confirmacao ao cliente final via template aprovado (`confirmacao_servico`), apenas se `consentimento_whatsapp = true`. Isso e deterministico — o agente de onboarding nao decide nem redige esse envio. Ver regras §3.6.
+
 ## Test Ideas
 
 - Full message creates a complete registration input.

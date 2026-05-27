@@ -62,7 +62,20 @@ describe("whatsapp reminder agent", () => {
     expect(reply.lembreteStatus).toBe("respondido");
   });
 
-  test("renders the approved reminder template text", () => {
+  test("renders the oil-change reminder template text for troca_oleo", () => {
+    expect(
+      renderReminderTemplate({
+        customerName: "Joao",
+        workshopName: "Auto Center Silva",
+        vehicleDescription: "Civic 2018",
+        tipoServico: "troca_oleo",
+      }),
+    ).toBe(
+      "Oi Joao, aqui e da Auto Center Silva.\nJa esta na hora da proxima troca de oleo do seu Civic 2018.\nQuer agendar?",
+    );
+  });
+
+  test("renders a generic reminder when the service type is unknown", () => {
     expect(
       renderReminderTemplate({
         customerName: "Joao",
@@ -70,7 +83,7 @@ describe("whatsapp reminder agent", () => {
         vehicleDescription: "Civic 2018",
       }),
     ).toBe(
-      "Oi Joao, aqui e da Auto Center Silva.\nJa esta na hora da proxima troca de oleo do seu Civic 2018.\nQuer agendar?",
+      "Oi Joao, aqui e da Auto Center Silva.\nEsta na hora do proximo servico do seu Civic 2018. Quer agendar?",
     );
   });
 

@@ -1,6 +1,11 @@
 import OpenAI from "openai";
 
 import { audioFallbackMessage } from "./audio-fallbacks";
+import {
+  renderServiceConfirmation,
+  serviceConfirmationParams,
+  SERVICE_CONFIRMATION_TEMPLATE,
+} from "./service-confirmation";
 import { unsupportedMediaFallback } from "./unsupported-media-fallbacks";
 import { WhatsappCobrancaAgent } from "./cobranca-agent";
 import { resolveWhatsappConversation } from "./conversation-router";
@@ -31,6 +36,7 @@ import type {
   ConversationAgentMode,
   InboundWhatsappMessage,
   OnboardingAgent,
+  RegisterServiceInput,
   ReminderAgent,
   SalesAgent,
   SupportAgent,
@@ -499,6 +505,117 @@ async function processDocument(input: {
     durationMs: null,
     error: result.error,
   };
+}
+
+// Envia a confirmação de serviço ao cliente final via template aprovado.
+// Retorna `true` apenas quando a mensagem foi efetivamente enviada. Qualquer
+// pré-condição não satisfeita (sem consentimento, sem suporte a template, sem
+// método de conversa) ou falha de envio retorna `false` sem lançar — a resposta
+// para a oficina não pode depender deste envio.
+async function sendServiceConfirmation(input: {
+  deps: HandlerDeps;
+  oficinaId: string;
+  oficinaNome: string | null;
+  clienteId: string;
+  serviceInput: Omit<RegisterServiceInput, "oficinaId">;
+}): Promise<boolean> {
+  const { deps, oficinaId, clienteId, serviceInput } = input;
+
+  if (!serviceInput.consentimentoWhatsapp) {
+    return false;
+  }
+  if (!deps.whatsapp.sendTemplateMessage) {
+    return false;
+  }
+  if (!deps.repository.upsertClienteFinalConversation) {
+    return false;
+  }
+
+  const workshopName = input.oficinaNome ?? "sua oficina";
+  const confirmationArgs = {
+    customerName: serviceInput.nomeCliente,
+    workshopName,
+    vehicleDescription: serviceInput.veiculo,
+  };
+  const renderedBody = renderServiceConfirmation(confirmationArgs);
+  const params = serviceConfirmationParams(confirmationArgs);
+
+  let conversationId: string;
+  try {
+    const conversation = await deps.repository.upsertClienteFinalConversation({
+      oficinaId,
+      clienteId,
+      whatsapp: serviceInput.whatsappCliente,
+    });
+    conversationId = conversation.id;
+  } catch {
+    // Sem conversa não há como persistir o outbound de forma consistente.
+    return false;
+  }
+
+  const outbox = await deps.repository.createOutboundMessage({
+    conversationId,
+    leadId: null,
+    oficinaId,
+    to: serviceInput.whatsappCliente,
+    body: renderedBody,
+    messageKind: "template",
+    templateName: SERVICE_CONFIRMATION_TEMPLATE.name,
+    templateLanguage: SERVICE_CONFIRMATION_TEMPLATE.language,
+    templateParams: params,
+  });
+
+  try {
+    const sent = await deps.whatsapp.sendTemplateMessage({
+      to: serviceInput.whatsappCliente,
+      templateName: SERVICE_CONFIRMATION_TEMPLATE.name,
+      languageCode: SERVICE_CONFIRMATION_TEMPLATE.language,
+      bodyParameters: params,
+    });
+    await deps.repository.markOutboundSent({
+      outboundMessageId: outbox.id,
+      whatsappMessageId: sent.whatsappMessageId,
+      response: sent.response ?? null,
+    });
+    await deps.repository.saveOutboundMessage({
+      conversationId,
+      leadId: null,
+      oficinaId,
+      whatsappMessageId: sent.whatsappMessageId,
+      body: renderedBody,
+      rawMessage: sent.response ?? null,
+      sentAt: new Date().toISOString(),
+    });
+    await deps.repository.saveAgentToolCall({
+      conversationId,
+      leadId: null,
+      oficinaId,
+      clienteId,
+      toolName: "notify_cliente_confirmacao",
+      input: { whatsapp: serviceInput.whatsappCliente, template: SERVICE_CONFIRMATION_TEMPLATE.name },
+      output: { sent: true, whatsappMessageId: sent.whatsappMessageId },
+    });
+    return true;
+  } catch (error) {
+    const outboundError = errorDetails(error);
+    await deps.repository.markOutboundFailed({
+      outboundMessageId: outbox.id,
+      errorMessage: outboundError.message,
+      providerErrorCode: outboundError.code,
+      providerErrorMessage: outboundError.message,
+      response: outboundError.response,
+    });
+    await deps.repository.saveAgentToolCall({
+      conversationId,
+      leadId: null,
+      oficinaId,
+      clienteId,
+      toolName: "notify_cliente_confirmacao",
+      input: { whatsapp: serviceInput.whatsappCliente, template: SERVICE_CONFIRMATION_TEMPLATE.name },
+      output: { sent: false, error: outboundError.message },
+    });
+    return false;
+  }
 }
 
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
@@ -1042,14 +1159,16 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               });
             }
 
+            let confirmationSent = false;
             if (onboardingReply.registerServiceInput) {
               if (!resolved.oficinaId || !deps.repository.registerServiceWithReminder) {
                 throw new Error("Missing workshop context for service registration");
               }
 
+              const serviceInput = onboardingReply.registerServiceInput;
               const registered = await deps.repository.registerServiceWithReminder({
                 oficinaId: resolved.oficinaId,
-                ...onboardingReply.registerServiceInput,
+                ...serviceInput,
               });
 
               await deps.repository.saveAgentToolCall({
@@ -1060,9 +1179,20 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 toolName: "register_service_with_reminder",
                 input: {
                   oficinaId: resolved.oficinaId,
-                  ...onboardingReply.registerServiceInput,
+                  ...serviceInput,
                 },
                 output: registered,
+              });
+
+              // Confirmação ao cliente final (ADR-0005). Número frio → sempre via
+              // template aprovado e somente com consentimento (regras §7.1). Falha
+              // aqui nunca derruba a resposta para a oficina.
+              confirmationSent = await sendServiceConfirmation({
+                deps,
+                oficinaId: resolved.oficinaId,
+                oficinaNome: resolved.oficinaNome,
+                clienteId: registered.clienteId,
+                serviceInput,
               });
             }
 
@@ -1074,11 +1204,16 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               });
             }
 
-            replyBody = onboardingReply.registerServiceInput
-              ? `Cliente cadastrado. Vou lembrar o ${onboardingReply.registerServiceInput.nomeCliente} em ${
-                  resolved.diasLembretePadrao ?? 90
-                } dias para voltar trocar óleo com você.`
-              : onboardingReply.body;
+            if (onboardingReply.registerServiceInput) {
+              const nomeCliente = onboardingReply.registerServiceInput.nomeCliente;
+              const dias = resolved.diasLembretePadrao ?? 90;
+              replyBody = `Cliente cadastrado. Vou lembrar o ${nomeCliente} em ${dias} dias pra voltar com você.`;
+              if (confirmationSent) {
+                replyBody += ` Já avisei o ${nomeCliente} que o serviço foi registrado.`;
+              }
+            } else {
+              replyBody = onboardingReply.body;
+            }
           } else if (effectiveAgentMode === "cliente_final_lembrete") {
             const reminderReply = await reminderAgent.generateReply({
               message: inbound.body,

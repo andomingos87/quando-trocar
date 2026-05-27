@@ -860,6 +860,10 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     oficinaId?: string | null;
     to: string;
     body: string;
+    messageKind?: "text" | "template";
+    templateName?: string | null;
+    templateLanguage?: string | null;
+    templateParams?: unknown;
   }) {
     const result = (await this.supabase
       .from("outbound_messages")
@@ -870,6 +874,10 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         to_whatsapp: input.to,
         body: input.body,
         status: "pending",
+        message_kind: input.messageKind ?? "text",
+        template_name: input.templateName ?? null,
+        template_language: input.templateLanguage ?? null,
+        template_params: input.templateParams ?? null,
       })
       .select("id")
       .single()) as SupabaseResult<{ id: string }>;

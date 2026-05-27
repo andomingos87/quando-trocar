@@ -369,6 +369,10 @@ export type WhatsappRepository = {
     oficinaId?: string | null;
     to: string;
     body: string;
+    messageKind?: "text" | "template";
+    templateName?: string | null;
+    templateLanguage?: string | null;
+    templateParams?: unknown;
   }): Promise<{ id: string }>;
   markOutboundSent(input: {
     outboundMessageId: string;
