@@ -161,6 +161,73 @@ function cleanServiceText(input: string) {
     .trim();
 }
 
+// A oficina às vezes envia o nome embrulhado em frase de intenção
+// ("Quero cadastrar o cliente Luca Marcilli") ou com rótulo/pontuação solta.
+// Normalizamos para guardar SOMENTE o nome, estruturado (sem prefixos de
+// intenção, sem pontuação nas pontas, com caixa de nome próprio).
+const NOME_CLIENTE_STRIP_PATTERNS: ReadonlyArray<RegExp> = [
+  // pronome / cortesia inicial
+  /^(?:eu\s+)?(?:quero|queria|gostaria(?:\s+de)?|preciso(?:\s+de)?|vou|pode(?:r(?:ia)?)?|favor|por\s+favor|me\s+ajud\w*(?:\s+a)?)\s+/i,
+  // verbos de cadastro
+  /^(?:cadastr\w*|registr\w*|adicion\w*|inclu\w*|inser\w*|anot\w*|salv\w*|coloc\w*|criar?|abrir?)\s+/i,
+  // artigos / determinantes
+  /^(?:o|a|os|as|um|uma|esse|essa|este|esta|aquele|aquela|meu|minha|novo|nova)\s+/i,
+  // rótulo cliente / nome
+  /^(?:clientes?|clienta|nome(?:\s+(?:do|da|de))?(?:\s+cliente)?)\b\s*/i,
+  // conectores
+  /^(?:chamad[oa]|de\s+nome|que\s+(?:se\s+)?chama|é|eh|seria)\s+/i,
+  // pontuação residual nas pontas
+  /^[\s:,.\-]+/,
+];
+
+const NOME_PARTICULAS_MINUSCULAS = new Set([
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "e",
+]);
+
+function toTitleCaseName(value: string): string {
+  return value
+    .toLocaleLowerCase("pt-BR")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word, index) => {
+      if (index > 0 && NOME_PARTICULAS_MINUSCULAS.has(word)) return word;
+      return word.replace(/(^|[-'])(\p{L})/gu, (_, sep: string, ch: string) =>
+        sep + ch.toLocaleUpperCase("pt-BR"),
+      );
+    })
+    .join(" ");
+}
+
+export function normalizeNomeCliente(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  let value = raw.replace(/\s+/g, " ").trim();
+  if (!value) return null;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pattern of NOME_CLIENTE_STRIP_PATTERNS) {
+      const next = value.replace(pattern, "");
+      if (next !== value) {
+        value = next.trim();
+        changed = true;
+      }
+    }
+  }
+
+  value = value.replace(/[\s:,.\-]+$/g, "").trim();
+  if (!value) return null;
+
+  return toTitleCaseName(value);
+}
+
 function parseDeterministic(message: string, today: string): ServiceDraft {
   const phone = extractPhone(message);
   const withoutPhone = removePhone(message, phone);
@@ -176,7 +243,10 @@ function parseDeterministic(message: string, today: string): ServiceDraft {
     consentimento_whatsapp: !hasNegativeConsent(message),
   };
 
-  if (parts[0]) draft.nome_cliente = parts[0];
+  if (parts[0]) {
+    const nome = normalizeNomeCliente(parts[0]);
+    if (nome) draft.nome_cliente = nome;
+  }
   if (parts[1]) draft.veiculo = parts[1];
   if (service) draft.servico = service;
   if (phone) draft.whatsapp_cliente = normalizeWhatsappPhone(phone);
@@ -213,7 +283,8 @@ function applyFollowUp(
 
   if (context.missing_field === "nome_cliente") {
     if (!isNeutralMessage(message) && !isQuestionLike(message) && message.trim().length >= 2) {
-      draft.nome_cliente = message.trim();
+      const nome = normalizeNomeCliente(message);
+      if (nome) draft.nome_cliente = nome;
     }
   }
 
@@ -332,7 +403,7 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
           : undefined;
     const marca = normalizeMarca(parsed.data.marca_peca ?? null);
     return {
-      nome_cliente: parsed.data.nome_cliente ?? undefined,
+      nome_cliente: normalizeNomeCliente(parsed.data.nome_cliente) ?? undefined,
       whatsapp_cliente: parsed.data.whatsapp_cliente
         ? normalizeWhatsappPhone(parsed.data.whatsapp_cliente)
         : undefined,

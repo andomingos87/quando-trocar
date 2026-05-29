@@ -1,7 +1,38 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { WhatsappOnboardingAgent } from "@/lib/whatsapp/onboarding-agent";
+import {
+  WhatsappOnboardingAgent,
+  normalizeNomeCliente,
+} from "@/lib/whatsapp/onboarding-agent";
 import type { ConversationContext } from "@/lib/whatsapp/types";
+
+describe("normalizeNomeCliente", () => {
+  test("strips registration-intent phrases keeping only the name", () => {
+    expect(normalizeNomeCliente("Quero cadastrar o cliente Luca Marcilli")).toBe(
+      "Luca Marcilli",
+    );
+    expect(normalizeNomeCliente("cadastrar cliente Aide Marsili")).toBe(
+      "Aide Marsili",
+    );
+    expect(normalizeNomeCliente("o cliente é a Lara")).toBe("Lara");
+    expect(normalizeNomeCliente("nome do cliente: Flaviane Marsili")).toBe(
+      "Flaviane Marsili",
+    );
+  });
+
+  test("trims surrounding punctuation and normalizes casing", () => {
+    expect(normalizeNomeCliente("Lara Marsili.")).toBe("Lara Marsili");
+    expect(normalizeNomeCliente("flaviane marsili")).toBe("Flaviane Marsili");
+    expect(normalizeNomeCliente("MARIA DE SOUZA")).toBe("Maria de Souza");
+  });
+
+  test("keeps a clean name unchanged and handles empties", () => {
+    expect(normalizeNomeCliente("Joao")).toBe("Joao");
+    expect(normalizeNomeCliente("  ")).toBeNull();
+    expect(normalizeNomeCliente("quero cadastrar o cliente")).toBeNull();
+    expect(normalizeNomeCliente(null)).toBeNull();
+  });
+});
 
 describe("WhatsappOnboardingAgent", () => {
   test("extracts a complete service registration from the workshop example format", async () => {
