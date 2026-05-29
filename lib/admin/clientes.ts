@@ -13,6 +13,7 @@ export type ClienteListRow = {
   id: string;
   oficina_id: string | null;
   oficina_nome: string | null;
+  nome: string | null;
   nome_mascarado: string;
   whatsapp_mascarado: string;
   status: ClienteFinalStatus;
@@ -127,6 +128,7 @@ export async function listClientesFinais(
       id: c.id as string,
       oficina_id: (c.oficina_id ?? null) as string | null,
       oficina_nome: oficina?.nome ?? null,
+      nome: (c.nome ?? null) as string | null,
       nome_mascarado: maskName(c.nome as string | null),
       whatsapp_mascarado: maskWhatsapp(c.whatsapp as string),
       status: c.status as ClienteFinalStatus,

@@ -12,6 +12,7 @@ export type MotivoPausa = "inadimplencia" | "voluntaria" | "admin";
 export type OficinaListRow = {
   id: string;
   nome: string;
+  responsavel: string | null;
   whatsapp_principal: string;
   cidade: string | null;
   status: OficinaStatus;
@@ -44,9 +45,7 @@ export type OficinaListResult = {
   pageSize: number;
 };
 
-export type OficinaDetail = OficinaListRow & {
-  responsavel: string | null;
-};
+export type OficinaDetail = OficinaListRow;
 
 export type OficinaCreateInput = {
   nome: string;
@@ -59,6 +58,10 @@ export type OficinaCreateInput = {
 };
 
 export type OficinaPatchInput = Partial<{
+  nome: string;
+  whatsapp: string;
+  cidade: string | null;
+  responsavel: string | null;
   status: OficinaStatus;
   motivo_pausa: MotivoPausa | null;
   plano_id: string;
@@ -86,7 +89,7 @@ export async function listOficinas(
   let query = supabase
     .from("oficinas")
     .select(
-      `id, nome, whatsapp_principal, cidade, status, origem, motivo_pausa, plano_id, preco_negociado, proximo_vencimento, created_at,
+      `id, nome, responsavel, whatsapp_principal, cidade, status, origem, motivo_pausa, plano_id, preco_negociado, proximo_vencimento, created_at,
        planos:plano_id (nome, preco_base)`,
       { count: "exact" },
     )
@@ -139,6 +142,7 @@ export async function listOficinas(
     return {
       id: o.id,
       nome: o.nome,
+      responsavel: o.responsavel,
       whatsapp_principal: o.whatsapp_principal,
       cidade: o.cidade,
       status: o.status,
@@ -562,13 +566,72 @@ export async function patchOficina(
     actions.push("oficina.update_plano");
   }
 
-  if (
-    input.preco_negociado !== undefined &&
-    Number(input.preco_negociado) !== Number(before.preco_negociado ?? Number.NaN)
-  ) {
-    patch.preco_negociado = input.preco_negociado;
-    actions.push("oficina.update_preco");
+  if (input.preco_negociado !== undefined) {
+    const next = input.preco_negociado === null ? null : Number(input.preco_negociado);
+    const prev = before.preco_negociado === null ? null : Number(before.preco_negociado);
+    if (next !== prev) {
+      patch.preco_negociado = next;
+      actions.push("oficina.update_preco");
+    }
   }
+
+  let cadastroChanged = false;
+
+  if (input.nome !== undefined) {
+    const nome = input.nome.trim();
+    if (nome.length === 0) {
+      const err = new Error("Nome obrigatorio.");
+      Object.assign(err, { status: 400 });
+      throw err;
+    }
+    if (nome !== before.nome) {
+      patch.nome = nome;
+      cadastroChanged = true;
+    }
+  }
+
+  if (input.cidade !== undefined) {
+    const cidade = input.cidade === null ? null : input.cidade.trim() || null;
+    if (cidade !== before.cidade) {
+      patch.cidade = cidade;
+      cadastroChanged = true;
+    }
+  }
+
+  if (input.responsavel !== undefined) {
+    const responsavel =
+      input.responsavel === null ? null : input.responsavel.trim() || null;
+    if (responsavel !== before.responsavel) {
+      patch.responsavel = responsavel;
+      cadastroChanged = true;
+    }
+  }
+
+  if (input.whatsapp !== undefined) {
+    const phone = normalizePhoneToE164(input.whatsapp);
+    if (!phone.ok) {
+      const err = new Error("WhatsApp invalido.");
+      Object.assign(err, { status: 400 });
+      throw err;
+    }
+    if (phone.e164 !== before.whatsapp_principal) {
+      const { data: existing } = await supabase
+        .from("oficinas")
+        .select("id")
+        .eq("whatsapp_principal", phone.e164)
+        .neq("id", id)
+        .neq("status", "cancelada");
+      if (existing && existing.length > 0) {
+        const err = new Error("Ja existe outra oficina ativa com esse WhatsApp.");
+        Object.assign(err, { status: 409 });
+        throw err;
+      }
+      patch.whatsapp_principal = phone.e164;
+      cadastroChanged = true;
+    }
+  }
+
+  if (cadastroChanged) actions.push("oficina.update_cadastro");
 
   if (Object.keys(patch).length === 1) {
     // nada mudou alem de updated_at

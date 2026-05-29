@@ -40,7 +40,7 @@ export default async function ClientesPage({
       <header>
         <h1 className="text-2xl font-semibold">Clientes finais</h1>
         <p className="mt-1 text-sm text-muted">
-          {list.total} {list.total === 1 ? "cliente" : "clientes"} no total · PII mascarada
+          {list.total} {list.total === 1 ? "cliente" : "clientes"} no total · WhatsApp mascarado
         </p>
       </header>
       <ClientesClient initial={list} filters={filters} />

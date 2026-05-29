@@ -51,7 +51,7 @@ export default async function LembreteDetailPage({
             </span>
           </div>
           <p className="mt-1 text-sm text-muted">
-            {lembrete.cliente_nome_mascarado} · {lembrete.cliente_whatsapp_mascarado} ·
+            {lembrete.cliente_nome ?? "—"} · {lembrete.cliente_whatsapp_mascarado} ·
             agendado para {formatDateTime(lembrete.scheduled_at)}
           </p>
         </div>
@@ -89,7 +89,7 @@ export default async function LembreteDetailPage({
             <Field label="Placa" value={lembrete.veiculo_placa} />
             <Field
               label="Cliente"
-              value={`${lembrete.cliente_nome_mascarado} (${lembrete.cliente_whatsapp_mascarado})`}
+              value={`${lembrete.cliente_nome ?? "—"} (${lembrete.cliente_whatsapp_mascarado})`}
               wide
             />
             <Field

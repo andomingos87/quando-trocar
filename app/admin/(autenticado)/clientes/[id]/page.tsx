@@ -40,7 +40,7 @@ export default async function ClienteDetailPage({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">{cliente.nome_mascarado}</h1>
+            <h1 className="text-2xl font-semibold">{cliente.nome ?? "—"}</h1>
             <span
               className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                 STATUS_BADGE[cliente.status] ?? ""

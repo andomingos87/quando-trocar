@@ -13,6 +13,7 @@ export type MessageKind = "text" | "template";
 
 export type OutboundListRow = {
   id: string;
+  conversa_id: string | null;
   oficina_id: string | null;
   oficina_nome: string | null;
   to_whatsapp_mascarado: string;
@@ -46,6 +47,16 @@ export type OutboundListResult = {
   pageSize: number;
 };
 
+export type OutboundSummary = {
+  total: number;
+  sent: number;
+  failed: number;
+  pending: number;
+  retry_scheduled: number;
+  /** sent / (sent + failed), em %. null quando nao ha mensagens resolvidas. */
+  taxaEntrega: number | null;
+};
+
 const DEFAULT_PAGE_SIZE = 50;
 
 function periodoToSinceIso(
@@ -57,6 +68,32 @@ function periodoToSinceIso(
   if (periodo === "ultimos_7d") return new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
   if (periodo === "ultimos_30d") return new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
   return undefined;
+}
+
+// Aplica os filtros comuns (tipo, oficina, periodo, busca) — exceto status e
+// paginacao. Reusado pela listagem e pelo resumo analitico.
+function applyCommonFilters<T extends { eq: (c: string, v: unknown) => T; gte: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
+  query: T,
+  filters: OutboundListFilters,
+): T {
+  let q = query;
+  if (filters.message_kind) q = q.eq("message_kind", filters.message_kind);
+  if (filters.oficina_id) q = q.eq("oficina_id", filters.oficina_id);
+
+  const sinceIso = periodoToSinceIso(filters.periodo);
+  if (sinceIso) q = q.gte("created_at", sinceIso);
+
+  if (filters.busca && filters.busca.trim().length > 0) {
+    const term = filters.busca.trim();
+    const phone = normalizePhoneToE164(term);
+    if (phone.ok) {
+      q = q.eq("to_whatsapp", phone.e164);
+    } else {
+      const safe = term.replace(/[%,]/g, "");
+      q = q.ilike("template_name", `%${safe}%`);
+    }
+  }
+  return q;
 }
 
 export async function listOutboundMessages(
@@ -71,7 +108,7 @@ export async function listOutboundMessages(
   let query = supabase
     .from("outbound_messages")
     .select(
-      `id, oficina_id, to_whatsapp, message_kind, template_name, body, status, attempts,
+      `id, conversa_id, oficina_id, to_whatsapp, message_kind, template_name, body, status, attempts,
        provider_error_code, provider_error_message, sent_at, next_attempt_at, created_at, lembrete_id,
        oficinas:oficina_id (nome)`,
       { count: "exact" },
@@ -82,22 +119,7 @@ export async function listOutboundMessages(
   if (filters.status && filters.status !== "todas") {
     query = query.eq("status", filters.status);
   }
-  if (filters.message_kind) query = query.eq("message_kind", filters.message_kind);
-  if (filters.oficina_id) query = query.eq("oficina_id", filters.oficina_id);
-
-  const sinceIso = periodoToSinceIso(filters.periodo);
-  if (sinceIso) query = query.gte("created_at", sinceIso);
-
-  if (filters.busca && filters.busca.trim().length > 0) {
-    const term = filters.busca.trim();
-    const phone = normalizePhoneToE164(term);
-    if (phone.ok) {
-      query = query.eq("to_whatsapp", phone.e164);
-    } else {
-      const safe = term.replace(/[%,]/g, "");
-      query = query.ilike("template_name", `%${safe}%`);
-    }
-  }
+  query = applyCommonFilters(query, filters);
 
   const { data, count, error } = await query;
   if (error) throw new Error(`list_outbound_failed: ${error.message}`);
@@ -107,6 +129,7 @@ export async function listOutboundMessages(
     const oficina = Array.isArray(oficinaRaw) ? oficinaRaw[0] ?? null : oficinaRaw;
     return {
       id: m.id as string,
+      conversa_id: (m.conversa_id ?? null) as string | null,
       oficina_id: (m.oficina_id ?? null) as string | null,
       oficina_nome: oficina?.nome ?? null,
       to_whatsapp_mascarado: maskWhatsapp(m.to_whatsapp as string),
@@ -128,6 +151,38 @@ export async function listOutboundMessages(
   });
 
   return { rows, total: count ?? 0, page, pageSize };
+}
+
+// Resumo analitico do conjunto filtrado (ignora o filtro de status, para que os
+// cards mostrem sempre a quebra completa por status no periodo/oficina/busca).
+export async function getOutboundSummary(
+  supabase: SupabaseClient,
+  filters: OutboundListFilters = {},
+): Promise<OutboundSummary> {
+  const countFor = async (status?: OutboundStatus): Promise<number> => {
+    let q = supabase
+      .from("outbound_messages")
+      .select("id", { count: "exact", head: true });
+    q = applyCommonFilters(q, filters);
+    if (status) q = q.eq("status", status);
+    const { count, error } = await q;
+    if (error) throw new Error(`outbound_summary_failed: ${error.message}`);
+    return count ?? 0;
+  };
+
+  const [total, sent, failed, pending, retry_scheduled] = await Promise.all([
+    countFor(),
+    countFor("sent"),
+    countFor("failed"),
+    countFor("pending"),
+    countFor("retry_scheduled"),
+  ]);
+
+  const resolvidas = sent + failed;
+  const taxaEntrega =
+    resolvidas > 0 ? Math.round((sent / resolvidas) * 1000) / 10 : null;
+
+  return { total, sent, failed, pending, retry_scheduled, taxaEntrega };
 }
 
 // ----------------------------------------------------------------------------

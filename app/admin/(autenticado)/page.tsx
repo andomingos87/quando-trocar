@@ -1,5 +1,12 @@
+import Link from "next/link";
+
 import { Card, CardHint, CardLabel, CardValue } from "@/components/admin/ui";
-import { formatBRL, formatDateTime } from "@/lib/admin/format";
+import {
+  CATEGORIA_DOT,
+  describeAcao,
+  describeEntidade,
+} from "@/lib/admin/audit-actions";
+import { dayLabel, formatBRL, formatDateTime, formatRelative } from "@/lib/admin/format";
 import {
   getAtividadesRecentes,
   getMrrEstimado,
@@ -106,31 +113,60 @@ export default async function AdminOverviewPage() {
       </section>
 
       <section className="rounded-2xl border border-line bg-white">
-        <h2 className="border-b border-line-soft px-5 py-3 text-sm font-medium uppercase tracking-wide text-muted">
-          Atividades recentes
-        </h2>
+        <div className="flex items-center justify-between border-b border-line-soft px-5 py-3">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted">
+            Atividades recentes
+          </h2>
+          <Link
+            href="/admin/auditoria"
+            className="text-xs font-medium text-brand-dark hover:text-brand-deep"
+          >
+            Ver tudo →
+          </Link>
+        </div>
         {atividades.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted">
             Nenhuma atividade ainda. Operacoes do painel aparecerao aqui.
           </p>
         ) : (
           <ul className="divide-y divide-line-soft">
-            {atividades.map((a) => (
-              <li key={a.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-5 py-3 text-sm">
-                <div>
-                  <p>
-                    <span className="font-mono text-xs text-muted">{a.acao}</span>
-                    <span className="ml-2 text-muted">por</span>{" "}
-                    <span className="font-medium text-ink">{a.admin_label}</span>
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted">
-                    {a.entidade}
-                    {a.entidade_id ? ` · ${a.entidade_id.slice(0, 8)}` : ""}
-                  </p>
-                </div>
-                <span className="text-xs text-muted">{formatDateTime(a.created_at)}</span>
-              </li>
-            ))}
+            {atividades.map((a, i) => {
+              const { label, categoria } = describeAcao(a.acao);
+              const entidade = describeEntidade(a.entidade);
+              const dia = dayLabel(a.created_at);
+              const showDia = i === 0 || dayLabel(atividades[i - 1].created_at) !== dia;
+              return (
+                <li key={a.id}>
+                  {showDia ? (
+                    <p className="bg-paper-soft px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
+                      {dia}
+                    </p>
+                  ) : null}
+                  <div className="grid grid-cols-[auto_1fr_auto] items-baseline gap-3 px-5 py-3 text-sm">
+                    <span
+                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${CATEGORIA_DOT[categoria]}`}
+                      aria-hidden
+                    />
+                    <div>
+                      <p className="font-medium text-ink" title={a.acao}>
+                        {label}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {a.admin_label}
+                        {entidade ? ` · ${entidade}` : ""}
+                      </p>
+                    </div>
+                    <time
+                      dateTime={a.created_at}
+                      title={formatDateTime(a.created_at)}
+                      className="whitespace-nowrap text-xs text-muted"
+                    >
+                      {formatRelative(a.created_at)}
+                    </time>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

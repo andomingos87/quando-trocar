@@ -40,6 +40,22 @@ export function formatDate(value: string | Date | null | undefined): string {
   return DATE_SHORT.format(d);
 }
 
+// Rótulo de cabeçalho de dia: "Hoje", "Ontem" ou a data curta. Compara no fuso de SP.
+export function dayLabel(
+  value: string | Date | null | undefined,
+  now: Date = new Date(),
+): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  const day = DATE_SHORT.format(d);
+  const today = DATE_SHORT.format(now);
+  const yesterday = DATE_SHORT.format(new Date(now.getTime() - 86_400_000));
+  if (day === today) return "Hoje";
+  if (day === yesterday) return "Ontem";
+  return day;
+}
+
 export function formatRelative(
   value: string | Date | null | undefined,
   now: Date = new Date(),

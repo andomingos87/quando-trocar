@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -10,6 +9,7 @@ import type {
 } from "@/lib/admin/oficinas";
 import { formatBRL, formatDate, formatRelative } from "@/lib/admin/format";
 import { OficinaCreateModal } from "./oficina-create-modal";
+import { OficinaEditModal } from "./oficina-edit-modal";
 
 const STATUS_BADGE: Record<string, string> = {
   ativa: "bg-cyan-soft text-ink",
@@ -30,6 +30,7 @@ export function OficinasClient({
   const sp = useSearchParams();
   const [, startTransition] = useTransition();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editRow, setEditRow] = useState<OficinaListResult["rows"][number] | null>(null);
 
   const updateFilter = (key: string, value: string | undefined) => {
     const params = new URLSearchParams(sp.toString());
@@ -160,12 +161,13 @@ export function OficinasClient({
             {initial.rows.map((row) => (
               <tr key={row.id} className="hover:bg-paper-soft">
                 <td className="px-4 py-3">
-                  <Link
-                    href={`/admin/oficinas/${row.id}`}
-                    className="font-medium text-ink hover:underline"
+                  <button
+                    type="button"
+                    onClick={() => setEditRow(row)}
+                    className="text-left font-medium text-ink hover:text-brand hover:underline"
                   >
                     {row.nome}
-                  </Link>
+                  </button>
                 </td>
                 <td className="px-4 py-3 text-ink tabular-nums">
                   {row.whatsapp_principal}
@@ -254,6 +256,18 @@ export function OficinasClient({
           onSaved={(id) => {
             setModalOpen(false);
             router.push(`/admin/oficinas/${id}`);
+          }}
+        />
+      ) : null}
+
+      {editRow ? (
+        <OficinaEditModal
+          oficina={editRow}
+          planos={planos}
+          onClose={() => setEditRow(null)}
+          onSaved={() => {
+            setEditRow(null);
+            startTransition(() => router.refresh());
           }}
         />
       ) : null}

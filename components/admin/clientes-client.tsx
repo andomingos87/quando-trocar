@@ -96,7 +96,7 @@ export function ClientesClient({
                     href={`/admin/clientes/${row.id}`}
                     className="font-medium text-ink hover:underline"
                   >
-                    {row.nome_mascarado}
+                    {row.nome ?? "—"}
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-ink tabular-nums">

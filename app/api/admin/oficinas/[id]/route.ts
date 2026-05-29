@@ -33,6 +33,12 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 
   const patch: OficinaPatchInput = {};
+  if (typeof body.nome === "string") patch.nome = body.nome;
+  if (typeof body.whatsapp === "string") patch.whatsapp = body.whatsapp;
+  if (body.cidade === null || typeof body.cidade === "string") patch.cidade = body.cidade;
+  if (body.responsavel === null || typeof body.responsavel === "string") {
+    patch.responsavel = body.responsavel;
+  }
   if (typeof body.status === "string") patch.status = body.status;
   if (body.motivo_pausa === null || typeof body.motivo_pausa === "string") {
     patch.motivo_pausa = body.motivo_pausa;

@@ -1,4 +1,5 @@
 import {
+  getOutboundSummary,
   listOutboundMessages,
   type OutboundListFilters,
 } from "@/lib/admin/mensagens";
@@ -36,17 +37,20 @@ export default async function MensagensPage({
   const sp = await searchParams;
   const filters = pickFilters(sp);
   const supabase = createSupabaseAdminClient();
-  const list = await listOutboundMessages(supabase, filters);
+  const [list, summary] = await Promise.all([
+    listOutboundMessages(supabase, filters),
+    getOutboundSummary(supabase, filters),
+  ]);
 
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Mensagens enviadas</h1>
+        <h1 className="text-2xl font-semibold">Mensagens</h1>
         <p className="mt-1 text-sm text-muted">
-          {list.total} {list.total === 1 ? "mensagem" : "mensagens"} no total · PII mascarada
+          {list.total} {list.total === 1 ? "mensagem" : "mensagens"} no filtro · agrupadas por conversa · PII mascarada
         </p>
       </header>
-      <MensagensClient initial={list} filters={filters} />
+      <MensagensClient initial={list} summary={summary} filters={filters} />
     </div>
   );
 }

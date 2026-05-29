@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { maskName, maskWhatsapp } from "./pii";
+import { normalizeClienteNome, normalizeServico, normalizeVeiculo } from "./normalize";
+import { maskWhatsapp } from "./pii";
 
 // ADR-0001: transicao iniciada pelo admin humano, nao por LLM.
 
@@ -21,7 +22,7 @@ export type LembreteListRow = {
   oficina_id: string | null;
   oficina_nome: string | null;
   cliente_id: string | null;
-  cliente_nome_mascarado: string;
+  cliente_nome: string | null;
   cliente_whatsapp_mascarado: string;
   veiculo_descricao: string | null;
   servico_tipo: string | null;
@@ -55,7 +56,6 @@ export type LembreteDetail = LembreteListRow & {
   provider_status: string | null;
   provider_error_code: string | null;
   last_attempt_at: string | null;
-  cliente_nome: string | null;
   cliente_whatsapp: string | null;
   veiculo_id: string | null;
   veiculo_placa: string | null;
@@ -158,10 +158,10 @@ export async function listLembretes(
       oficina_id: (l.oficina_id ?? null) as string | null,
       oficina_nome: oficina?.nome ?? null,
       cliente_id: (l.cliente_id ?? null) as string | null,
-      cliente_nome_mascarado: maskName(cliente?.nome ?? null),
+      cliente_nome: normalizeClienteNome(cliente?.nome ?? null),
       cliente_whatsapp_mascarado: maskWhatsapp(cliente?.whatsapp ?? null),
-      veiculo_descricao: veiculo?.descricao ?? veiculo?.placa ?? null,
-      servico_tipo: servico?.tipo ?? null,
+      veiculo_descricao: normalizeVeiculo(veiculo?.descricao ?? veiculo?.placa ?? null),
+      servico_tipo: normalizeServico(servico?.tipo ?? null),
       status: l.status as LembreteStatus,
       scheduled_at: (l.scheduled_at ?? null) as string | null,
       sent_at: (l.sent_at ?? null) as string | null,
@@ -228,15 +228,14 @@ export async function getLembreteById(
     oficina_id: (data.oficina_id ?? null) as string | null,
     oficina_nome: oficina?.nome ?? null,
     cliente_id: (data.cliente_id ?? null) as string | null,
-    cliente_nome: cliente?.nome ?? null,
+    cliente_nome: normalizeClienteNome(cliente?.nome ?? null),
     cliente_whatsapp: cliente?.whatsapp ?? null,
-    cliente_nome_mascarado: maskName(cliente?.nome ?? null),
     cliente_whatsapp_mascarado: maskWhatsapp(cliente?.whatsapp ?? null),
     veiculo_id: (data.veiculo_id ?? null) as string | null,
-    veiculo_descricao: veiculo?.descricao ?? veiculo?.placa ?? null,
+    veiculo_descricao: normalizeVeiculo(veiculo?.descricao ?? veiculo?.placa ?? null),
     veiculo_placa: veiculo?.placa ?? null,
     servico_id: (data.servico_id ?? null) as string | null,
-    servico_tipo: servico?.tipo ?? null,
+    servico_tipo: normalizeServico(servico?.tipo ?? null),
     servico_descricao: servico?.descricao ?? null,
     servico_valor: servico?.valor !== undefined ? Number(servico.valor) : null,
     servico_data: servico?.data_servico ?? null,

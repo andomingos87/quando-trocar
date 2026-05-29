@@ -560,6 +560,7 @@ create table cobranca_jobs (
 - WhatsApp do cliente final mostrado parcialmente (`+55 11 ****-1234`).
 - Texto da mensagem é truncado a 80 caracteres com `...`.
 - Detalhe completo da conversa **não** é exposto no MVP (sem entrar como oficina).
+- O mascaramento de nome acima vale para o **preview de mensagens**. Na tela de **Lembretes** (lista e detalhe) o nome do cliente é exibido por extenso — é dado operacional necessário para a triagem dos lembretes; o WhatsApp permanece mascarado. Nome, veículo e tipo de serviço passam por normalização cosmética de exibição (`lib/admin/normalize.ts`): remoção de frases de enquadramento deixadas pelo LLM, title-case, extração do ano do veículo e classificação do serviço em rótulos canônicos.
 
 ### 9.3 Revogação de admin
 

@@ -122,7 +122,7 @@ export function LembretesClient({
                     href={`/admin/lembretes/${row.id}`}
                     className="font-medium text-ink hover:underline"
                   >
-                    {row.cliente_nome_mascarado}
+                    {row.cliente_nome ?? "—"}
                   </Link>
                   <span className="ml-2 text-xs text-muted">
                     {row.cliente_whatsapp_mascarado}
