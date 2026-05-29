@@ -76,6 +76,14 @@ export class WhatsAppCloudApiClient implements WhatsappSender, WhatsappMediaDown
     languageCode: string;
     bodyParameters: string[];
     /**
+     * Optional names for the body parameters. When provided (and matching the
+     * length of `bodyParameters`), the request is built with NAMED parameters
+     * (`parameter_name`) instead of positional ones. Required for templates
+     * created with named placeholders like `{{nome}}` — Meta rejects a
+     * positional send against a named template.
+     */
+    bodyParameterNames?: string[];
+    /**
      * Optional value for a URL button that contains a `{{1}}` placeholder.
      * Required by AUTHENTICATION templates with COPY_CODE one-tap buttons —
      * Meta rejects the send with error 132000 if the button parameter is
@@ -87,13 +95,22 @@ export class WhatsAppCloudApiClient implements WhatsappSender, WhatsappMediaDown
       throw new Error("Missing WhatsApp Cloud API environment variables");
     }
 
+    const useNamedParameters =
+      input.bodyParameterNames !== undefined &&
+      input.bodyParameterNames.length === input.bodyParameters.length;
+
     const components: Array<Record<string, unknown>> = [
       {
         type: "body",
-        parameters: input.bodyParameters.map((text) => ({
-          type: "text",
-          text,
-        })),
+        parameters: input.bodyParameters.map((text, index) =>
+          useNamedParameters
+            ? {
+                type: "text",
+                parameter_name: input.bodyParameterNames![index],
+                text,
+              }
+            : { type: "text", text },
+        ),
       },
     ];
 

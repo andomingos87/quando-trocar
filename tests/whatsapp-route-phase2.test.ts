@@ -292,7 +292,8 @@ describe("whatsapp webhook phase 2", () => {
       to: "+5541999990000",
       templateName: "confirmacao_servico",
       languageCode: "pt_BR",
-      bodyParameters: ["Joao", "Auto Center Silva", "Civic 2018"],
+      bodyParameters: ["Joao", "óleo", "Civic 2018", "Auto Center Silva"],
+      bodyParameterNames: ["nome", "produto", "carro", "oficina"],
     });
     expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
       to: "+5541999421180",

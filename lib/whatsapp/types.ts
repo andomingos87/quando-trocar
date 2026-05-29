@@ -477,6 +477,13 @@ export type WhatsappSender = {
     languageCode: string;
     bodyParameters: string[];
     /**
+     * Optional names for the body parameters. When provided (and matching the
+     * length of `bodyParameters`), the send uses NAMED parameters
+     * (`parameter_name`) instead of positional ones — required for templates
+     * created with named placeholders like `{{nome}}`.
+     */
+    bodyParameterNames?: string[];
+    /**
      * Optional value for a URL button that contains a `{{1}}` placeholder
      * (used by AUTHENTICATION templates with COPY_CODE one-tap buttons).
      * When provided, an extra `button` component is appended to the request.

@@ -2,8 +2,10 @@ import OpenAI from "openai";
 
 import { audioFallbackMessage } from "./audio-fallbacks";
 import {
+  productLabelForConfirmation,
   renderServiceConfirmation,
   serviceConfirmationParams,
+  SERVICE_CONFIRMATION_PARAM_NAMES,
   SERVICE_CONFIRMATION_TEMPLATE,
 } from "./service-confirmation";
 import { unsupportedMediaFallback } from "./unsupported-media-fallbacks";
@@ -536,6 +538,10 @@ async function sendServiceConfirmation(input: {
     customerName: serviceInput.nomeCliente,
     workshopName,
     vehicleDescription: serviceInput.veiculo,
+    productLabel: productLabelForConfirmation({
+      tipoServico: serviceInput.tipoServico,
+      servico: serviceInput.servico,
+    }),
   };
   const renderedBody = renderServiceConfirmation(confirmationArgs);
   const params = serviceConfirmationParams(confirmationArgs);
@@ -571,6 +577,7 @@ async function sendServiceConfirmation(input: {
       templateName: SERVICE_CONFIRMATION_TEMPLATE.name,
       languageCode: SERVICE_CONFIRMATION_TEMPLATE.language,
       bodyParameters: params,
+      bodyParameterNames: [...SERVICE_CONFIRMATION_PARAM_NAMES],
     });
     await deps.repository.markOutboundSent({
       outboundMessageId: outbox.id,
