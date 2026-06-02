@@ -245,6 +245,19 @@ Regras:
 - Auditoria: uma entrada por ação distinta (`oficina.update_cadastro`, `oficina.update_status`, `oficina.update_plano`, `oficina.update_preco`).
 - Fonte: `patchOficina` em `lib/admin/oficinas.ts`, `OficinaEditModal` em `components/admin/oficina-edit-modal.tsx`, rota `PATCH /api/admin/oficinas/[id]`.
 
+### 2.6 Exclusão de oficina — soft delete (painel admin)
+Admin pode excluir uma oficina pela "zona de perigo" do mesmo modal de edição (`/admin/oficinas`). Exclusão é **soft delete**, distinta de `status = 'cancelada'`:
+- `cancelada` é estado de negócio: a oficina some dos fluxos operacionais mas continua visível e filtrável na listagem do admin.
+- **Excluir** grava `oficinas.deleted_at = now()` e oculta o registro de **todas** as telas do admin (listagem, detalhe, busca, checagem de unicidade de WhatsApp), preservando-o no banco para auditoria.
+
+Regras:
+- Exige confirmar o nome exato da oficina (mesma proteção do cancelamento); nome divergente bloqueia (400).
+- Oficina inexistente ou já excluída retorna 404.
+- **Irreversível por esta tela** — restauração só diretamente no banco (limpar `deleted_at`).
+- O WhatsApp de uma oficina excluída deixa de bloquear unicidade, podendo ser reusado por um novo cadastro.
+- Auditoria: uma entrada `oficina.soft_delete`.
+- Fonte: `softDeleteOficina` em `lib/admin/oficinas.ts`, `OficinaEditModal` em `components/admin/oficina-edit-modal.tsx`, rota `DELETE /api/admin/oficinas/[id]`, migration `20260602000000_oficinas_soft_delete.sql`.
+
 ---
 
 ## 3. Onboarding e operação

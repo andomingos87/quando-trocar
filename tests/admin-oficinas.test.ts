@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { patchOficina, validateOficinaCreate } from "@/lib/admin/oficinas";
+import {
+  patchOficina,
+  softDeleteOficina,
+  validateOficinaCreate,
+} from "@/lib/admin/oficinas";
 
 const validBase = {
   nome: "Oficina X",
@@ -64,15 +68,22 @@ function makeOficinaSupabase(opts: {
   whatsappConflict?: Array<{ id: string }>;
 }) {
   const { row, whatsappConflict = [] } = opts;
-  const updateEq = vi.fn(async () => ({ error: null }));
+  const update = vi.fn(() => updateChain);
+  // update().eq().is() — thenable resolving to { error: null }
+  const updateChain: Record<string, unknown> = {
+    eq: vi.fn(() => updateChain),
+    is: vi.fn(() => updateChain),
+    then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
+  };
 
   const oficinasChain = () => {
     const chain: Record<string, unknown> = {
       select: vi.fn(() => chain),
       eq: vi.fn(() => chain),
       neq: vi.fn(() => chain),
+      is: vi.fn(() => chain),
       maybeSingle: vi.fn(async () => ({ data: row, error: null })),
-      update: vi.fn(() => ({ eq: updateEq })),
+      update,
       // thenable: resolves the whatsapp-uniqueness query result
       then: (resolve: (v: { data: unknown; error: null }) => unknown) =>
         resolve({ data: whatsappConflict, error: null }),
@@ -87,7 +98,7 @@ function makeOficinaSupabase(opts: {
   };
 
   return {
-    _updateEq: updateEq,
+    _update: update,
     from: vi.fn((table: string) => {
       if (table === "oficinas") return oficinasChain();
       if (table === "mensagens") return mensagensChain;
@@ -145,6 +156,47 @@ describe("patchOficina — edicao de cadastro", () => {
       { adminId: "a", ip: null },
     );
     expect(result.actions).toEqual([]);
-    expect((supabase as unknown as { _updateEq: { mock: { calls: unknown[] } } })._updateEq.mock.calls.length).toBe(0);
+    expect((supabase as unknown as { _update: { mock: { calls: unknown[] } } })._update.mock.calls.length).toBe(0);
+  });
+});
+
+describe("softDeleteOficina", () => {
+  it("rejeita quando o nome de confirmacao nao bate (400)", async () => {
+    const supabase = makeOficinaSupabase({ row: baseRow });
+    await expect(
+      softDeleteOficina(
+        supabase,
+        OFICINA_ID,
+        { confirmationName: "Nome Errado" },
+        { adminId: "a", ip: null },
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+    expect((supabase as unknown as { _update: { mock: { calls: unknown[] } } })._update.mock.calls.length).toBe(0);
+  });
+
+  it("rejeita oficina inexistente/ja excluida (404)", async () => {
+    const supabase = makeOficinaSupabase({ row: null as never });
+    await expect(
+      softDeleteOficina(
+        supabase,
+        OFICINA_ID,
+        { confirmationName: "Oficina X" },
+        { adminId: "a", ip: null },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("grava deleted_at quando o nome confere", async () => {
+    const supabase = makeOficinaSupabase({ row: baseRow });
+    const result = await softDeleteOficina(
+      supabase,
+      OFICINA_ID,
+      { confirmationName: "Oficina X" },
+      { adminId: "a", ip: null },
+    );
+    expect(result).toMatchObject({ ok: true, id: OFICINA_ID });
+    const update = (supabase as unknown as { _update: { mock: { calls: unknown[][] } } })._update;
+    expect(update.mock.calls.length).toBe(1);
+    expect(update.mock.calls[0][0]).toHaveProperty("deleted_at");
   });
 });

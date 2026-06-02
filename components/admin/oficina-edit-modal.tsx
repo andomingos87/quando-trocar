@@ -39,6 +39,36 @@ export function OficinaEditModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [deleting, setDeleting] = useState(false);
+  const [deleteName, setDeleteName] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleteError(null);
+    setDeleteBusy(true);
+    try {
+      const res = await fetch(`/api/admin/oficinas/${oficina.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmationName: deleteName.trim() }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setDeleteError(data.message ?? "Erro ao excluir oficina.");
+        return;
+      }
+      onSaved();
+    } catch {
+      setDeleteError("Erro de conexao.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -217,6 +247,69 @@ export function OficinaEditModal({
               {error}
             </p>
           ) : null}
+
+          <div className="rounded-xl border border-red/30 bg-red-soft/40 p-3">
+            {!deleting ? (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">Excluir oficina</p>
+                  <p className="text-xs text-muted">
+                    Remove a oficina de todas as telas do admin. Irreversivel por esta tela.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setDeleting(true);
+                    setDeleteError(null);
+                    setDeleteName("");
+                  }}
+                  disabled={busy}
+                  className="border-red/40 text-red"
+                >
+                  Excluir
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Field
+                  label="Confirme o nome da oficina para excluir"
+                  hint="A exclusao e irreversivel por esta tela."
+                >
+                  <Input
+                    value={deleteName}
+                    onChange={(e) => setDeleteName(e.target.value)}
+                    placeholder={oficina.nome}
+                    className="border-red/40"
+                  />
+                </Field>
+                {deleteError ? (
+                  <p className="rounded-lg border border-red/30 bg-red-soft px-3 py-2 text-sm text-red">
+                    {deleteError}
+                  </p>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setDeleting(false)}
+                    disabled={deleteBusy}
+                  >
+                    Voltar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    onClick={handleDelete}
+                    disabled={deleteBusy || deleteName.trim() !== oficina.nome.trim()}
+                  >
+                    {deleteBusy ? "Excluindo..." : "Confirmar exclusao"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-between gap-2 pt-2">
             <Link

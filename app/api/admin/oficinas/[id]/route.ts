@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api-guard";
-import { patchOficina, type OficinaPatchInput } from "@/lib/admin/oficinas";
+import {
+  patchOficina,
+  softDeleteOficina,
+  type OficinaPatchInput,
+} from "@/lib/admin/oficinas";
 import { getRequestIp } from "@/lib/admin/request-ip";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -65,6 +69,46 @@ export async function PATCH(request: Request, ctx: Ctx) {
         ? err.message
         : "Erro ao atualizar oficina.";
     if (status === 500) console.error("admin/oficinas PATCH failed", err);
+    return NextResponse.json({ ok: false, message }, { status });
+  }
+}
+
+export async function DELETE(request: Request, ctx: Ctx) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
+
+  const { id } = await ctx.params;
+  if (!isUuid(id)) {
+    return NextResponse.json({ ok: false, message: "ID invalido." }, { status: 400 });
+  }
+
+  let body: { confirmationName?: unknown };
+  try {
+    body = (await request.json()) as { confirmationName?: unknown };
+  } catch {
+    return NextResponse.json({ ok: false, message: "Payload invalido." }, { status: 400 });
+  }
+
+  const confirmationName =
+    typeof body.confirmationName === "string" ? body.confirmationName : "";
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const ip = getRequestIp(request);
+    const result = await softDeleteOficina(
+      supabase,
+      id,
+      { confirmationName },
+      { adminId: auth.admin.adminId, ip },
+    );
+    return NextResponse.json(result);
+  } catch (err) {
+    const status = (err as { status?: number }).status ?? 500;
+    const message =
+      err instanceof Error && status !== 500
+        ? err.message
+        : "Erro ao excluir oficina.";
+    if (status === 500) console.error("admin/oficinas DELETE failed", err);
     return NextResponse.json({ ok: false, message }, { status });
   }
 }

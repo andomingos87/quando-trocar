@@ -93,6 +93,7 @@ export async function listOficinas(
        planos:plano_id (nome, preco_base)`,
       { count: "exact" },
     )
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -176,6 +177,7 @@ export async function getOficinaById(
        planos:plano_id (nome, preco_base)`,
     )
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(`get_oficina_failed: ${error.message}`);
   if (!data) return null;
@@ -428,7 +430,8 @@ export async function createOficinaManual(
     .from("oficinas")
     .select("id, status")
     .eq("whatsapp_principal", input.whatsapp)
-    .neq("status", "cancelada");
+    .neq("status", "cancelada")
+    .is("deleted_at", null);
   if (existing && existing.length > 0) {
     const err = new Error("Ja existe oficina ativa com esse WhatsApp.");
     Object.assign(err, { status: 409 });
@@ -620,7 +623,8 @@ export async function patchOficina(
         .select("id")
         .eq("whatsapp_principal", phone.e164)
         .neq("id", id)
-        .neq("status", "cancelada");
+        .neq("status", "cancelada")
+        .is("deleted_at", null);
       if (existing && existing.length > 0) {
         const err = new Error("Ja existe outra oficina ativa com esse WhatsApp.");
         Object.assign(err, { status: 409 });
@@ -657,4 +661,56 @@ export async function patchOficina(
   }
 
   return { ok: true, oficina: after, actions };
+}
+
+export type SoftDeleteOficinaResult = {
+  ok: true;
+  id: string;
+};
+
+/**
+ * Soft delete: marca `deleted_at` para ocultar a oficina de todas as telas do
+ * admin, mantendo o registro no banco. Distinto de `status = 'cancelada'`.
+ * Exige confirmar o nome (mesma proteção do cancelamento) e é irreversível
+ * por esta tela — restauração só via banco.
+ */
+export async function softDeleteOficina(
+  supabase: SupabaseClient,
+  id: string,
+  input: { confirmationName: string },
+  ctx: { adminId: string; ip: string | null },
+): Promise<SoftDeleteOficinaResult> {
+  const before = await getOficinaById(supabase, id);
+  if (!before) {
+    const err = new Error("oficina_not_found");
+    Object.assign(err, { status: 404 });
+    throw err;
+  }
+
+  if (!input.confirmationName || input.confirmationName.trim() !== before.nome.trim()) {
+    const err = new Error("Confirme o nome da oficina para excluir.");
+    Object.assign(err, { status: 400 });
+    throw err;
+  }
+
+  return withAdminAudit(
+    supabase,
+    () => ({
+      adminId: ctx.adminId,
+      acao: "oficina.soft_delete",
+      entidade: "oficinas",
+      entidadeId: id,
+      ip: ctx.ip,
+      payload: { before },
+    }),
+    async () => {
+      const { error } = await supabase
+        .from("oficinas")
+        .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("deleted_at", null);
+      if (error) throw new Error(`soft_delete_oficina_failed: ${error.message}`);
+      return { ok: true as const, id };
+    },
+  );
 }
