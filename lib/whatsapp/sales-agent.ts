@@ -150,6 +150,56 @@ export function detectQuerHumano(message: string) {
   ].some((re) => re.test(normalized));
 }
 
+// Frases que a oficina costuma embrulhar antes do nome ("minha oficina se
+// chama X", "é a X", "o nome é X"). Removemos pra guardar só o nome.
+const WORKSHOP_NAME_STRIP_PATTERNS: ReadonlyArray<RegExp> = [
+  /^(?:oficina|auto\s*center|garagem|funilaria|mec[aâ]nica)\s+(?:se\s+chama|chama(?:-se)?|e|eh|seria)\s+/i,
+  /^(?:o\s+)?nome\s+(?:da\s+oficina\s+)?(?:e|eh|seria|:)\s*/i,
+  /^(?:se\s+)?chama(?:-se)?\s+/i,
+  /^(?:e|eh|seria)\s+/i,
+  /^(?:a|o|minha|meu)\s+/i,
+  /^[\s:,.\-]+/,
+];
+
+// Valida se a mensagem pode ser uma resposta de nome de oficina (não é
+// saudação, ack, pergunta nem só dígitos) e devolve o nome limpo, ou null.
+export function extractWorkshopName(message: string): string | null {
+  const raw = message.replace(/\s+/g, " ").trim();
+  if (!raw) return null;
+
+  if (
+    detectBasicGreeting(message) ||
+    detectNeutralAck(message) ||
+    detectPriceQuestion(message) ||
+    detectQuerHumano(message)
+  ) {
+    return null;
+  }
+
+  const normalized = normalizeText(message);
+  if (message.includes("?") || /^(qual|como|porque|por que|quando|onde|quem|o que)\b/.test(normalized)) {
+    return null;
+  }
+
+  let value = raw;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pattern of WORKSHOP_NAME_STRIP_PATTERNS) {
+      const next = value.replace(pattern, "");
+      if (next !== value) {
+        value = next.trim();
+        changed = true;
+      }
+    }
+  }
+
+  value = value.replace(/[\s:,.\-]+$/g, "").trim();
+  if (value.length < 2 || /^\d+$/.test(value.replace(/\s/g, ""))) return null;
+
+  return value;
+}
+
 export function detectPriceQuestion(message: string) {
   const normalized = normalizeText(message);
   return /\b(quanto custa|quanto fica|preco|valor|mensalidade|investimento|cobranca|cobram)\b/.test(
@@ -638,13 +688,26 @@ function buildReply(
     };
   }
 
-  // Quero testar
+  // Quero testar — antes de converter, captura o nome da oficina.
   if (classification.intent === "quer_testar") {
+    // Já temos o nome guardado (lead reiterou interesse) -> converte.
+    if (memory.workshop_name) {
+      return {
+        status: "teste_aceito",
+        body: `Show chefe! Vou cadastrar a ${memory.workshop_name} em teste por aqui mesmo.`,
+        toolCalls: [],
+        convertToOficina: true,
+        nomeOficina: memory.workshop_name,
+        updatedContext: { sales: memory },
+      };
+    }
+
+    // Ainda não sabemos o nome -> pergunta e aguarda a resposta.
+    memory.awaiting_workshop_name = true;
     return {
       status: "teste_aceito",
-      body: "Beleza chefe! Vou cadastrar sua oficina em teste por aqui mesmo.",
+      body: "Boa chefe! Antes de ativar seu teste, como chama a sua oficina?",
       toolCalls: [],
-      convertToOficina: true,
       updatedContext: { sales: memory },
     };
   }
@@ -823,6 +886,47 @@ export class WhatsappSalesAgent {
     const salesConfig = input.salesConfig ?? defaultConfig();
     const faqs = input.faqs ?? [];
     const memory: SalesConversationMemory = { ...(input.context?.sales ?? {}) };
+
+    // Estamos esperando o nome da oficina pra concluir a conversão.
+    if (memory.awaiting_workshop_name) {
+      // O lead ainda pode desistir nesse ponto.
+      if (isExplicitLossMessage(input.message)) {
+        return {
+          status: "perdido",
+          body: "Tranquilo chefe, deixo registrado. Se mudar de ideia, e so me chamar de novo.",
+          toolCalls: [],
+          updatedContext: { sales: { ...memory, awaiting_workshop_name: false } },
+        };
+      }
+
+      const nome = extractWorkshopName(input.message);
+      if (!nome) {
+        // Resposta não parece um nome -> pergunta de novo, sem converter.
+        return {
+          status: input.leadStatus,
+          body: "So pra eu cadastrar certinho chefe: qual o nome da sua oficina?",
+          toolCalls: [],
+          updatedContext: { sales: memory },
+        };
+      }
+
+      return {
+        status: "teste_aceito",
+        body: `Show chefe! Vou cadastrar a ${nome} em teste por aqui mesmo.`,
+        toolCalls: [
+          {
+            toolName: "capture_workshop_name",
+            input: { message: input.message },
+            output: { nome },
+          },
+        ],
+        convertToOficina: true,
+        nomeOficina: nome,
+        updatedContext: {
+          sales: { ...memory, awaiting_workshop_name: false, workshop_name: nome },
+        },
+      };
+    }
 
     const deterministic = classifySalesMessage(input.message, faqs);
 

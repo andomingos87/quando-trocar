@@ -288,7 +288,7 @@ describe("whatsapp sales agent — generateReply", () => {
     expect(reply.status).toBe("perdido");
   });
 
-  test("quer testar marks teste_aceito and flags convertToOficina", async () => {
+  test("quer testar asks for the workshop name before converting", async () => {
     const agent = new WhatsappSalesAgent({ openai: null });
     const reply = await agent.generateReply({
       message: "quero testar",
@@ -299,7 +299,41 @@ describe("whatsapp sales agent — generateReply", () => {
     });
 
     expect(reply.status).toBe("teste_aceito");
+    expect(reply.convertToOficina).toBeUndefined();
+    expect(reply.body.toLowerCase()).toContain("oficina");
+    expect(reply.updatedContext?.sales?.awaiting_workshop_name).toBe(true);
+  });
+
+  test("captures the workshop name answer and flags convertToOficina", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "Auto Center Silva",
+      leadStatus: "teste_aceito",
+      context: { sales: { awaiting_workshop_name: true, greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).toBe("teste_aceito");
     expect(reply.convertToOficina).toBe(true);
+    expect(reply.nomeOficina).toBe("Auto Center Silva");
+    expect(reply.updatedContext?.sales?.awaiting_workshop_name).toBe(false);
+    expect(reply.updatedContext?.sales?.workshop_name).toBe("Auto Center Silva");
+  });
+
+  test("re-asks the workshop name when the answer is not a name", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "quanto custa?",
+      leadStatus: "teste_aceito",
+      context: { sales: { awaiting_workshop_name: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.convertToOficina).toBeUndefined();
+    expect(reply.body.toLowerCase()).toContain("nome");
+    expect(reply.updatedContext?.sales?.awaiting_workshop_name).toBe(true);
   });
 
   test("openAI fallback honors closed intent enum", async () => {

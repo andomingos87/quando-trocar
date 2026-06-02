@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { parseBrazilianDate } from "./date-parse";
 import { normalizeText, normalizeWhatsappPhone } from "./sales-agent";
 import type {
   ConversationAgentMode,
@@ -70,12 +71,6 @@ function extractMarcaFromMessage(message: string): MarcaAmortecedor | null {
   return null;
 }
 
-function isoDateOffset(today: string, offsetDays: number) {
-  const date = new Date(`${today}T12:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + offsetDays);
-  return date.toISOString().slice(0, 10);
-}
-
 function hasNegativeConsent(message: string) {
   const normalized = normalizeText(message);
   return (
@@ -122,43 +117,30 @@ function removePhone(message: string, phone: string | null) {
 }
 
 function extractDate(message: string, today: string) {
-  const normalized = normalizeText(message);
-  if (/\bhoje\b/.test(normalized)) {
-    return { date: today, ambiguous: false };
-  }
-  if (/\bontem\b/.test(normalized)) {
-    return { date: isoDateOffset(today, -1), ambiguous: false };
-  }
-  if (WEEKDAY_PATTERN.test(normalized)) {
-    return { date: null, ambiguous: true };
-  }
-
-  const dateMatch = normalized.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
-  if (!dateMatch) {
-    return { date: null, ambiguous: false };
-  }
-
-  const day = dateMatch[1].padStart(2, "0");
-  const month = dateMatch[2].padStart(2, "0");
-  const year = dateMatch[3]
-    ? dateMatch[3].length === 2
-      ? `20${dateMatch[3]}`
-      : dateMatch[3]
-    : today.slice(0, 4);
-
-  return { date: `${year}-${month}-${day}`, ambiguous: false };
+  return parseBrazilianDate(message, today);
 }
 
-function cleanServiceText(input: string) {
-  return input
+function cleanServiceText(input: string, dateMatch?: string | null) {
+  let value = input;
+  // Remove o trecho exato de data reconhecido pelo parser (ex.: "amanha",
+  // "daqui 3 dias", "05/06", "quarta que vem") pra não poluir o serviço.
+  if (dateMatch) {
+    value = value.replace(new RegExp(escapeRegExp(dateMatch), "gi"), " ");
+  }
+  return value
     .replace(/\bhoje\b/gi, "")
     .replace(/\bontem\b/gi, "")
+    .replace(/\bamanh[ãa]\b/gi, "")
     .replace(WEEKDAY_PATTERN, "")
     .replace(/cliente\s+nao\s+autorizou\s+mensagem/gi, "")
     .replace(/cliente\s+não\s+autorizou\s+mensagem/gi, "")
     .replace(/\s+/g, " ")
     .replace(/^[,\s]+|[,\s]+$/g, "")
     .trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // A oficina às vezes envia o nome embrulhado em frase de intenção
@@ -237,7 +219,7 @@ function parseDeterministic(message: string, today: string): ServiceDraft {
     .filter(Boolean);
   const serviceSource = parts.slice(2).join(", ") || parts[2] || "";
   const parsedDate = extractDate(message, today);
-  const service = cleanServiceText(serviceSource);
+  const service = cleanServiceText(serviceSource, parsedDate.matchedText);
   const draft: ServiceDraft = {
     valor: null,
     consentimento_whatsapp: !hasNegativeConsent(message),
@@ -420,6 +402,112 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
   }
 }
 
+// Tokens que, sozinhos ou combinados, significam "pode cadastrar". A
+// confirmação só dispara o cadastro quando TODOS os tokens da mensagem estão
+// nesta lista — assim "sim pode cadastrar" confirma, mas "sim mas o carro e
+// Gol" cai no fluxo de correção (nunca grava dado errado por engano).
+const CONFIRMATION_AFFIRMATIVE_TOKENS = new Set([
+  "sim", "isso", "mesmo", "ai", "exato", "exatamente", "correto", "corretos",
+  "esta", "ta", "tah", "certo", "certinho", "certos", "tudo", "perfeito",
+  "confirmo", "confirmado", "confirma", "confirmar", "pode", "podem", "poder",
+  "cadastrar", "cadastra", "registrar", "registra", "salvar", "salva", "ok",
+  "okay", "blz", "beleza", "positivo", "com", "certeza", "senhor", "senhora",
+  "aham", "uhum", "ja", "manda", "mandar", "bora", "vai", "vamos", "fechado",
+  "show", "claro", "afirmativo",
+]);
+
+function isAffirmativeConfirmation(message: string): boolean {
+  const normalized = normalizeText(message);
+  if (!normalized) return false;
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.length === 0) return false;
+  return tokens.every((token) => CONFIRMATION_AFFIRMATIVE_TOKENS.has(token));
+}
+
+const MARCA_LABELS: Record<MarcaAmortecedor, string> = {
+  perfect: "Perfect",
+  monroe: "Monroe",
+  cofap: "Cofap",
+  nakata: "Nakata",
+  outra: "outra",
+};
+
+function formatDateBR(iso: string | undefined | null): string {
+  if (!iso) return "-";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+}
+
+function serviceSummaryLine(draft: ServiceDraft): string {
+  const tipo = draft.tipo_servico ?? detectTipoServico(draft.servico);
+  let label = draft.servico ?? "-";
+  if (tipo === "amortecedor" && draft.marca_peca) {
+    label += ` (${MARCA_LABELS[draft.marca_peca]})`;
+  }
+  return label;
+}
+
+function confirmationSummary(draft: ServiceDraft): string {
+  return [
+    "Confere os dados antes de eu registrar:",
+    "",
+    `• Cliente: ${draft.nome_cliente ?? "-"}`,
+    `• Carro: ${draft.veiculo ?? "-"}`,
+    `• Servico: ${serviceSummaryLine(draft)}`,
+    `• Data: ${formatDateBR(draft.data_servico)}`,
+    `• WhatsApp: ${draft.whatsapp_cliente ?? "-"}`,
+    "",
+    'Esta correto? Responda *sim* pra confirmar, ou me diga o que corrigir (ex.: "o carro e Gol").',
+  ].join("\n");
+}
+
+function confirmationContext(draft: ServiceDraft): ConversationContext {
+  return {
+    pending_action: "registrar_primeira_troca",
+    awaiting_confirmation: true,
+    service_draft: draft,
+  };
+}
+
+function confirmationReply(draft: ServiceDraft): OnboardingAgentReply {
+  return {
+    body: confirmationSummary(draft),
+    context: confirmationContext(draft),
+    registerServiceInput: null,
+    nextAgentMode: null,
+    toolCalls: [
+      {
+        toolName: "solicitou_confirmacao_cadastro",
+        input: {},
+        output: { draft: draft as Record<string, unknown> },
+      },
+    ],
+  };
+}
+
+// Mescla uma correção parcial sobre o rascunho existente. Só sobrescreve campos
+// que a correção realmente trouxe (não-vazios); valor/consentimento não mudam
+// numa correção de campo. Recalcula tipo/marca quando o serviço muda.
+function mergeDraftCorrection(base: ServiceDraft, update: ServiceDraft): ServiceDraft {
+  const merged: ServiceDraft = { ...base };
+  if (update.nome_cliente) merged.nome_cliente = update.nome_cliente;
+  if (update.whatsapp_cliente) merged.whatsapp_cliente = update.whatsapp_cliente;
+  if (update.veiculo) merged.veiculo = update.veiculo;
+  if (update.data_servico) merged.data_servico = update.data_servico;
+  if (update.servico) {
+    merged.servico = update.servico;
+    const tipo = update.tipo_servico ?? detectTipoServico(update.servico);
+    merged.tipo_servico = tipo;
+    merged.marca_peca =
+      tipo === "amortecedor" ? update.marca_peca ?? base.marca_peca ?? null : null;
+  }
+  if (update.marca_peca && (merged.tipo_servico ?? detectTipoServico(merged.servico)) === "amortecedor") {
+    merged.marca_peca = update.marca_peca;
+  }
+  return merged;
+}
+
 function neutralReply(message: string): OnboardingAgentReply {
   const normalized = normalizeText(message);
   const isGreeting =
@@ -491,6 +579,12 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
       return blockedPromptInjectionReply(input.message);
     }
 
+    // Rascunho completo aguardando o "sim" da oficina (ADR-0017). Tratado antes
+    // do filtro de neutralidade pra não descartar um "ok"/"sim" como ruído.
+    if (input.context.awaiting_confirmation && input.context.service_draft) {
+      return this.handleConfirmation(input);
+    }
+
     if (!input.context.missing_field && !hasRegistrationSignal(input.message)) {
       return neutralReply(input.message);
     }
@@ -511,13 +605,98 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
       };
     }
 
-    return {
-      body: "",
-      context: {},
-      registerServiceInput: draftToRegisterInput(draft),
-      nextAgentMode: input.mode === "onboarding" ? "operacao" : null,
-      toolCalls: [],
-    };
+    // Todos os campos presentes: NÃO grava ainda. Mostra o resumo e espera a
+    // oficina confirmar — é a rede de segurança que o ADR-0015 assumia mas que
+    // não existia no fluxo (correção manual antes do template irreversível).
+    return confirmationReply(draft);
+  }
+
+  private async handleConfirmation(input: {
+    message: string;
+    mode: Extract<ConversationAgentMode, "onboarding" | "operacao">;
+    context: ConversationContext;
+    today: string;
+  }): Promise<OnboardingAgentReply> {
+    const draft = input.context.service_draft as ServiceDraft;
+
+    if (isAffirmativeConfirmation(input.message)) {
+      return {
+        body: "",
+        context: {},
+        registerServiceInput: draftToRegisterInput(draft),
+        nextAgentMode: input.mode === "onboarding" ? "operacao" : null,
+        toolCalls: [
+          {
+            toolName: "confirmou_cadastro",
+            input: { message: input.message },
+            output: { confirmed: true },
+          },
+        ],
+      };
+    }
+
+    // Não foi um "sim": tratamos como correção. Re-extrai apenas via OpenAI
+    // (parser determinístico por vírgula é perigoso em respostas curtas tipo
+    // "o carro e Gol") e mescla os campos informados sobre o rascunho.
+    const correction = await this.extractCorrection(input.message, input.today);
+    const merged = correction ? mergeDraftCorrection(draft, correction) : draft;
+
+    const changed = correction ? JSON.stringify(merged) !== JSON.stringify(draft) : false;
+
+    if (!changed) {
+      return {
+        body: [
+          "Sem problema. Me diga o que corrigir.",
+          'Por exemplo: "o carro e Gol" ou "o nome e Flaviane Marsili".',
+          "Ou reenvie tudo: nome do cliente, carro, servico, data e WhatsApp.",
+        ].join("\n"),
+        context: confirmationContext(draft),
+        registerServiceInput: null,
+        nextAgentMode: null,
+        toolCalls: [
+          {
+            toolName: "confirmou_cadastro",
+            input: { message: input.message },
+            output: { confirmed: false, parsed: false },
+          },
+        ],
+      };
+    }
+
+    const missingField = missingFieldForDraft(merged);
+    if (missingField) {
+      return {
+        body: questionForMissingField(missingField),
+        context: draftContext(merged, missingField),
+        registerServiceInput: null,
+        nextAgentMode: null,
+        toolCalls: [
+          {
+            toolName: "confirmou_cadastro",
+            input: { message: input.message },
+            output: { confirmed: false, parsed: true, missing_field: missingField },
+          },
+        ],
+      };
+    }
+
+    // Correção aplicada e rascunho ainda completo → reapresenta pra reconfirmar.
+    return confirmationReply(merged);
+  }
+
+  private async extractCorrection(
+    message: string,
+    today: string,
+  ): Promise<ServiceDraft | null> {
+    const ai = await this.extractWithOpenAI(message);
+    if (ai) return ai;
+    // Sem OpenAI (ou falha): tenta o parser determinístico só quando a mensagem
+    // tem cara de cadastro completo reenviado (várias vírgulas / telefone), pra
+    // não interpretar uma frase solta como nome/veículo errado.
+    if (hasRegistrationSignal(message)) {
+      return parseDeterministic(message, today);
+    }
+    return null;
   }
 
   private async extractDraft(message: string, today: string): Promise<ServiceDraft> {

@@ -154,7 +154,7 @@ Transições válidas (decisão determinística, não LLM):
 | `confirmacao_neutra` | mantém status atual | "ok"/"blz"/"entendi"; resposta curta se já explicou, senão cai pro fluxo padrão |
 | `vai_pensar` | mantém status atual | "vou pensar"/"depois te falo"; copy "sem pressa", sem handoff |
 | `quer_humano` | mantém status atual | "passa pro Anderson"; **handoff direto** com `wa.me` |
-| `quer_testar` | `teste_aceito` | dispara conversão |
+| `quer_testar` | `teste_aceito` | **pergunta o nome da oficina** e aguarda a resposta (`sales.awaiting_workshop_name`); só dispara a conversão quando o nome é capturado |
 | `sem_interesse` | `perdido` | **só** se mensagem passa em `isExplicitLossMessage()` |
 | `fora_escopo` | mantém status atual | nunca rebaixa lead `interessado`; copy curta na 2ª aparição |
 
@@ -212,12 +212,16 @@ Uma oficina vira `cliente_ativo` quando:
 
 Dados mínimos coletados no fluxo: `nome_oficina`, `whatsapp_principal`.
 
-- Fonte: [PRD §8](./product/PRD-whatsapp-bot.md).
+**Captura do nome da oficina (obrigatória):** quando o lead aceita testar (`quer_testar`), o bot **não converte na hora** — primeiro pergunta o nome da oficina ("Boa chefe! Antes de ativar seu teste, como chama a sua oficina?") e marca `sales.awaiting_workshop_name = true`. Na resposta, `extractWorkshopName()` limpa frases de embrulho ("minha oficina se chama X", "é a X", "o nome é X") e valida que não é saudação/ack/pergunta/preço nem só dígitos. Se a resposta não parecer um nome, o bot repergunta. Se o lead desistir (`isExplicitLossMessage`), vira `perdido`. Com o nome válido, o agente devolve `convertToOficina = true` e `nomeOficina = <nome>`, e a tool call `capture_workshop_name` é registrada. O nome capturado fica em `sales.workshop_name`.
+
+- Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), `extractWorkshopName()` em `lib/whatsapp/sales-agent.ts`.
 
 ### 2.2 Ações no banco na conversão
 - Cria registro em `oficinas` com `status = ativa`, `plano = teste`, `origem = landing_whatsapp`.
+- `nome` = o nome capturado no fluxo (`AgentReply.nomeOficina`). Se vier vazio, grava o placeholder `"Oficina sem nome"` (sentinela `OFICINA_SEM_NOME` em `lib/whatsapp/repository.ts`), que dispara o backfill na próxima interação (ver §2.7).
 - `leads_oficina.status = convertido`, preenche `converted_at` e `oficina_id`.
 - Conversa transita: `participant_type = oficina_cliente`, `agent_mode = onboarding`.
+- Mensagem de boas-vindas é **personalizada com o nome** ("Pronto, a *Auto Center Silva* esta cadastrada."); cai no genérico ("sua oficina") só quando o nome é o placeholder.
 - Tudo via RPC transacional `convertLeadToOficina` (`lib/whatsapp/repository.ts`).
 
 ### 2.3 Cadastro manual de oficina (painel admin)
@@ -258,6 +262,12 @@ Regras:
 - Auditoria: uma entrada `oficina.soft_delete`.
 - Fonte: `softDeleteOficina` em `lib/admin/oficinas.ts`, `OficinaEditModal` em `components/admin/oficina-edit-modal.tsx`, rota `DELETE /api/admin/oficinas/[id]`, migration `20260602000000_oficinas_soft_delete.sql`.
 
+### 2.7 Backfill do nome da oficina ("Oficina sem nome")
+Oficinas convertidas antes da captura obrigatória (ou cujo lead não respondeu o nome) ficam com `nome = "Oficina sem nome"`. Na **próxima interação** dessa oficina (modo `onboarding`/`operacao`), o webhook intercepta antes do agente de onboarding:
+- 1ª mensagem com o placeholder → pergunta "Antes de continuar, qual o nome da sua oficina? E pra deixar seu cadastro certinho." e marca `conversas.context.awaiting_workshop_name = true`. O cadastro de troca **não** é processado nesse turno.
+- Resposta seguinte → `extractWorkshopName()` (mesma validação da §2.1). Se válido, grava `oficinas.nome` via `updateOficinaNome`, registra a tool call `update_oficina_nome`, limpa a flag e devolve ao fluxo normal pedindo a troca. Se inválido, repergunta.
+- Fonte: `lib/whatsapp/webhook-handler.ts` (branch de backfill), `updateOficinaNome` em `lib/whatsapp/repository.ts`.
+
 ---
 
 ## 3. Onboarding e operação
@@ -273,7 +283,7 @@ Regras:
 2. `whatsapp_cliente` (E.164)
 3. `veiculo`
 4. `servico`
-5. `data_servico`
+5. `data_servico` — ver cobertura de formatos abaixo.
 6. `tipo_servico` — enum fechado `troca_oleo | amortecedor | revisao | outro`. Classificado deterministicamente do texto de `servico`; LLM apenas classifica (ADR-0001). Default histórico = `troca_oleo`.
 
 Opcional: `valor`.
@@ -285,7 +295,15 @@ O `nome_cliente` é **normalizado na captura** (`normalizeNomeCliente` em `lib/w
 
 Se faltar algum, o bot pergunta **só o primeiro faltante**, persiste o draft parcial em `conversas.context.service_draft`, e completa multi-turn.
 
-- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-onboarding-agent.md`](../.codex/prompts/whatsapp-onboarding-agent.md), `lib/whatsapp/onboarding-agent.ts`, migration `20260521000000_tipo_servico_marca_peca.sql`.
+**Cobertura de formatos de `data_servico`** (`parseBrazilianDate` em `lib/whatsapp/date-parse.ts`, com `today` no fuso `America/Sao_Paulo`):
+- Relativos explícitos: `hoje`, `ontem`, `anteontem`, `amanhã`, `depois de amanhã`.
+- Contagem de dias/semanas: `daqui 3 dias`, `daqui a uma semana`, `em 2 dias`, `dentro de 1 dia`, `5 dias atrás`, `há 2 dias`, `uma semana atrás`.
+- Numérico: `05/06`, `5/6`, `05/06/2026`, `5/6/26`, `15-03`, `10-12-2025` (dia/mês; `.` **não** é separador, para não confundir com motorização tipo `Gol 1.0`).
+- Extenso: `dia 5`, `5 de junho`, `5 de jun`, `10 de dezembro de 2025`.
+- Dia da semana **só com qualificador**: `sexta que vem`/`próxima sexta` → próxima ocorrência futura; `sábado passado` → ocorrência anterior; `terça retrasada` → duas semanas atrás. **Dia da semana sem qualificador** ("foi na segunda") permanece **ambíguo** e o bot pergunta a data (poderia ser passada ou futura).
+- O trecho de data reconhecido é removido do texto do serviço (`cleanServiceText`), evitando que "amanhã"/"05/06"/"sexta que vem" poluam o campo `servico`.
+
+- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-onboarding-agent.md`](../.codex/prompts/whatsapp-onboarding-agent.md), `lib/whatsapp/onboarding-agent.ts`, `lib/whatsapp/date-parse.ts`, migration `20260521000000_tipo_servico_marca_peca.sql`.
 
 ### 3.3 Guardrails operacionais
 Bot **não** inicia cadastro nem preenche campo quando:
@@ -295,14 +313,20 @@ Bot **não** inicia cadastro nem preenche campo quando:
 
 - Fonte: `lib/whatsapp/onboarding-agent.ts`.
 
-### 3.4 Criação automática quando draft completo
-Quando todos os campos obrigatórios estão preenchidos, RPC `register_service_with_reminder` cria atomicamente:
+### 3.4 Confirmação obrigatória antes de registrar (ADR-0017)
+Quando todos os campos obrigatórios estão preenchidos, o bot **não grava direto**. Primeiro devolve um resumo dos dados captados e marca `conversas.context.awaiting_confirmation = true` (carregando o draft completo em `service_draft`). É a rede de segurança que o [ADR-0015](./adr/0015-suporte-audio-whisper.md) assumia ("a oficina corrige manualmente") mas que não existia no fluxo — sem ela, uma transcrição errada do Whisper (ex.: veículo capturado como "Não houve loucura") era gravada e o template irreversível disparava ao cliente frio sem revisão humana.
+
+- **Resumo**: lista cliente, carro, serviço (com marca do amortecedor quando houver), data e WhatsApp; pede "Responda *sim* pra confirmar, ou me diga o que corrigir". Registra a tool call `solicitou_confirmacao_cadastro`.
+- **Afirmação** (`sim`, `isso`, `pode cadastrar`, `ok`, `beleza`… — só quando **todos** os tokens da resposta são afirmativos, pra "sim, mas o carro é Gol" não confirmar por engano): aí sim chama a RPC e dispara a confirmação ao cliente. Tool call `confirmou_cadastro` com `confirmed=true`.
+- **Correção** (qualquer resposta não-afirmativa): re-extrai os campos informados **via LLM** (o parser por vírgula é perigoso em respostas curtas) e mescla sobre o draft, reapresentando o resumo para novo "sim". Se nada foi entendido, pede explicitamente o que corrigir. Em nenhum caso grava ou dispara template enquanto não houver afirmação. Tool call `confirmou_cadastro` com `confirmed=false`.
+
+Após a afirmação, a RPC `register_service_with_reminder` cria atomicamente:
 - `clientes_finais` (ou reusa se já existe por `(oficina_id, whatsapp)`)
 - `veiculos` (ou reusa)
 - `servicos` (sempre novo)
 - `lembretes` (apenas se `consentimento_whatsapp = true`)
 
-- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), migration `20260426021529_phase_2_conversion_onboarding.sql`.
+- Fonte: [ADR-0017](./adr/0017-confirmacao-antes-de-registrar-troca.md), [PRD §10](./product/PRD-whatsapp-bot.md), `lib/whatsapp/onboarding-agent.ts`, migration `20260426021529_phase_2_conversion_onboarding.sql`.
 
 ### 3.5 Preservação de status do cliente
 RPC `register_service_with_reminder` **não reativa** cliente que já está em:

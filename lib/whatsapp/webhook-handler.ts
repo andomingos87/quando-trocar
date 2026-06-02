@@ -17,6 +17,8 @@ import {
   INADIMPLENCIA_MESSAGE,
 } from "./inadimplencia-guard";
 import { WhatsappOnboardingAgent } from "./onboarding-agent";
+import { extractWorkshopName } from "./sales-agent";
+import { OFICINA_SEM_NOME } from "./repository";
 import { WhatsappReminderAgent } from "./reminder-agent";
 import { WhatsappSupportAgent } from "./support-agent";
 import {
@@ -187,9 +189,14 @@ function errorStack(error: unknown) {
   return error instanceof Error ? error.stack ?? null : null;
 }
 
-function onboardingIntroMessage() {
+function onboardingIntroMessage(nomeOficina?: string | null) {
+  const nome = nomeOficina?.trim();
+  const header =
+    nome && nome !== OFICINA_SEM_NOME
+      ? `Pronto, a ${nome} esta cadastrada.`
+      : "Pronto, sua oficina esta cadastrada.";
   return [
-    "Pronto, sua oficina esta cadastrada.",
+    header,
     "",
     "Para registrar uma troca, me mande assim:",
     "",
@@ -1095,10 +1102,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 conversationId: resolved.conversationId,
                 whatsapp: inbound.normalizedFrom,
                 responsavel: inbound.contactName,
-                nomeOficina:
-                  typeof resolved.context.service_draft?.nome_cliente === "string"
-                    ? resolved.context.service_draft.nome_cliente
-                    : null,
+                nomeOficina: reply.nomeOficina ?? null,
               });
 
               await deps.repository.saveAgentToolCall({
@@ -1114,7 +1118,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 output: converted,
               });
 
-              replyBody = onboardingIntroMessage();
+              replyBody = onboardingIntroMessage(converted.nome);
             } else {
               if (reply.status !== leadStatus && resolved.leadId) {
                 await deps.repository.updateLeadStatus({
@@ -1145,6 +1149,50 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 input: toolCall.input,
                 output: toolCall.output,
               });
+            }
+          } else if (
+            isOperationalMode(effectiveAgentMode) &&
+            resolved.oficinaId &&
+            resolved.oficinaNome === OFICINA_SEM_NOME &&
+            deps.repository.updateOficinaNome
+          ) {
+            // Backfill: oficina convertida sem nome ("Oficina sem nome").
+            // Pergunta o nome real e grava no banco antes de retomar o fluxo.
+            if (!resolved.context.awaiting_workshop_name) {
+              if (deps.repository.updateConversationModeAndContext) {
+                await deps.repository.updateConversationModeAndContext({
+                  conversationId: resolved.conversationId,
+                  context: { ...resolved.context, awaiting_workshop_name: true },
+                });
+              }
+              replyBody =
+                "Antes de continuar, qual o nome da sua oficina? E pra deixar seu cadastro certinho.";
+            } else {
+              const nome = extractWorkshopName(inbound.body);
+              if (!nome) {
+                replyBody = "So pra eu cadastrar certinho: qual o nome da sua oficina?";
+              } else {
+                await deps.repository.updateOficinaNome({
+                  oficinaId: resolved.oficinaId,
+                  nome,
+                });
+                await deps.repository.saveAgentToolCall({
+                  conversationId: resolved.conversationId,
+                  leadId: resolved.leadId,
+                  oficinaId: resolved.oficinaId,
+                  clienteId: resolved.clienteId,
+                  toolName: "update_oficina_nome",
+                  input: { message: inbound.body },
+                  output: { nome },
+                });
+                if (deps.repository.updateConversationModeAndContext) {
+                  await deps.repository.updateConversationModeAndContext({
+                    conversationId: resolved.conversationId,
+                    context: { ...resolved.context, awaiting_workshop_name: false },
+                  });
+                }
+                replyBody = `Show, anotei: ${nome}. Agora me manda a troca assim: nome do cliente, carro, servico, data e WhatsApp do cliente.`;
+              }
             }
           } else if (isOperationalMode(effectiveAgentMode)) {
             const onboardingReply = await onboardingAgent.generateReply({

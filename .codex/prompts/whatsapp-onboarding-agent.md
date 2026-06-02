@@ -56,6 +56,22 @@ Example without brand: `"Maria, Onix 2020, amortecedor, ontem, 11988887777"` →
 - In `operacao`, keep registering services without restarting the onboarding flow.
 - Return `registerServiceInput` only when all required fields are valid.
 
+## Date parsing (`data_servico`)
+
+Datas são resolvidas deterministicamente por `parseBrazilianDate` (`lib/whatsapp/date-parse.ts`) — o LLM não inventa data. Cobertura ampla:
+
+- Relativos: `hoje`, `ontem`, `anteontem`, `amanhã`, `depois de amanhã`.
+- Contagem: `daqui 3 dias`, `daqui a uma semana`, `em 2 dias`, `5 dias atrás`, `há 2 dias`.
+- Numérico: `05/06`, `5/6/26`, `05/06/2026`, `15-03`, `10-12-2025` (`.` não é separador, para não confundir com `Gol 1.0`).
+- Extenso: `dia 5`, `5 de junho`, `5 de jun`, `10 de dezembro de 2025`.
+- Dia da semana **só com qualificador**: `sexta que vem`/`próxima sexta` (futuro), `sábado passado` / `terça retrasada` (passado). Dia da semana **sem qualificador** ("na segunda") fica **ambíguo** → pergunta a data.
+
+O trecho de data reconhecido é removido do texto do serviço (não polui `servico`).
+
+## Workshop name backfill
+
+Não é responsabilidade deste agente: oficinas com `nome = "Oficina sem nome"` têm o nome perguntado/salvo pelo webhook **antes** de chamar este agente (ver regras §2.7). O onboarding só roda depois que o nome real está gravado.
+
 ## Consent Rules
 
 - If the workshop provides the customer WhatsApp for reminders, default `consentimento_whatsapp` to true for the MVP.

@@ -65,6 +65,8 @@ export type AgentReply = {
   status: LeadStatus;
   toolCalls: ToolCallRecord[];
   convertToOficina?: boolean;
+  /** Nome da oficina capturado no fluxo de conversão (acompanha convertToOficina). */
+  nomeOficina?: string | null;
   updatedContext?: ConversationContext;
   handoffRequired?: boolean;
   handoffReason?: string;
@@ -78,6 +80,10 @@ export type SalesConversationMemory = {
   greeted?: boolean;
   funcionamento_explained?: boolean;
   consecutive_fallback?: number;
+  /** Aguardando a oficina responder o nome antes de converter o lead. */
+  awaiting_workshop_name?: boolean;
+  /** Nome da oficina informado pelo lead durante a conversão. */
+  workshop_name?: string;
 };
 
 export type FaqVendasRecord = {
@@ -121,10 +127,23 @@ export type ConversationContext = {
     | "data_servico"
     | "marca_peca";
   service_draft?: ServiceDraft;
+  /**
+   * Cadastro com todos os campos preenchidos aguardando a oficina confirmar
+   * antes de gravar o serviço e disparar o template ao cliente final. Rede de
+   * segurança contra captura ruim (ex.: alucinação do Whisper — ver ADR-0017).
+   * Enquanto `true`, `service_draft` carrega o rascunho completo a confirmar.
+   */
+  awaiting_confirmation?: boolean;
   lastReminderId?: string;
   ambiguousReminderLookup?: boolean;
   supportHandoffReason?: string;
   sales?: SalesConversationMemory;
+  /**
+   * Conversa de oficina cujo cadastro ficou com nome placeholder
+   * ("Oficina sem nome"): aguardando a oficina responder o nome real
+   * antes de retomar o fluxo de onboarding/operação (backfill).
+   */
+  awaiting_workshop_name?: boolean;
 };
 
 export type RegisterServiceInput = {
@@ -310,6 +329,12 @@ export type WhatsappRepository = {
     nome: string;
     diasLembretePadrao: number;
   }>;
+  // Atualiza apenas o nome de uma oficina já cadastrada. Usado no backfill de
+  // oficinas que ficaram com o placeholder "Oficina sem nome".
+  updateOficinaNome?(input: {
+    oficinaId: string;
+    nome: string;
+  }): Promise<void>;
   registerServiceWithReminder?(input: RegisterServiceInput): Promise<RegisteredService>;
   // Conta mensagens inbound dos tipos image/document recebidas nas últimas
   // 24h da mesma conversa (whatsapp_from). Usado pelo rate limit de mídia.

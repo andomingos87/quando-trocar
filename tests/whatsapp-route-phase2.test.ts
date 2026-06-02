@@ -84,6 +84,7 @@ function phase2Repository(overrides: Record<string, unknown> = {}) {
       nome: "Oficina sem nome",
       diasLembretePadrao: 90,
     })),
+    updateOficinaNome: vi.fn(async () => undefined),
     registerServiceWithReminder: vi.fn(async () => ({
       clienteId: "cliente-id",
       veiculoId: "veiculo-id",
@@ -161,6 +162,146 @@ describe("whatsapp webhook phase 2", () => {
       to: "+5541999421180",
       body: expect.stringContaining("Pronto, sua oficina esta cadastrada."),
     });
+  });
+
+  test("personalizes the conversion confirmation with the workshop name", async () => {
+    const repository = phase2Repository({
+      convertLeadToOficina: vi.fn(async () => ({
+        oficinaId: "oficina-id",
+        nome: "Auto Center Silva",
+        diasLembretePadrao: 90,
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const agent = {
+      generateReply: vi.fn(async () => ({
+        body: "Perfeito.",
+        status: "teste_aceito" as const,
+        convertToOficina: true,
+        nomeOficina: "Auto Center Silva",
+        toolCalls: [],
+      })),
+    };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("Auto Center Silva"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.convertLeadToOficina).toHaveBeenCalledWith(
+      expect.objectContaining({ nomeOficina: "Auto Center Silva" }),
+    );
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: expect.stringContaining("a Auto Center Silva esta cadastrada"),
+    });
+  });
+
+  test("asks for the workshop name when the oficina has the placeholder name", async () => {
+    const repository = phase2Repository({
+      getOficinaByWhatsapp: vi.fn(async () => ({
+        id: "oficina-id",
+        nome: "Oficina sem nome",
+        whatsappPrincipal: "+5541999421180",
+        diasLembretePadrao: 90,
+      })),
+      upsertOficinaConversation: vi.fn(async () => ({
+        id: "conversation-id",
+        leadId: null,
+        oficinaId: "oficina-id",
+        agentMode: "onboarding" as const,
+        participantType: "oficina_cliente" as const,
+        context: {},
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const onboardingAgent = { generateReply: vi.fn() };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: { generateReply: vi.fn() },
+      onboardingAgent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("Joao, Civic 2018, troca de oleo hoje, 41999990000"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    // Não processa o cadastro enquanto não souber o nome da oficina.
+    expect(onboardingAgent.generateReply).not.toHaveBeenCalled();
+    expect(repository.updateConversationModeAndContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ awaiting_workshop_name: true }),
+      }),
+    );
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: expect.stringContaining("nome da sua oficina"),
+    });
+  });
+
+  test("saves the workshop name answer during backfill", async () => {
+    const repository = phase2Repository({
+      getOficinaByWhatsapp: vi.fn(async () => ({
+        id: "oficina-id",
+        nome: "Oficina sem nome",
+        whatsappPrincipal: "+5541999421180",
+        diasLembretePadrao: 90,
+      })),
+      upsertOficinaConversation: vi.fn(async () => ({
+        id: "conversation-id",
+        leadId: null,
+        oficinaId: "oficina-id",
+        agentMode: "onboarding" as const,
+        participantType: "oficina_cliente" as const,
+        context: { awaiting_workshop_name: true },
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const onboardingAgent = { generateReply: vi.fn() };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: { generateReply: vi.fn() },
+      onboardingAgent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("Auto Center Silva"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.updateOficinaNome).toHaveBeenCalledWith({
+      oficinaId: "oficina-id",
+      nome: "Auto Center Silva",
+    });
+    expect(repository.updateConversationModeAndContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ awaiting_workshop_name: false }),
+      }),
+    );
+    expect(onboardingAgent.generateReply).not.toHaveBeenCalled();
   });
 
   test("registers the first service for an active workshop and moves onboarding to operation", async () => {

@@ -42,7 +42,7 @@ It **does not quote a final price**. It may say "a partir de R$ X" (starting fro
 - Volume + ticket can be split across messages — the agent persists `sales.volume_known` / `sales.ticket_known` in `conversas.context` until both are known. Only then computes ROI. The opener **does not ask** for these numbers (ciclo 5); the agent only computes ROI if the lead volunteers them. When one number is given alone, the agent asks the missing one with an explicit easy out ("sem stress — bora pro teste de 14 dias").
 - ROI uses `configuracoes_vendedor.taxa_recuperacao_roi` (default 0.15). Text frames it as a tendency, not a promise: *"oficinas do seu tamanho costumam trazer de volta uns 15% dos clientes…"*.
 - FAQ lookup uses `faq_vendas` (active rows). Match by keyword count, ties broken by `ordem`.
-- If the lead accepts a test, set the reply path that allows conversion to `oficina`.
+- If the lead accepts a test, **ask for the workshop name** before converting; capture the answer, then set the reply path that allows conversion to `oficina` (carrying `nomeOficina`).
 - If the lead explicitly says no, mark the lead as lost only for clear negative intent.
 
 ## Pricing rule (ADR-0012)
@@ -74,7 +74,7 @@ The bot does not invent ranges, does not say "depende", does not commit to a fin
 - `confirmacao_neutra` → status unchanged; short ack if `funcionamento_explained`, else falls into the regular flow
 - `vai_pensar` → status unchanged; "sem pressa" copy, no handoff
 - `quer_humano` → status unchanged; **direct handoff** to commercial `wa.me`
-- `quer_testar` → `teste_aceito` and conversion path
+- `quer_testar` → `teste_aceito`; **ask for the workshop name first** (`sales.awaiting_workshop_name`). Only when the name answer is captured (`extractWorkshopName`) does the reply set `convertToOficina = true` + `nomeOficina`. The name is persisted in `sales.workshop_name`; the conversion writes it to `oficinas.nome` (empty → `"Oficina sem nome"` placeholder, which triggers backfill on next interaction).
 - `sem_interesse` → `perdido` only when explicit (`isExplicitLossMessage`)
 - `fora_escopo` → do not destroy an existing higher-value status; short copy when already explained
 

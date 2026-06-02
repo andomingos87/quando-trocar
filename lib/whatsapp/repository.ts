@@ -18,6 +18,11 @@ import type {
 const FAQ_CACHE_TTL_MS = 60_000;
 const CONFIG_CACHE_TTL_MS = 60_000;
 
+// Nome placeholder gravado quando a oficina é convertida sem informar o nome.
+// Usado como sentinela pelo backfill (bot pergunta o nome real na próxima
+// interação). Mantido em um único lugar pra evitar divergência de string.
+export const OFICINA_SEM_NOME = "Oficina sem nome";
+
 type SupabaseResult<T> = {
   data: T | null;
   error: { code?: string; message: string } | null;
@@ -596,7 +601,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     nomeOficina: string | null;
   }) {
     const now = new Date().toISOString();
-    const nome = input.nomeOficina ?? "Oficina sem nome";
+    const nome = input.nomeOficina?.trim() || OFICINA_SEM_NOME;
     const oficinaResult = (await this.supabase
       .from("oficinas")
       .upsert(
@@ -654,6 +659,18 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       nome: oficinaResult.data!.nome,
       diasLembretePadrao: oficinaResult.data!.dias_lembrete_padrao,
     };
+  }
+
+  async updateOficinaNome(input: { oficinaId: string; nome: string }) {
+    const nome = input.nome.trim();
+    if (!nome) return;
+
+    const result = (await this.supabase
+      .from("oficinas")
+      .update({ nome, updated_at: new Date().toISOString() })
+      .eq("id", input.oficinaId)) as SupabaseResult<null>;
+
+    throwIfError(result);
   }
 
   async registerServiceWithReminder(input: RegisterServiceInput): Promise<RegisteredService> {
