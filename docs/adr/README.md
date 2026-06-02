@@ -21,6 +21,10 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | accepted | 2026-05-17 |
 | [0012](./0012-politica-de-preco.md) | Plano único com preço configurável por oficina via painel admin | accepted | 2026-05-17 |
 | [0013](./0013-painel-admin-escopo-billing-auditoria.md) | Painel admin — escopo, billing mensal recorrente e auditoria | accepted | 2026-05-17 |
+| [0014](./0014-cadencia-e-template-por-tipo-de-servico.md) | Cadência e template Meta por tipo de serviço | accepted | 2026-05-22 |
+| [0015](./0015-suporte-audio-whisper.md) | Suporte a áudio via transcrição Whisper | accepted | 2026-05-21 |
+| [0016](./0016-suporte-imagem-pdf-sem-storage.md) | Suporte a imagem (vision) e documento PDF, sem Supabase Storage | accepted | 2026-05-21 |
+| [0017](./0017-confirmacao-antes-de-registrar-troca.md) | Confirmação da oficina antes de registrar a troca | accepted | 2026-06-02 |
 
 ### Em aberto (drafts)
 

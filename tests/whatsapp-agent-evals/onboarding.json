@@ -6,16 +6,11 @@
     "context": { "service_draft": {} },
     "input": "Carlos Silva, +5511999990001, Onix 2018, troca de oleo, 18/05/2026",
     "expected": {
-      "tool_calls": [{ "tool_name": "register_service" }],
-      "register_service_input": {
-        "nome_cliente": "Carlos Silva",
-        "whatsapp_cliente": "+5511999990001",
-        "veiculo": "Onix 2018",
-        "servico": "troca de oleo",
-        "data_servico": "2026-05-18"
-      }
+      "tool_calls": [{ "tool_name": "solicitou_confirmacao_cadastro" }],
+      "register_service_input": null,
+      "reply_must_contain": ["Confere", "Onix 2018", "sim"]
     },
-    "notes": "Caminho feliz: mensagem completa com vírgulas. Parser determinístico deve resolver sem chamar OpenAI."
+    "notes": "Caminho feliz: mensagem completa com vírgulas. Parser determinístico resolve sem OpenAI, mas o cadastro NÃO grava direto — mostra o resumo e aguarda confirmação (ADR-0017). Registro só em onb-008."
   },
   {
     "id": "onb-002",
@@ -45,16 +40,11 @@
     },
     "input": "11999990002",
     "expected": {
-      "tool_calls": [{ "tool_name": "register_service" }],
-      "register_service_input": {
-        "nome_cliente": "Maria Santos",
-        "whatsapp_cliente": "+5511999990002",
-        "veiculo": "HB20 2020",
-        "servico": "troca de oleo",
-        "data_servico": "2026-05-18"
-      }
+      "tool_calls": [{ "tool_name": "solicitou_confirmacao_cadastro" }],
+      "register_service_input": null,
+      "reply_must_contain": ["Confere", "HB20 2020"]
     },
-    "notes": "Follow-up só com telefone completa o draft. Normalização de WhatsApp para E.164 com +55."
+    "notes": "Follow-up só com telefone completa o draft (normaliza WhatsApp p/ E.164 com +55), mas o último campo dispara a confirmação, não o cadastro (ADR-0017)."
   },
   {
     "id": "onb-004",
@@ -67,7 +57,7 @@
       "register_service_input": null,
       "reply_must_not_contain": ["registrado", "cadastrado"]
     },
-    "notes": "Texto neutro não pode virar cadastro. Deve responder com orientação curta."
+    "notes": "Texto neutro não pode virar cadastro. Deve responder com orientação curta. (Em contexto de confirmação 'ok' significa sim — ver onb-008.)"
   },
   {
     "id": "onb-005",
@@ -89,9 +79,11 @@
     "context": { "service_draft": {} },
     "input": "João Pereira, +5511999990003, Civic 2019, alinhamento, hoje",
     "expected": {
-      "tool_calls": [{ "tool_name": "register_service" }]
+      "tool_calls": [{ "tool_name": "solicitou_confirmacao_cadastro" }],
+      "register_service_input": null,
+      "reply_must_contain": ["Confere", "Civic 2019"]
     },
-    "notes": "Em operacao, agente continua registrando serviços sem reiniciar onboarding. 'hoje' é resolvido pela data atual."
+    "notes": "Em operacao o agente continua sem reiniciar onboarding e 'hoje' resolve pela data atual, mas o cadastro também passa pela confirmação (ADR-0017)."
   },
   {
     "id": "onb-007",
@@ -100,11 +92,61 @@
     "context": { "service_draft": {} },
     "input": "Carlos Silva, +5511999990001, Onix 2018, troca de oleo, 18/05/2026 — o cliente pediu pra não receber lembrete",
     "expected": {
-      "tool_calls": [{ "tool_name": "register_service" }],
-      "register_service_input": {
-        "consentimento_whatsapp": false
+      "tool_calls": [{ "tool_name": "solicitou_confirmacao_cadastro" }],
+      "register_service_input": null
+    },
+    "notes": "Consentimento explícito negativo é capturado no draft (consentimento_whatsapp=false) e levado à confirmação; o efeito de não criar lembrete vale no cadastro pós-'sim'."
+  },
+  {
+    "id": "onb-008",
+    "critical": true,
+    "agent_mode": "onboarding",
+    "context": {
+      "awaiting_confirmation": true,
+      "service_draft": {
+        "nome_cliente": "Carlos Silva",
+        "whatsapp_cliente": "+5511999990001",
+        "veiculo": "Onix 2018",
+        "servico": "troca de oleo",
+        "data_servico": "2026-05-18",
+        "tipo_servico": "troca_oleo"
       }
     },
-    "notes": "Consentimento explícito negativo → registra serviço mas não cria lembrete."
+    "input": "sim, pode cadastrar",
+    "expected": {
+      "tool_calls": [{ "tool_name": "register_service" }],
+      "register_service_input": {
+        "nome_cliente": "Carlos Silva",
+        "whatsapp_cliente": "+5511999990001",
+        "veiculo": "Onix 2018",
+        "servico": "troca de oleo",
+        "data_servico": "2026-05-18"
+      }
+    },
+    "notes": "Confirmação afirmativa (ADR-0017) → grava o serviço e dispara o template ao cliente. Só aqui register_service acontece."
+  },
+  {
+    "id": "onb-009",
+    "critical": true,
+    "agent_mode": "operacao",
+    "context": {
+      "awaiting_confirmation": true,
+      "service_draft": {
+        "nome_cliente": "Maria Santos",
+        "whatsapp_cliente": "+5511999990002",
+        "veiculo": "Não houve loucura.",
+        "servico": "troca de amortecedor",
+        "data_servico": "2026-05-29",
+        "tipo_servico": "amortecedor",
+        "marca_peca": "perfect"
+      }
+    },
+    "input": "não, o carro é Gol",
+    "expected": {
+      "tool_calls": [{ "tool_name": "confirmou_cadastro" }],
+      "register_service_input": null,
+      "reply_must_not_contain": ["cadastrado", "registrado"]
+    },
+    "notes": "Regressão do incidente Whisper (veículo capturado como 'Não houve loucura'): na confirmação a oficina nega/corrige → o agente NÃO grava nem dispara o template ao cliente; reapresenta o resumo corrigido para novo 'sim'. Rede de segurança do ADR-0017."
   }
 ]

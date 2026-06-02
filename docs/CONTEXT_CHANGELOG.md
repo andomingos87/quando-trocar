@@ -19,6 +19,25 @@ Não registrar:
 
 ---
 
+## 2026-06-02 — Confirmação da oficina antes de registrar a troca
+
+### Adicionado
+
+- **[ADR-0017](./adr/0017-confirmacao-antes-de-registrar-troca.md)** — cadastro de troca vira fluxo de dois passos: o agente mostra um resumo e marca `awaiting_confirmation`; só grava e dispara o template ao cliente após a oficina responder afirmativamente. Rede de segurança que o [ADR-0015](./adr/0015-suporte-audio-whisper.md) assumia mas que não existia.
+- **`context.awaiting_confirmation`** em `lib/whatsapp/types.ts` + `handleConfirmation`/`confirmationReply`/`isAffirmativeConfirmation`/`mergeDraftCorrection` em `lib/whatsapp/onboarding-agent.ts`. Webhook inalterado (continua agindo sobre `registerServiceInput`).
+- **Seção 3.4 reescrita em `regras-de-negocio.md`** — confirmação obrigatória, detecção de afirmação por whitelist de tokens, fluxo de correção via LLM.
+- **Cobertura** — `tests/whatsapp-onboarding-agent.test.ts` adaptado ao fluxo de dois passos + casos de confirmação/correção; eval `tests/whatsapp-agent-evals/onboarding.json` (onb-008 confirma, onb-009 regressão do incidente Whisper). Suíte: 406 testes verde.
+
+### Motivação (incidente)
+
+- Cadastro por áudio em 2026-05-29: Whisper alucinou o veículo como "Não houve loucura.", o agente gravou e o template foi ao cliente final sem revisão. O ADR-0015 já aceitava o erro de transcrição assumindo correção manual da oficina — que não estava implementada.
+
+### Correção de índice
+
+- `docs/adr/README.md` passou a listar 0014–0017 (estava parado em 0013).
+
+---
+
 ## 2026-05-21 — Suporte a imagem (vision) e PDF (texto) sem Storage
 
 ### Adicionado
