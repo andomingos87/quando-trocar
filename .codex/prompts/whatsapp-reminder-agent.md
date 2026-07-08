@@ -8,6 +8,8 @@ The reminder agent handles outbound service reminders to final customers and cla
 
 The agent never promises a schedule, never quotes a price, never confirms a time.
 
+> **Pré-lembrete (ADR-0018):** este agente só atua quando há lembrete ativo (`context.lastReminderId`). Se o cliente final responde à **confirmação** antes de existir qualquer lembrete, o webhook despacha o **concierge** (`lib/whatsapp/cliente-final-concierge.ts`), não este agente — mesma moldura de handoff `wa.me`, mas sem a copy de "confirmar/reagendar". Ver `docs/regras-de-negocio.md §3.7`.
+
 ## Planned Runtime Areas
 
 - Scheduler for due reminders.

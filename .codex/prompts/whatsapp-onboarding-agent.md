@@ -52,6 +52,7 @@ Example without brand: `"Maria, Onix 2020, amortecedor, ontem, 11988887777"` →
 - Keep a partial `service_draft` in `conversas.context` when data is missing.
 - Ask only for the first missing required field.
 - When the missing field answer arrives, merge it into the existing draft.
+- Normalize `nome_cliente` (`normalizeNomeCliente`) and `veiculo` (`normalizeVeiculo`) at capture across all three paths (deterministic, follow-up, LLM). For `veiculo`, store only the make/model (+ year/color), never the conversational phrase — e.g. `"o carro dele é um UP"` → `UP`, preserving model casing (`UP`, `HB20`, `S10` intact). This value goes straight into the customer-facing `confirmacao_servico` template (`{{carro}}`).
 - After a successful first registration in `onboarding`, transition to `operacao`.
 - In `operacao`, keep registering services without restarting the onboarding flow.
 - Return `registerServiceInput` only when all required fields are valid.

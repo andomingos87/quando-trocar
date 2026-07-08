@@ -32,7 +32,7 @@ describe("whatsapp reminder agent", () => {
   test("opens handoff for scheduling interest without confirming an appointment", async () => {
     const agent = new WhatsappReminderAgent({ openai: null });
 
-    const reply = await agent.generateReply({ message: "quero agendar" });
+    const reply = await agent.generateReply({ message: "quero agendar", conversationContext: {} });
 
     expect(reply.intent).toBe("quer_agendar");
     expect(reply.handoffRequired).toBe(true);
@@ -56,7 +56,10 @@ describe("whatsapp reminder agent", () => {
       } as never,
     });
 
-    const reply = await agent.generateReply({ message: "ja troquei em outro lugar" });
+    const reply = await agent.generateReply({
+      message: "ja troquei em outro lugar",
+      conversationContext: {},
+    });
 
     expect(reply.intent).toBe("ja_fez_servico");
     expect(reply.lembreteStatus).toBe("respondido");

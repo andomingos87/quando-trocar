@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   WhatsappOnboardingAgent,
   normalizeNomeCliente,
+  normalizeVeiculo,
 } from "@/lib/whatsapp/onboarding-agent";
 import type { ConversationContext } from "@/lib/whatsapp/types";
 
@@ -31,6 +32,29 @@ describe("normalizeNomeCliente", () => {
     expect(normalizeNomeCliente("  ")).toBeNull();
     expect(normalizeNomeCliente("quero cadastrar o cliente")).toBeNull();
     expect(normalizeNomeCliente(null)).toBeNull();
+  });
+});
+
+describe("normalizeVeiculo", () => {
+  test("remove o embrulho conversacional, guardando só o modelo", () => {
+    expect(normalizeVeiculo("o carro dele é um UP")).toBe("UP");
+    expect(normalizeVeiculo("o carro é um Gol")).toBe("Gol");
+    expect(normalizeVeiculo("ela tem um HB20 prata")).toBe("HB20 Prata");
+    expect(normalizeVeiculo("carro: Onix")).toBe("Onix");
+    expect(normalizeVeiculo("o carro do cliente é uma S10")).toBe("S10");
+  });
+
+  test("preserva caixa de siglas/códigos e capitaliza tokens minúsculos", () => {
+    expect(normalizeVeiculo("UP")).toBe("UP");
+    expect(normalizeVeiculo("gol")).toBe("Gol");
+    expect(normalizeVeiculo("civic 2018")).toBe("Civic 2018");
+    expect(normalizeVeiculo("Civic 2018")).toBe("Civic 2018");
+  });
+
+  test("retorna null quando sobra só embrulho (sem modelo) ou vazio", () => {
+    expect(normalizeVeiculo("o carro dele é um")).toBeNull();
+    expect(normalizeVeiculo("   ")).toBeNull();
+    expect(normalizeVeiculo(null)).toBeNull();
   });
 });
 

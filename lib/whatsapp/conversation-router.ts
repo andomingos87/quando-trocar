@@ -13,6 +13,7 @@ type Phase2Repository = Pick<
   | "getOficinaByWhatsapp"
   | "getConversationByWhatsapp"
   | "findReminderConversationByWhatsapp"
+  | "findClienteFinalConversationByWhatsapp"
   | "upsertSupportConversation"
   | "upsertClienteFinalConversation"
   | "upsertOficinaConversation"
@@ -168,6 +169,57 @@ export async function resolveWhatsappConversation(input: {
         participantType: customerConversation.participantType ?? "contato_desconhecido",
         agentMode: "suporte",
         context: customerConversation.context ?? {},
+      };
+    }
+  }
+
+  // Cliente final que respondeu à CONFIRMAÇÃO antes de existir lembrete (ADR-0018).
+  // Sem isto cairia no fallback de vendas (lead de oficina) — público errado.
+  // Roteia como cliente_final no modo `cliente_final_lembrete` SEM `lastReminderId`;
+  // o webhook então despacha o concierge (não o agente de lembrete).
+  if (
+    input.repository.findClienteFinalConversationByWhatsapp &&
+    input.repository.upsertClienteFinalConversation
+  ) {
+    const conciergeConversation =
+      await input.repository.findClienteFinalConversationByWhatsapp({
+        whatsapp: input.whatsapp,
+      });
+
+    if (conciergeConversation?.agentMode === "suporte") {
+      return {
+        conversationId: conciergeConversation.id,
+        leadId: null,
+        leadStatus: null,
+        oficinaId: null,
+        clienteId: null,
+        oficinaNome: null,
+        diasLembretePadrao: null,
+        participantType: conciergeConversation.participantType ?? "contato_desconhecido",
+        agentMode: "suporte",
+        context: conciergeConversation.context ?? {},
+      };
+    }
+
+    if (conciergeConversation?.clienteId && conciergeConversation.oficinaId) {
+      const conversation = await input.repository.upsertClienteFinalConversation({
+        oficinaId: conciergeConversation.oficinaId,
+        clienteId: conciergeConversation.clienteId,
+        whatsapp: input.whatsapp,
+        context: conciergeConversation.context ?? {},
+      });
+
+      return {
+        conversationId: conversation.id,
+        leadId: null,
+        leadStatus: null,
+        oficinaId: conversation.oficinaId ?? conciergeConversation.oficinaId,
+        clienteId: conversation.clienteId ?? conciergeConversation.clienteId,
+        oficinaNome: null,
+        diasLembretePadrao: null,
+        participantType: "cliente_final",
+        agentMode: "cliente_final_lembrete",
+        context: conversation.context ?? conciergeConversation.context ?? {},
       };
     }
   }

@@ -443,6 +443,73 @@ describe("whatsapp webhook phase 2", () => {
     });
   });
 
+  test("envia o botão wa.me da oficina na confirmação quando o flag está ativo (ADR-0018)", async () => {
+    vi.stubEnv("WHATSAPP_CONFIRMACAO_BUTTON_WA_ME", "true");
+    try {
+      const getOficinaById = vi.fn(async () => ({
+        id: "oficina-id",
+        nome: "Auto Center Silva",
+        whatsappPrincipal: "+5541999421180",
+        diasLembretePadrao: 90,
+      }));
+      const repository = phase2Repository({
+        getOficinaByWhatsapp: vi.fn(async () => ({
+          id: "oficina-id",
+          nome: "Auto Center Silva",
+          whatsappPrincipal: "+5541999421180",
+          diasLembretePadrao: 90,
+        })),
+        getOficinaById,
+      });
+      const whatsapp = {
+        sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+        sendTemplateMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.tmpl-1" })),
+      };
+      const onboardingAgent = {
+        generateReply: vi.fn(async () => ({
+          body: "",
+          context: {},
+          registerServiceInput: {
+            nomeCliente: "Joao",
+            whatsappCliente: "+5541999990000",
+            veiculo: "Civic 2018",
+            servico: "troca de oleo",
+            dataServico: "2026-04-25",
+            valor: null,
+            consentimentoWhatsapp: true,
+            tipoServico: "troca_oleo" as const,
+            marcaPeca: null,
+          },
+          nextAgentMode: "operacao" as const,
+          toolCalls: [],
+        })),
+      };
+
+      const handlers = createWhatsappWebhookHandlers({
+        env,
+        repository,
+        whatsapp,
+        agent: { generateReply: vi.fn() },
+        onboardingAgent,
+      });
+
+      const response = await handlers.POST(
+        signedRequest(
+          inboundPayload("Joao, Civic 2018, troca de oleo hoje, 41999990000"),
+          env.WHATSAPP_APP_SECRET,
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      expect(getOficinaById).toHaveBeenCalledWith({ oficinaId: "oficina-id" });
+      expect(whatsapp.sendTemplateMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ urlButtonParameter: "5541999421180" }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   test("does not message the customer without consent", async () => {
     const repository = phase2Repository({
       getOficinaByWhatsapp: vi.fn(async () => ({

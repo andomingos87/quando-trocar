@@ -25,6 +25,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0015](./0015-suporte-audio-whisper.md) | Suporte a áudio via transcrição Whisper | accepted | 2026-05-21 |
 | [0016](./0016-suporte-imagem-pdf-sem-storage.md) | Suporte a imagem (vision) e documento PDF, sem Supabase Storage | accepted | 2026-05-21 |
 | [0017](./0017-confirmacao-antes-de-registrar-troca.md) | Confirmação da oficina antes de registrar a troca | accepted | 2026-06-02 |
+| [0018](./0018-cliente-final-concierge-pre-lembrete.md) | Concierge do cliente final antes do primeiro lembrete | accepted | 2026-06-14 |
 
 ### Em aberto (drafts)
 

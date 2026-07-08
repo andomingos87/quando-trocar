@@ -210,6 +210,74 @@ export function normalizeNomeCliente(
   return toTitleCaseName(value);
 }
 
+// A oficina costuma descrever o carro numa frase ("o carro dele é um UP",
+// "ela tem um HB20", "carro: Gol"). Guardamos SOMENTE o modelo/descrição, sem o
+// embrulho conversacional — esse valor vai direto pra mensagem que o cliente
+// final lê (template confirmacao_servico → {{carro}}).
+const VEICULO_STRIP_PATTERNS: ReadonlyArray<RegExp> = [
+  // posse: "ele/ela tem (um/uma)"
+  /^(?:ele|ela|eles|elas)\s+tem\s+(?:um|uma)?\s*/i,
+  // rótulo carro/veículo (+ possessivo opcional: dele, do cliente...). O \b
+  // depois do possessivo evita que "de" case dentro de "dele".
+  /^(?:carro|veiculo|veículo|auto|autom[oó]vel|moto)\b(?:\s+(?:dele|dela|deles|delas|do|da|de)\b(?:\s+cliente)?)?\s*/i,
+  // possessivo solto / "do cliente"
+  /^(?:dele|dela|deles|delas|do\s+cliente|da\s+cliente)\s+/i,
+  // artigos / determinantes
+  /^(?:o|a|os|as|um|uma|esse|essa|este|esta|aquele|aquela|meu|minha|seu|sua)\s+/i,
+  // cópula / rótulo de modelo
+  /^(?:é|eh|seria|do\s+modelo|modelo(?:\s+é)?)\s+/i,
+  // pontuação residual nas pontas
+  /^[\s:,.\-]+/,
+];
+
+// Modelos têm caixa idiossincrática (UP, HB20, T-Cross, S10, 208). Preservamos
+// tokens que já tenham maiúscula ou dígito; só capitalizamos a inicial de
+// tokens 100% minúsculos (gol → Gol, civic → Civic).
+function capitalizeVehicleToken(word: string): string {
+  if (!word) return word;
+  if (/[A-ZÀ-Ý0-9]/.test(word)) return word;
+  return word.replace(/^(\p{L})/u, (ch) => ch.toLocaleUpperCase("pt-BR"));
+}
+
+// Palavras do embrulho conversacional. Usadas só pra aparar as PONTAS do
+// resultado (nunca o miolo, pra não quebrar "Gol G5 de Luxo"), cobrindo o que
+// sobra quando o padrão exige espaço seguinte (ex.: "um" no fim da frase).
+const VEICULO_STOPWORDS = new Set([
+  "o", "a", "os", "as", "um", "uma", "é", "eh", "e",
+  "de", "do", "da", "dele", "dela", "deles", "delas",
+  "carro", "veiculo", "veículo", "modelo", "tem", "seria",
+]);
+
+export function normalizeVeiculo(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let value = raw.replace(/\s+/g, " ").trim();
+  if (!value) return null;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pattern of VEICULO_STRIP_PATTERNS) {
+      const next = value.replace(pattern, "");
+      if (next !== value) {
+        value = next.trim();
+        changed = true;
+      }
+    }
+  }
+
+  value = value.replace(/[\s:,.\-]+$/g, "").trim();
+  if (!value) return null;
+
+  const tokens = value.split(/\s+/).filter(Boolean);
+  const isStopword = (token: string) =>
+    VEICULO_STOPWORDS.has(token.toLocaleLowerCase("pt-BR"));
+  while (tokens.length && isStopword(tokens[0])) tokens.shift();
+  while (tokens.length && isStopword(tokens[tokens.length - 1])) tokens.pop();
+  if (!tokens.length) return null;
+
+  return tokens.map(capitalizeVehicleToken).join(" ");
+}
+
 function parseDeterministic(message: string, today: string): ServiceDraft {
   const phone = extractPhone(message);
   const withoutPhone = removePhone(message, phone);
@@ -229,7 +297,10 @@ function parseDeterministic(message: string, today: string): ServiceDraft {
     const nome = normalizeNomeCliente(parts[0]);
     if (nome) draft.nome_cliente = nome;
   }
-  if (parts[1]) draft.veiculo = parts[1];
+  if (parts[1]) {
+    const veiculo = normalizeVeiculo(parts[1]);
+    if (veiculo) draft.veiculo = veiculo;
+  }
   if (service) draft.servico = service;
   if (phone) draft.whatsapp_cliente = normalizeWhatsappPhone(phone);
   if (parsedDate.date) draft.data_servico = parsedDate.date;
@@ -272,7 +343,8 @@ function applyFollowUp(
 
   if (context.missing_field === "veiculo") {
     if (!isNeutralMessage(message) && !isQuestionLike(message) && message.trim().length >= 3) {
-      draft.veiculo = message.trim();
+      const veiculo = normalizeVeiculo(message);
+      if (veiculo) draft.veiculo = veiculo;
     }
   }
 
@@ -339,7 +411,9 @@ function draftToRegisterInput(
   return {
     nomeCliente: draft.nome_cliente!,
     whatsappCliente: draft.whatsapp_cliente!,
-    veiculo: draft.veiculo!,
+    // Guard final antes de persistir: garante veículo limpo mesmo se algum
+    // caminho de captura tiver escapado da normalização.
+    veiculo: normalizeVeiculo(draft.veiculo) ?? draft.veiculo!,
     servico: draft.servico!,
     dataServico: draft.data_servico!,
     valor: draft.valor ?? null,
@@ -389,7 +463,7 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
       whatsapp_cliente: parsed.data.whatsapp_cliente
         ? normalizeWhatsappPhone(parsed.data.whatsapp_cliente)
         : undefined,
-      veiculo: parsed.data.veiculo ?? undefined,
+      veiculo: normalizeVeiculo(parsed.data.veiculo) ?? undefined,
       servico: parsed.data.servico ?? undefined,
       data_servico: parsed.data.data_servico ?? undefined,
       valor: parsed.data.valor ?? null,
@@ -725,7 +799,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
           {
             role: "system",
             content:
-              "Extraia dados de cadastro de troca de oficina. Responda apenas JSON compacto no schema solicitado.",
+              "Extraia dados de cadastro de troca de oficina. Responda apenas JSON compacto no schema solicitado. No campo veiculo devolva SOMENTE marca/modelo (e ano/cor se houver), nunca a frase inteira — ex.: 'o carro dele é um UP' → 'UP'.",
           },
           { role: "user", content: message },
         ],

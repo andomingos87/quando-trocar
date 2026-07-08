@@ -24,6 +24,14 @@ type MetaMessage = {
   video?: MetaMediaAttachment;
   location?: Record<string, unknown>;
   contacts?: unknown[];
+  // Resposta de botão de template (quick-reply): o texto do botão é a mensagem.
+  button?: { text?: string; payload?: string };
+  // Resposta interativa (button_reply / list_reply): o título escolhido é a mensagem.
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string; description?: string };
+  };
 };
 
 type MetaContact = {
@@ -200,9 +208,41 @@ export function extractInboundMessages(payload: unknown): InboundWhatsappMessage
           continue;
         }
 
-        // Tipo desconhecido (ex.: reactions, system, novos tipos do Meta).
-        // Emitimos `unsupported` para que o webhook responda algo em vez de
-        // ficar mudo.
+        // Toque em botão de quick-reply de template (`type: "button"`). O texto
+        // do botão é a intenção do usuário — tratamos como texto pra o agente
+        // ler normalmente, em vez de cair em "não consegui ler". O `context.id`
+        // (mensagem citada) já vai em `common.contextWhatsappMessageId`.
+        if (message.type === "button") {
+          const buttonText = message.button?.text?.trim();
+          if (buttonText) {
+            messages.push({
+              ...common,
+              body: buttonText,
+              mediaType: "text",
+            });
+            continue;
+          }
+        }
+
+        // Resposta interativa (button_reply / list_reply). O título escolhido
+        // pelo usuário é o conteúdo — também vira texto.
+        if (message.type === "interactive") {
+          const interactiveTitle =
+            message.interactive?.button_reply?.title?.trim() ||
+            message.interactive?.list_reply?.title?.trim();
+          if (interactiveTitle) {
+            messages.push({
+              ...common,
+              body: interactiveTitle,
+              mediaType: "text",
+            });
+            continue;
+          }
+        }
+
+        // Tipo desconhecido (ex.: reactions, system, novos tipos do Meta) ou
+        // button/interactive malformado (sem texto). Emitimos `unsupported`
+        // para que o webhook responda algo em vez de ficar mudo.
         if (message.type) {
           messages.push({
             ...common,

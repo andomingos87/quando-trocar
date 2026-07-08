@@ -155,7 +155,7 @@ describe("whatsapp webhook handlers", () => {
       }),
       saveOutboundMessage: vi.fn(async () => {
         calls.push("outbound-message");
-        return { id: "outbound-message-id" };
+        return { duplicate: false, messageId: "outbound-message-id" };
       }),
       markOutboundSent: vi.fn(async () => {
         calls.push("sent");

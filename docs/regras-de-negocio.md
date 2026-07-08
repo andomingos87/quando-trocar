@@ -293,6 +293,8 @@ Condicional:
 
 O `nome_cliente` é **normalizado na captura** (`normalizeNomeCliente` em `lib/whatsapp/onboarding-agent.ts`): remove frases de intenção/rótulo que a oficina às vezes envia junto (ex.: "Quero cadastrar o cliente Luca Marcilli" → `Luca Marcilli`), apara pontuação nas pontas e aplica caixa de nome próprio (partículas `de/da/do/das/dos/e` em minúsculas). Aplica-se aos três pontos de captura: parser determinístico, resposta de follow-up e extração via LLM. Se sobrar vazio após normalizar, o campo continua faltante e o bot pergunta o nome.
 
+O `veiculo` é **normalizado na captura** (`normalizeVeiculo` em `lib/whatsapp/onboarding-agent.ts`): remove o embrulho conversacional que a oficina costuma escrever (ex.: "o carro dele é um UP" → `UP`, "ela tem um HB20 prata" → `HB20 Prata`, "carro: Onix" → `Onix`), apara stopwords/pontuação nas pontas e ajusta a caixa preservando siglas/códigos de modelo (`UP`, `HB20`, `S10`, `208` ficam intactos; `gol`→`Gol`, `civic`→`Civic`). Aplica-se aos três pontos de captura (parser determinístico, follow-up e LLM) + guard final antes de persistir; o prompt da LLM também exige devolver só marca/modelo. Esse valor vai direto pra mensagem que o cliente final lê (template `confirmacao_servico` → `{{carro}}`), então não pode conter frase. Se sobrar vazio após normalizar, o campo continua faltante e o bot pergunta o carro.
+
 Se faltar algum, o bot pergunta **só o primeiro faltante**, persiste o draft parcial em `conversas.context.service_draft`, e completa multi-turn.
 
 **Cobertura de formatos de `data_servico`** (`parseBrazilianDate` em `lib/whatsapp/date-parse.ts`, com `today` no fuso `America/Sao_Paulo`):
@@ -344,8 +346,27 @@ Logo após o cadastro do serviço (RPC bem-sucedida), o bot envia uma **confirma
 - **Não bloqueante**: qualquer falha de envio (template não aprovado, erro do provedor) é registrada (`outbound_messages` em `failed` + `agent_tool_calls.notify_cliente_confirmacao`) mas **não** derruba a resposta de confirmação para a oficina.
 - **Reflexo na resposta à oficina**: quando a confirmação é enviada, o bot acrescenta "Já avisei o {cliente} que o serviço foi registrado." à mensagem de cadastro.
 - A conversa do cliente final é criada/reusada em `conversas` (`participant_type = cliente_final`, `agent_mode = cliente_final_lembrete`).
+- **Botão "Chamar no WhatsApp"** (ADR-0018): o template tem um botão **CTA de URL `https://wa.me/{{1}}`**, com `{{1}}` = WhatsApp da oficina (passado no envio). O cliente fala direto com a oficina; o botão **não** devolve mensagem ao bot. A copy do corpo direciona a esse botão.
 
-- Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), `lib/whatsapp/service-confirmation.ts`, `sendServiceConfirmation()` em `lib/whatsapp/webhook-handler.ts`.
+- Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), [ADR-0018](./adr/0018-cliente-final-concierge-pre-lembrete.md), `lib/whatsapp/service-confirmation.ts`, `sendServiceConfirmation()` em `lib/whatsapp/webhook-handler.ts`.
+
+### 3.7 Concierge do cliente final antes do primeiro lembrete (ADR-0018)
+Entre a confirmação e o primeiro lembrete há uma janela em que o cliente final pode responder. Nessa janela ele **não** é lead de vendas:
+- **Reconhecimento**: o roteador identifica o cliente final por telefone via `findClienteFinalConversationByWhatsapp` (conversa `cliente_final` em `conversas`, independente de lembrete). Resolve `agent_mode = cliente_final_lembrete` **sem `lastReminderId`**; o webhook bifurca por esse campo — com lembrete ativo → agente de lembrete; sem → **concierge** (`lib/whatsapp/cliente-final-concierge.ts`). Ambiguidade multi-oficina (telefone com outbound de 2+ oficinas) → handoff suporte, como no lookup de lembrete.
+- **Comportamento (determinístico, sem LLM)** — intents e ações:
+
+| Intent | Resposta | Efeito |
+|---|---|---|
+| `agradecimento` | curta + link da oficina | — |
+| `quem_e` | explica (assistente da oficina via Quando Trocar) + link | — |
+| `pedido_oficina` (preço, agendar, remarcar, horário, reclamação) | handoff `wa.me` pra oficina | `markConversationHandoff(pedido_cliente_final)` |
+| `opt_out` | "não envio mais mensagens" | `clienteStatus = opt_out` + cancela lembretes futuros |
+| `numero_errado` | "desculpe o engano" | `clienteStatus = numero_errado` + cancela lembretes futuros |
+| `nao_reconhece` | handoff pra oficina verificar | `markConversationHandoff(cliente_nao_reconhece)` |
+| `mensagem_indefinida` | handoff (destino seguro) | `markConversationHandoff(mensagem_ambigua)` |
+
+- Bot não cota preço nem agenda ([ADR-0009](./adr/0009-confirmacao-vs-pre-agendamento.md)/[ADR-0012](./adr/0012-politica-de-preco.md)); opt-out/status nunca via LLM ([ADR-0001](./adr/0001-llm-como-conselheiro-nao-decisor.md)). Tool call `cliente_final_concierge` registrada sempre.
+- Fonte: [ADR-0018](./adr/0018-cliente-final-concierge-pre-lembrete.md), `lib/whatsapp/cliente-final-concierge.ts`, `lib/whatsapp/conversation-router.ts`, `lib/whatsapp/webhook-handler.ts`.
 
 ---
 

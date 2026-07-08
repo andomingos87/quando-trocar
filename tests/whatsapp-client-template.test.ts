@@ -90,4 +90,50 @@ describe("WhatsAppCloudApiClient.sendTemplateMessage", () => {
       { type: "text", text: "óleo" },
     ]);
   });
+
+  test("inclui componente de botão URL quando urlButtonParameter é passado", async () => {
+    const fetchMock = mockFetchOk();
+    const client = new WhatsAppCloudApiClient({ accessToken: "token", phoneNumberId: "123" });
+
+    await client.sendTemplateMessage({
+      to: "+5541999990000",
+      templateName: "confirmacao_servico",
+      languageCode: "pt_BR",
+      bodyParameters: ["Joao"],
+      bodyParameterNames: ["nome"],
+      urlButtonParameter: "5541999990000",
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(init.body as string);
+    const button = payload.template.components.find(
+      (c: { type: string }) => c.type === "button",
+    );
+    expect(button).toMatchObject({
+      type: "button",
+      sub_type: "url",
+      index: "0",
+      parameters: [{ type: "text", text: "5541999990000" }],
+    });
+  });
+
+  test("sem urlButtonParameter não inclui componente de botão", async () => {
+    const fetchMock = mockFetchOk();
+    const client = new WhatsAppCloudApiClient({ accessToken: "token", phoneNumberId: "123" });
+
+    await client.sendTemplateMessage({
+      to: "+5541999990000",
+      templateName: "confirmacao_servico",
+      languageCode: "pt_BR",
+      bodyParameters: ["Joao"],
+      bodyParameterNames: ["nome"],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(init.body as string);
+    const button = payload.template.components.find(
+      (c: { type: string }) => c.type === "button",
+    );
+    expect(button).toBeUndefined();
+  });
 });

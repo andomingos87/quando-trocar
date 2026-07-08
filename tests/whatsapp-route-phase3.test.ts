@@ -140,6 +140,8 @@ function phase3Repository(overrides: Record<string, unknown> = {}) {
     createOutboundMessage: vi.fn(async () => ({ id: "freeform-outbound-id" })),
     markOutboundSent: vi.fn(async () => undefined),
     markOutboundFailed: vi.fn(async () => undefined),
+    updateLeadStatus: vi.fn(async () => undefined),
+    getOficinaById: vi.fn(async () => null),
     ...overrides,
   };
 }
@@ -292,5 +294,73 @@ describe("whatsapp webhook phase 3", () => {
       to: "+5541999990000",
       body: "Recebi sua mensagem. Vou avisar a oficina para continuar com voce.",
     });
+  });
+
+  test("cliente final respondendo à confirmação (sem lembrete) usa o concierge, não o reminder agent", async () => {
+    const repository = phase3Repository({
+      // Sem lembrete ativo: o lookup de lembrete não acha; o de cliente final sim.
+      findReminderConversationByWhatsapp: vi.fn(async () => null),
+      findClienteFinalConversationByWhatsapp: vi.fn(async () => ({
+        id: "concierge-conversation",
+        leadId: null,
+        oficinaId: "oficina-id",
+        clienteId: "cliente-id",
+        participantType: "cliente_final" as const,
+        agentMode: "cliente_final_lembrete" as const,
+        context: {},
+      })),
+      upsertClienteFinalConversation: vi.fn(async () => ({
+        id: "concierge-conversation",
+        leadId: null,
+        oficinaId: "oficina-id",
+        clienteId: "cliente-id",
+        participantType: "cliente_final" as const,
+        agentMode: "cliente_final_lembrete" as const,
+        context: {},
+      })),
+      getOficinaById: vi.fn(async () => ({
+        id: "oficina-id",
+        nome: "Auto Peças Anderson",
+        whatsappPrincipal: "+5541999990000",
+        diasLembretePadrao: 90,
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-concierge-1" })),
+      sendTemplateMessage: vi.fn(),
+    };
+    const reminderAgent = { generateReply: vi.fn() };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: { generateReply: vi.fn() },
+      reminderAgent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundCustomerPayload("quanto custou?"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.upsertLead).not.toHaveBeenCalled();
+    // Reminder agent NÃO é chamado: não há lembrete ativo.
+    expect(reminderAgent.generateReply).not.toHaveBeenCalled();
+    expect(repository.getOficinaById).toHaveBeenCalledWith({ oficinaId: "oficina-id" });
+    // Pedido acionável → handoff pra oficina.
+    expect(repository.markConversationHandoff).toHaveBeenCalledWith({
+      conversationId: "concierge-conversation",
+      reason: "pedido_cliente_final",
+    });
+    expect(repository.saveAgentToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: "cliente_final_concierge" }),
+    );
+    const sent = (
+      whatsapp.sendTextMessage.mock.calls[0] as unknown as [{ to: string; body: string }]
+    )[0];
+    expect(sent.to).toBe("+5541999990000");
+    expect(sent.body).toContain("Auto Peças Anderson");
+    expect(sent.body).toContain("https://wa.me/5541999990000");
   });
 });

@@ -210,3 +210,74 @@ describe("extractInboundMessages — mídia adicional (F0 fallback / ADR-0016)",
     expect(messages[0].mediaType).toBe("unsupported");
   });
 });
+
+describe("extractInboundMessages — botões de template / interactive (2a)", () => {
+  test("type=button (quick-reply de template) → mediaType=text com o texto do botão", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.button-1",
+        timestamp: "1714070400",
+        type: "button",
+        context: { id: "wamid.confirmacao-original" },
+        button: { text: "Chamar no WhatsApp", payload: "chamar_whatsapp" },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      mediaType: "text",
+      body: "Chamar no WhatsApp",
+      contextWhatsappMessageId: "wamid.confirmacao-original",
+    });
+    expect(messages[0].mediaId).toBeUndefined();
+  });
+
+  test("type=interactive button_reply → mediaType=text com o título escolhido", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.interactive-1",
+        type: "interactive",
+        interactive: {
+          type: "button_reply",
+          button_reply: { id: "btn-1", title: "Confirmar" },
+        },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ mediaType: "text", body: "Confirmar" });
+  });
+
+  test("type=interactive list_reply → mediaType=text com o título da opção", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.interactive-2",
+        type: "interactive",
+        interactive: {
+          type: "list_reply",
+          list_reply: { id: "opt-1", title: "Reagendar", description: "Mudar a data" },
+        },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({ mediaType: "text", body: "Reagendar" });
+  });
+
+  test("button sem texto (malformado) → mediaType=unsupported", () => {
+    const messages = extractInboundMessages(
+      payloadWithMessage({
+        from: "5541999999999",
+        id: "wamid.button-bad",
+        type: "button",
+        button: { payload: "sem_texto" },
+      }),
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].mediaType).toBe("unsupported");
+  });
+});

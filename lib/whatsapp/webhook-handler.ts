@@ -20,6 +20,7 @@ import { WhatsappOnboardingAgent } from "./onboarding-agent";
 import { extractWorkshopName } from "./sales-agent";
 import { OFICINA_SEM_NOME } from "./repository";
 import { WhatsappReminderAgent } from "./reminder-agent";
+import { WhatsappClienteFinalConciergeAgent } from "./cliente-final-concierge";
 import { WhatsappSupportAgent } from "./support-agent";
 import {
   extractInboundMessages,
@@ -35,6 +36,7 @@ import {
   type DocumentExtractionResult,
 } from "./document-text";
 import type {
+  ClienteFinalConciergeAgent,
   CobrancaAgent,
   CobrancaSubmode,
   ConversationAgentMode,
@@ -154,6 +156,7 @@ type HandlerDeps = {
   agent: SalesAgent;
   onboardingAgent?: OnboardingAgent;
   reminderAgent?: ReminderAgent;
+  conciergeAgent?: ClienteFinalConciergeAgent;
   supportAgent?: SupportAgent;
   cobrancaAgent?: CobrancaAgent;
   mediaDownloader?: MediaDownloader;
@@ -553,6 +556,22 @@ async function sendServiceConfirmation(input: {
   const renderedBody = renderServiceConfirmation(confirmationArgs);
   const params = serviceConfirmationParams(confirmationArgs);
 
+  // Botão "Chamar no WhatsApp" como CTA wa.me da oficina (ADR-0018). Gated por
+  // env: só manda o parâmetro depois que o template na Meta tiver o botão de URL
+  // `https://wa.me/{{1}}`. Enviar o componente antes da edição do template
+  // quebraria o send (mismatch). O `{{1}}` é o número da oficina (só dígitos).
+  let urlButtonParameter: string | undefined;
+  if (
+    process.env.WHATSAPP_CONFIRMACAO_BUTTON_WA_ME === "true" &&
+    deps.repository.getOficinaById
+  ) {
+    const oficina = await deps.repository.getOficinaById({ oficinaId });
+    const digits = oficina?.whatsappPrincipal?.replace(/\D/g, "");
+    if (digits && digits.length >= 10) {
+      urlButtonParameter = digits;
+    }
+  }
+
   let conversationId: string;
   try {
     const conversation = await deps.repository.upsertClienteFinalConversation({
@@ -585,6 +604,7 @@ async function sendServiceConfirmation(input: {
       languageCode: SERVICE_CONFIRMATION_TEMPLATE.language,
       bodyParameters: params,
       bodyParameterNames: [...SERVICE_CONFIRMATION_PARAM_NAMES],
+      urlButtonParameter,
     });
     await deps.repository.markOutboundSent({
       outboundMessageId: outbox.id,
@@ -635,6 +655,8 @@ async function sendServiceConfirmation(input: {
 export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   const onboardingAgent = deps.onboardingAgent ?? new WhatsappOnboardingAgent();
   const reminderAgent = deps.reminderAgent ?? new WhatsappReminderAgent();
+  const conciergeAgent =
+    deps.conciergeAgent ?? new WhatsappClienteFinalConciergeAgent();
   const supportAgent = deps.supportAgent ?? new WhatsappSupportAgent();
   const cobrancaAgent = deps.cobrancaAgent ?? new WhatsappCobrancaAgent();
   const mediaDownloader: MediaDownloader | null =
@@ -1269,6 +1291,68 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             } else {
               replyBody = onboardingReply.body;
             }
+          } else if (
+            effectiveAgentMode === "cliente_final_lembrete" &&
+            !resolved.context.lastReminderId
+          ) {
+            // CONCIERGE (ADR-0018): cliente final respondeu à confirmação antes
+            // de existir qualquer lembrete. Resposta curta + handoff wa.me pra
+            // oficina — nunca o agente de vendas nem o de lembrete.
+            const oficina =
+              resolved.oficinaId && deps.repository.getOficinaById
+                ? await deps.repository.getOficinaById({ oficinaId: resolved.oficinaId })
+                : null;
+            const conciergeReply = conciergeAgent.generateReply({
+              message: inbound.body,
+              workshopName: oficina?.nome ?? resolved.oficinaNome ?? "a oficina",
+              workshopWhatsapp: oficina?.whatsappPrincipal ?? null,
+            });
+
+            if (
+              conciergeReply.clienteStatus &&
+              resolved.clienteId &&
+              deps.repository.updateClienteFinalStatus
+            ) {
+              await deps.repository.updateClienteFinalStatus({
+                clienteId: resolved.clienteId,
+                status: conciergeReply.clienteStatus,
+                optOutAt:
+                  conciergeReply.clienteStatus === "opt_out"
+                    ? new Date().toISOString()
+                    : undefined,
+              });
+            }
+
+            if (
+              conciergeReply.shouldCancelFutureReminders &&
+              resolved.clienteId &&
+              deps.repository.cancelFutureRemindersForCliente
+            ) {
+              await deps.repository.cancelFutureRemindersForCliente({
+                clienteId: resolved.clienteId,
+              });
+            }
+
+            if (conciergeReply.handoffRequired && deps.repository.markConversationHandoff) {
+              await deps.repository.markConversationHandoff({
+                conversationId: resolved.conversationId,
+                reason: conciergeReply.handoffReason ?? "mensagem_ambigua",
+              });
+            }
+
+            for (const toolCall of conciergeReply.toolCalls) {
+              await deps.repository.saveAgentToolCall({
+                conversationId: resolved.conversationId,
+                leadId: null,
+                oficinaId: resolved.oficinaId,
+                clienteId: resolved.clienteId,
+                toolName: toolCall.toolName,
+                input: toolCall.input,
+                output: toolCall.output,
+              });
+            }
+
+            replyBody = conciergeReply.replyBody;
           } else if (effectiveAgentMode === "cliente_final_lembrete") {
             const reminderReply = await reminderAgent.generateReply({
               message: inbound.body,

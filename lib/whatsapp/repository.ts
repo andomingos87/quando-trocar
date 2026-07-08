@@ -291,6 +291,29 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     };
   }
 
+  async getOficinaById(input: { oficinaId: string }) {
+    const result = (await this.supabase
+      .from("oficinas")
+      .select("id,nome,whatsapp_principal,dias_lembrete_padrao")
+      .eq("id", input.oficinaId)
+      .maybeSingle()) as SupabaseResult<{
+      id: string;
+      nome: string;
+      whatsapp_principal: string;
+      dias_lembrete_padrao: number;
+    }>;
+
+    throwIfError(result);
+    if (!result.data) return null;
+
+    return {
+      id: result.data.id,
+      nome: result.data.nome,
+      whatsappPrincipal: result.data.whatsapp_principal,
+      diasLembretePadrao: result.data.dias_lembrete_padrao,
+    };
+  }
+
   async getConversationByWhatsapp(input: { whatsapp: string }) {
     const result = (await this.supabase
       .from("conversas")
@@ -424,6 +447,65 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
           },
         })
       : null;
+  }
+
+  // Reconhece um cliente final que respondeu à CONFIRMAÇÃO de serviço, antes de
+  // existir qualquer lembrete (ADR-0018). A confirmação cria a conversa
+  // cliente_final em `conversas` (chaveada por participant_whatsapp), mas sem
+  // lembrete — por isso `findReminderConversationByWhatsapp` não a acha. Aqui
+  // vamos direto na conversa, e detectamos ambiguidade multi-oficina pelo
+  // histórico de outbound (espelhando o lookup de lembrete).
+  async findClienteFinalConversationByWhatsapp(input: { whatsapp: string }) {
+    const outbound = (await this.supabase
+      .from("outbound_messages")
+      .select("oficina_id")
+      .eq("to_whatsapp", input.whatsapp)
+      .not("oficina_id", "is", null)
+      .order("sent_at", { ascending: false })
+      .limit(10)) as SupabaseResult<Array<{ oficina_id: string | null }>>;
+
+    throwIfError(outbound);
+
+    const distinctOffices = new Set(
+      (outbound.data ?? [])
+        .map((row) => row.oficina_id)
+        .filter((value): value is string => Boolean(value)),
+    );
+
+    if (distinctOffices.size > 1) {
+      return this.upsertSupportConversation({
+        whatsapp: input.whatsapp,
+        context: {
+          ambiguousReminderLookup: true,
+          supportHandoffReason: "cliente_final_ambiguo",
+        },
+      });
+    }
+
+    const conversation = (await this.supabase
+      .from("conversas")
+      .select("id,lead_id,oficina_id,cliente_id,participant_type,agent_mode,context")
+      .eq("participant_whatsapp", input.whatsapp)
+      .eq("participant_type", "cliente_final")
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{
+      id: string;
+      lead_id: string | null;
+      oficina_id: string | null;
+      cliente_id: string | null;
+      participant_type: ParticipantType;
+      agent_mode: ConversationAgentMode;
+      context: ConversationContext | null;
+    }>;
+
+    throwIfError(conversation);
+
+    if (!conversation.data?.cliente_id || !conversation.data.oficina_id) {
+      return null;
+    }
+
+    return mapConversation(conversation.data);
   }
 
   async upsertSupportConversation(input: {

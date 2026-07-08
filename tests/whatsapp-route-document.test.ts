@@ -171,7 +171,8 @@ describe("whatsapp webhook — fluxo de documento PDF (ADR-0016)", () => {
         message: expect.stringContaining("[documento]"),
       }),
     );
-    const passedMessage = agent.generateReply.mock.calls[0][0].message as string;
+    const passedMessage = (agent.generateReply.mock.calls[0] as unknown as [{ message: string }])[0]
+      .message;
     expect(passedMessage).toContain("R$ 320,00");
     expect(passedMessage).toContain("olha o orçamento");
     expect(repository.saveInboundMessage).toHaveBeenCalledWith(
@@ -217,7 +218,7 @@ describe("whatsapp webhook — fluxo de documento PDF (ADR-0016)", () => {
         transcriptionStatus: "empty",
       }),
     );
-    const call = whatsapp.sendTextMessage.mock.calls[0][0] as { body: string };
+    const call = (whatsapp.sendTextMessage.mock.calls[0] as unknown as [{ body: string }])[0];
     expect(call.body.toLowerCase()).toContain("texto");
   });
 

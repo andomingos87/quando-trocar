@@ -170,7 +170,8 @@ describe("whatsapp webhook — fluxo de imagem (ADR-0016)", () => {
       }),
     );
     // Body contém a descrição e a legenda
-    const passedMessage = agent.generateReply.mock.calls[0][0].message as string;
+    const passedMessage = (agent.generateReply.mock.calls[0] as unknown as [{ message: string }])[0]
+      .message;
     expect(passedMessage).toContain("84.500 km");
     expect(passedMessage).toContain("olha o km");
     expect(repository.saveInboundMessage).toHaveBeenCalledWith(
@@ -215,7 +216,8 @@ describe("whatsapp webhook — fluxo de imagem (ADR-0016)", () => {
     );
 
     expect(response.status).toBe(200);
-    const passedMessage = agent.generateReply.mock.calls[0][0].message as string;
+    const passedMessage = (agent.generateReply.mock.calls[0] as unknown as [{ message: string }])[0]
+      .message;
     expect(passedMessage).toBe("[imagem] Nota fiscal R$ 320,00");
   });
 
@@ -242,7 +244,7 @@ describe("whatsapp webhook — fluxo de imagem (ADR-0016)", () => {
 
     expect(response.status).toBe(200);
     expect(agent.generateReply).not.toHaveBeenCalled();
-    const call = whatsapp.sendTextMessage.mock.calls[0][0] as { body: string };
+    const call = (whatsapp.sendTextMessage.mock.calls[0] as unknown as [{ body: string }])[0];
     expect(call.body.toLowerCase()).toContain("foto");
     expect(call.body.toLowerCase()).toContain("texto");
     expect(repository.saveInboundMessage).toHaveBeenCalledWith(

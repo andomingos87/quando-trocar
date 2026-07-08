@@ -71,6 +71,6 @@ export function renderServiceConfirmation(
     `Registramos a troca de ${input.productLabel} do seu carro: ${input.vehicleDescription}`,
     `No local: ${input.workshopName}`,
     "",
-    "Vamos te avisar quando estiver perto da próxima troca. Se precisar de algo, é só responder por aqui.",
+    `Vamos te avisar quando estiver perto da próxima troca. Precisa falar com a ${input.workshopName}? É só tocar no botão abaixo. 👇`,
   ].join("\n");
 }

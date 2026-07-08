@@ -275,6 +275,17 @@ export type WhatsappRepository = {
     whatsappPrincipal: string;
     diasLembretePadrao: number;
   } | null>;
+  getOficinaById?(input: {
+    oficinaId: string;
+  }): Promise<{
+    id: string;
+    nome: string;
+    whatsappPrincipal: string;
+    diasLembretePadrao: number;
+  } | null>;
+  findClienteFinalConversationByWhatsapp?(input: {
+    whatsapp: string;
+  }): Promise<SavedConversation | null>;
   getConversationByWhatsapp?(input: {
     whatsapp: string;
   }): Promise<SavedConversation | null>;
@@ -577,6 +588,34 @@ export type ReminderAgent = {
     message: string;
     conversationContext: ConversationContext;
   }): Promise<ReminderAgentReply>;
+};
+
+// Concierge do cliente final ANTES de qualquer lembrete (resposta à confirmação).
+export type ClienteFinalConciergeIntent =
+  | "agradecimento"
+  | "quem_e"
+  | "opt_out"
+  | "numero_errado"
+  | "nao_reconhece"
+  | "pedido_oficina"
+  | "mensagem_indefinida";
+
+export type ClienteFinalConciergeReply = {
+  intent: ClienteFinalConciergeIntent;
+  replyBody: string;
+  handoffRequired: boolean;
+  handoffReason: string | null;
+  clienteStatus: "ativo" | "opt_out" | "numero_errado" | null;
+  shouldCancelFutureReminders: boolean;
+  toolCalls: ToolCallRecord[];
+};
+
+export type ClienteFinalConciergeAgent = {
+  generateReply(input: {
+    message: string;
+    workshopName: string;
+    workshopWhatsapp: string | null;
+  }): ClienteFinalConciergeReply;
 };
 
 export type SupportIntent =

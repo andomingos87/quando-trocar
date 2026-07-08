@@ -200,7 +200,7 @@ describe("whatsapp webhook — F0 fallback para mídia não suportada", () => {
       expect(agent.generateReply).not.toHaveBeenCalled();
       // Fallback sempre instrui a mandar por texto
       expect(whatsapp.sendTextMessage).toHaveBeenCalledTimes(1);
-      const call = whatsapp.sendTextMessage.mock.calls[0][0] as { body: string };
+      const call = (whatsapp.sendTextMessage.mock.calls[0] as unknown as [{ body: string }])[0];
       expect(call.body.toLowerCase()).toContain("texto");
       // saveInboundMessage gravou o tipo correto
       expect(repository.saveInboundMessage).toHaveBeenCalledWith(
