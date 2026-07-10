@@ -1,6 +1,6 @@
 # ADR 0011: Não rastrear representante no MVP
 
-- **Status**: accepted
+- **Status**: superseded por [ADR-0019](./0019-representantes-e-comissao.md) (2026-07-09)
 - **Data**: 2026-05-17
 - **Decisores**: Anderson Domingos
 - **Fonte**: `docs/product/PRD-whatsapp-bot.md §3.3, §24`

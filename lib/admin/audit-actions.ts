@@ -26,6 +26,7 @@ const ACOES: Record<string, AcaoDescricao> = {
   "oficina.update_plano": { label: "Alterou plano da oficina", categoria: "atualizacao" },
   "oficina.update_preco": { label: "Alterou preço da oficina", categoria: "atualizacao" },
   "oficina.update_status": { label: "Alterou status da oficina", categoria: "atualizacao" },
+  "oficina.update_representante": { label: "Alterou representante da oficina", categoria: "atualizacao" },
   "oficina.auto_pausa_inadimplencia": { label: "Pausou oficina por inadimplência", categoria: "financeiro" },
   "oficina.cobranca_manual_disparada": { label: "Disparou cobrança manual", categoria: "financeiro" },
 
@@ -63,6 +64,15 @@ const ACOES: Record<string, AcaoDescricao> = {
   "plano.create": { label: "Criou plano", categoria: "criacao" },
   "plano.update": { label: "Editou plano", categoria: "atualizacao" },
   "plano.deactivate": { label: "Desativou plano", categoria: "remocao" },
+
+  "representante.create": { label: "Cadastrou representante", categoria: "criacao" },
+  "representante.update": { label: "Editou representante", categoria: "atualizacao" },
+  "representante.soft_delete": { label: "Removeu representante", categoria: "remocao" },
+
+  "configuracoes_comissao.update": { label: "Editou regra de comissão", categoria: "financeiro" },
+  "comissao.marcar_paga": { label: "Marcou comissão como paga", categoria: "financeiro" },
+  "comissao.marcar_paga_lote": { label: "Pagou comissões em lote", categoria: "financeiro" },
+  "comissao.cancelar": { label: "Cancelou comissão", categoria: "financeiro" },
 };
 
 // Heurística para ações fora do mapa: deriva categoria a partir do sufixo do verbo.
@@ -116,6 +126,11 @@ const ENTIDADES: Record<string, string> = {
   tipos_servico: "Tipo de serviço",
   tipo_servico: "Tipo de serviço",
   configuracoes_vendedor: "Config. do vendedor",
+  configuracoes_comissao: "Config. de comissão",
+  representantes: "Representante",
+  representante: "Representante",
+  comissoes: "Comissão",
+  comissao: "Comissão",
   outbound_messages: "Mensagem",
   conversas: "Conversa",
 };

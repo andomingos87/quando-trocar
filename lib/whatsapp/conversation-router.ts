@@ -1,4 +1,4 @@
-import { detectLeadOrigin } from "./sales-agent";
+import { detectLeadOrigin, extractRepresentanteCodigo } from "./sales-agent";
 import type {
   ConversationAgentMode,
   ConversationContext,
@@ -72,12 +72,16 @@ export async function resolveWhatsappConversation(input: {
   landingPhrases?: string[];
 }): Promise<ResolvedWhatsappConversation> {
   const landingPhrases = input.landingPhrases;
+  // ADR-0019: "#REP-<codigo>" sai da mensagem antes do match exato da
+  // frase-gatilho; o codigo vira atribuicao do lead no upsert.
+  const representante = extractRepresentanteCodigo(input.body);
   if (!hasRequiredPhase2Methods(input.repository)) {
     const lead = await input.repository.upsertLead({
       whatsapp: input.whatsapp,
       nome: input.contactName,
-      origem: detectLeadOrigin(input.body, landingPhrases),
+      origem: detectLeadOrigin(representante.cleaned, landingPhrases),
       status: "em_conversa",
+      representanteCodigo: representante.codigo,
     });
     const conversation = await input.repository.upsertConversation({
       leadId: lead.id,
@@ -227,8 +231,9 @@ export async function resolveWhatsappConversation(input: {
   const lead = await input.repository.upsertLead({
     whatsapp: input.whatsapp,
     nome: input.contactName,
-    origem: detectLeadOrigin(input.body),
+    origem: detectLeadOrigin(representante.cleaned, landingPhrases),
     status: "em_conversa",
+    representanteCodigo: representante.codigo,
   });
   const conversation = await input.repository.upsertSalesLeadConversation({
     leadId: lead.id,

@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api-guard";
 import {
-  patchOficina,
-  softDeleteOficina,
-  type OficinaPatchInput,
-} from "@/lib/admin/oficinas";
+  patchRepresentante,
+  softDeleteRepresentante,
+  type RepresentanteInput,
+} from "@/lib/admin/representantes";
 import { getRequestIp } from "@/lib/admin/request-ip";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -15,9 +15,7 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 export async function PATCH(request: Request, ctx: Ctx) {
@@ -29,49 +27,28 @@ export async function PATCH(request: Request, ctx: Ctx) {
     return NextResponse.json({ ok: false, message: "ID invalido." }, { status: 400 });
   }
 
-  let body: Partial<OficinaPatchInput>;
+  let body: RepresentanteInput;
   try {
-    body = (await request.json()) as Partial<OficinaPatchInput>;
+    body = (await request.json()) as RepresentanteInput;
   } catch {
     return NextResponse.json({ ok: false, message: "Payload invalido." }, { status: 400 });
-  }
-
-  const patch: OficinaPatchInput = {};
-  if (typeof body.nome === "string") patch.nome = body.nome;
-  if (typeof body.whatsapp === "string") patch.whatsapp = body.whatsapp;
-  if (body.cidade === null || typeof body.cidade === "string") patch.cidade = body.cidade;
-  if (body.responsavel === null || typeof body.responsavel === "string") {
-    patch.responsavel = body.responsavel;
-  }
-  if (typeof body.status === "string") patch.status = body.status;
-  if (body.motivo_pausa === null || typeof body.motivo_pausa === "string") {
-    patch.motivo_pausa = body.motivo_pausa;
-  }
-  if (typeof body.plano_id === "string") patch.plano_id = body.plano_id;
-  if (body.preco_negociado === null) patch.preco_negociado = null;
-  else if (typeof body.preco_negociado === "number") patch.preco_negociado = body.preco_negociado;
-  if (body.representante_id === null || typeof body.representante_id === "string") {
-    patch.representante_id = body.representante_id;
-  }
-  if (typeof body.cancelConfirmationName === "string") {
-    patch.cancelConfirmationName = body.cancelConfirmationName;
   }
 
   try {
     const supabase = createSupabaseAdminClient();
     const ip = getRequestIp(request);
-    const result = await patchOficina(supabase, id, patch, {
+    const representante = await patchRepresentante(supabase, id, body, {
       adminId: auth.admin.adminId,
       ip,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ ok: true, representante });
   } catch (err) {
     const status = (err as { status?: number }).status ?? 500;
     const message =
       err instanceof Error && status !== 500
         ? err.message
-        : "Erro ao atualizar oficina.";
-    if (status === 500) console.error("admin/oficinas PATCH failed", err);
+        : "Erro ao atualizar representante.";
+    if (status === 500) console.error("admin/representantes PATCH failed", err);
     return NextResponse.json({ ok: false, message }, { status });
   }
 }
@@ -85,23 +62,20 @@ export async function DELETE(request: Request, ctx: Ctx) {
     return NextResponse.json({ ok: false, message: "ID invalido." }, { status: 400 });
   }
 
-  let body: { confirmationName?: unknown };
+  let body: { confirmNome?: unknown };
   try {
-    body = (await request.json()) as { confirmationName?: unknown };
+    body = (await request.json()) as { confirmNome?: unknown };
   } catch {
     return NextResponse.json({ ok: false, message: "Payload invalido." }, { status: 400 });
   }
 
-  const confirmationName =
-    typeof body.confirmationName === "string" ? body.confirmationName : "";
-
   try {
     const supabase = createSupabaseAdminClient();
     const ip = getRequestIp(request);
-    const result = await softDeleteOficina(
+    const result = await softDeleteRepresentante(
       supabase,
       id,
-      { confirmationName },
+      { confirmNome: typeof body.confirmNome === "string" ? body.confirmNome : "" },
       { adminId: auth.admin.adminId, ip },
     );
     return NextResponse.json(result);
@@ -110,8 +84,8 @@ export async function DELETE(request: Request, ctx: Ctx) {
     const message =
       err instanceof Error && status !== 500
         ? err.message
-        : "Erro ao excluir oficina.";
-    if (status === 500) console.error("admin/oficinas DELETE failed", err);
+        : "Erro ao excluir representante.";
+    if (status === 500) console.error("admin/representantes DELETE failed", err);
     return NextResponse.json({ ok: false, message }, { status });
   }
 }

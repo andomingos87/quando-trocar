@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHmac } from "node:crypto";
 
 import { avancarVencimentoMensal } from "@/lib/admin/billing";
+import { gerarComissaoParaPagamento } from "@/lib/admin/comissoes";
 import { MercadoPagoClient, mapMpStatus } from "@/lib/mercado-pago/client";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -76,15 +77,20 @@ export async function POST(request: Request) {
     if (!oficinaId) {
       return NextResponse.json({ ok: true, ignored: "no_oficina_ref" });
     }
-    await supabase.from("pagamentos").insert({
-      oficina_id: oficinaId,
-      valor: payment.transaction_amount ?? 0,
-      status: mapped,
-      mp_payment_id: mpPaymentId,
-      descricao: `Recebido via webhook MP`,
-      paid_at: paidAt,
-    });
+    const { data: createdPagamento } = await supabase
+      .from("pagamentos")
+      .insert({
+        oficina_id: oficinaId,
+        valor: payment.transaction_amount ?? 0,
+        status: mapped,
+        mp_payment_id: mpPaymentId,
+        descricao: `Recebido via webhook MP`,
+        paid_at: paidAt,
+      })
+      .select("id")
+      .single();
     await applySideEffects(supabase, oficinaId, mapped, paidAt);
+    await gerarComissaoSafe(supabase, createdPagamento?.id ?? null, mapped);
     await audit(supabase, oficinaId, mapped, mpPaymentId);
     return NextResponse.json({ ok: true, created: true });
   }
@@ -99,8 +105,25 @@ export async function POST(request: Request) {
     .eq("id", existing.id);
 
   await applySideEffects(supabase, existing.oficina_id, mapped, paidAt);
+  await gerarComissaoSafe(supabase, existing.id, mapped);
   await audit(supabase, existing.oficina_id, mapped, mpPaymentId);
   return NextResponse.json({ ok: true, updated: true });
+}
+
+// ADR-0019: comissao do representante e gerada quando o pagamento confirma.
+// Nao bloqueante: falha aqui nunca derruba o processamento do pagamento nem a
+// reativacao da oficina (mesmo principio da confirmacao ao cliente, §3.6).
+async function gerarComissaoSafe(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  pagamentoId: string | null,
+  status: ReturnType<typeof mapMpStatus>,
+): Promise<void> {
+  if (status !== "pago" || !pagamentoId) return;
+  try {
+    await gerarComissaoParaPagamento(supabase, pagamentoId);
+  } catch (err) {
+    console.error("gerar comissao failed", { pagamentoId, err });
+  }
 }
 
 async function applySideEffects(

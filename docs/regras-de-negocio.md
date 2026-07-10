@@ -70,6 +70,7 @@ O usuário decide. Não atualize por conta própria nem ignore por conta própri
 - [15. Modo cobrança (`agent_mode='cobranca'`)](#15-modo-cobrança-agent_modecobranca)
 - [16. Inteligência de mercado](#16-inteligência-de-mercado)
 - [17. Áudio e transcrição](#17-áudio-e-transcrição)
+- [18. Representantes e comissão](#18-representantes-e-comissão)
 
 ---
 
@@ -915,6 +916,50 @@ Fonte canônica: [ADR-0016](./adr/0016-suporte-imagem-pdf-sem-storage.md).
 - Excedido o limite, o webhook **não chama** o pipeline (sem custo de vision/OpenAI), grava a mensagem com `transcription_status = 'failed'` e `transcription_error = 'rate_limit'`, e dispara o fallback contextual.
 - Áudio (Whisper) **não** tem rate limit — custo é uma ordem de magnitude menor.
 - Métricas para acompanhar: [runbook `whatsapp-media-metrics.md`](./runbooks/whatsapp-media-metrics.md).
+
+---
+
+## 18. Representantes e comissão
+
+Fonte canônica: [ADR-0019](./adr/0019-representantes-e-comissao.md) (supersede a [ADR-0011](./adr/0011-visibilidade-de-representante.md)), plano [fase-representantes-comissao](./backlog-whatsapp-bot/fase-representantes-comissao.md).
+
+### 18.1 Cadastro de representante
+- Tabela `representantes`: `nome`, `whatsapp` (E.164, único), `codigo` (único, curto, case-insensitive), `ativo`, override opcional de comissão (`comissao_tipo`, `comissao_valor`, `comissao_duracao_meses`), soft delete (`deleted_at`).
+- Gerenciado em `/admin/representantes`. Exclusão exige confirmar o nome exato (mesmo padrão de oficinas §2.6); representante com comissões registradas não pode ser excluído — só desativado.
+- Fonte: `lib/admin/representantes.ts`, migration `20260709000000_representantes_comissao.sql`.
+
+### 18.2 Atribuição de lead a representante
+- O representante divulga link `wa.me` cuja primeira mensagem carrega `#REP-<codigo>` (ex.: `Oi quero testar o Quando Trocar #REP-CARLOS`).
+- `extractRepresentanteCodigo()` (determinístico, sem LLM — ADR-0001) extrai o código e o **remove** da mensagem antes de `detectLeadOrigin()` (o match da frase-gatilho é exato) e antes do agente vendedor processar o texto.
+- `upsertLead` resolve o código para `leads_oficina.representante_id` **apenas se** o lead ainda não tem representante e o representante está ativo e não deletado. Código desconhecido/inativo → ignorado em silêncio (lead entra sem atribuição).
+- Fonte: `lib/whatsapp/sales-agent.ts`, `lib/whatsapp/conversation-router.ts`, `lib/whatsapp/repository.ts`.
+
+### 18.3 Atribuição da oficina
+- Na conversão (bot `convertLeadToOficina` ou admin RPC `convert_lead_to_oficina_manual`), `representante_id` do lead é copiado para `oficinas.representante_id`.
+- Admin pode definir/alterar/remover o representante de uma oficina pelo modal de edição — auditoria `oficina.update_representante`.
+- Atribuição posterior **não** gera comissão retroativa: só pagamentos confirmados depois da atribuição.
+
+### 18.4 Política de comissão (tudo configurável no painel)
+- Singleton `configuracoes_comissao` (seção "Comissão de representantes" em `/admin/configuracoes`): `comissao_tipo` (`percentual | fixo`), `comissao_valor`, `comissao_duracao_meses` (null = vitalícia), `comissao_base` (`valor_pago | preco_tabela`).
+- Override por representante: `representantes.comissao_tipo/valor/duracao_meses` — quando preenchidos, vencem o default global (mesmo padrão `preco_negociado ?? preco_base`). O override é atômico: `comissao_tipo` + `comissao_valor` andam juntos.
+- Defaults seedados: percentual, 20%, vitalícia, base `valor_pago`.
+- Risco aceito: `comissao_base = 'preco_tabela'` com `preco_negociado` abaixo da tabela pode gerar comissão maior que a receita — a UI avisa ao selecionar.
+
+### 18.5 Geração da comissão
+- Disparo: webhook Mercado Pago confirma `pagamentos.status = 'pago'` de oficina com representante ativo → cria linha em `comissoes` com **snapshot** da regra vigente (`tipo`, `taxa_aplicada`, `base_valor`, `valor`). Mudança de configuração não altera comissões já geradas.
+- Idempotência: `comissoes.pagamento_id UNIQUE` — webhook repetido não duplica.
+- `comissao_duracao_meses = N` → só os N primeiros pagamentos `pago` da oficina geram comissão.
+- **Não bloqueante**: falha na geração é logada mas nunca derruba o processamento do pagamento nem a reativação da oficina (mesmo princípio da §3.6).
+- Fonte: `gerarComissaoParaPagamento` em `lib/admin/comissoes.ts`, `app/api/webhooks/mercado-pago/route.ts`.
+
+### 18.6 Ciclo de vida e payout
+```
+prevista · paga · cancelada
+```
+- `prevista → paga`: admin marca ao transferir o valor ao representante (Pix por fora do sistema), individual ou em lote por representante/período. Auditoria `comissao.marcar_paga`.
+- `prevista → cancelada`: estorno/erro, com motivo. Comissão `paga` não pode ser cancelada nem voltar a `prevista`.
+- Extrato em `/admin/comissoes`; card de comissão prevista no mês no dashboard `/admin`.
+- Sem split automático de pagamento no MVP (ADR-0019).
 
 ---
 

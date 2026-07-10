@@ -21,10 +21,12 @@ export function OficinasClient({
   initial,
   filters,
   planos,
+  representantes,
 }: {
   initial: OficinaListResult;
   filters: OficinaListFilters;
   planos: Array<{ id: string; nome: string }>;
+  representantes: Array<{ id: string; nome: string }>;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -252,6 +254,7 @@ export function OficinasClient({
       {modalOpen ? (
         <OficinaCreateModal
           planos={planos}
+          representantes={representantes}
           onClose={() => setModalOpen(false)}
           onSaved={(id) => {
             setModalOpen(false);
@@ -264,6 +267,7 @@ export function OficinasClient({
         <OficinaEditModal
           oficina={editRow}
           planos={planos}
+          representantes={representantes}
           onClose={() => setEditRow(null)}
           onSaved={() => {
             setEditRow(null);
