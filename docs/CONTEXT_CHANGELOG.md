@@ -19,6 +19,18 @@ Não registrar:
 
 ---
 
+## 2026-07-09 — Representantes comerciais e comissão configurável
+
+### Adicionado
+
+- **[ADR-0019](./adr/0019-representantes-e-comissao.md)** — supersede a [ADR-0011](./adr/0011-visibilidade-de-representante.md): o app passa a ser distribuído por rede de representantes. Atribuição via código `#REP-<codigo>` na primeira mensagem do lead (determinístico, sem LLM) + atribuição manual no admin; comissão gerada no webhook do Mercado Pago quando o pagamento confirma, com snapshot da regra vigente e idempotência por `comissoes.pagamento_id`.
+- **Política de comissão 100% configurável no painel** — singleton `configuracoes_comissao` (tipo percentual/fixo, valor, duração em meses ou vitalícia, base valor pago/preço de tabela) + override por representante. Payout manual (`prevista → paga`) no MVP, sem split automático MP.
+- **Schema** — migration `20260709000000_representantes_comissao.sql`: tabelas `representantes`, `comissoes`, `configuracoes_comissao`; `representante_id` em `leads_oficina` e `oficinas`; RPC `convert_lead_to_oficina_manual` atualizada para propagar a atribuição.
+- **Painel admin** — `/admin/representantes` (CRUD + link wa.me), `/admin/comissoes` (extrato, marcar paga individual/lote), seção de comissão em `/admin/configuracoes`, campo representante no modal da oficina, card de comissão prevista no dashboard.
+- **Seção 18 em `regras-de-negocio.md`** e plano em [fase-representantes-comissao](./backlog-whatsapp-bot/fase-representantes-comissao.md).
+
+---
+
 ## 2026-06-02 — Confirmação da oficina antes de registrar a troca
 
 ### Adicionado

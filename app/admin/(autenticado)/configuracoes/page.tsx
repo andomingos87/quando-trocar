@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import { getConfiguracoesComissao } from "@/lib/admin/comissoes";
 import { getConfiguracoesVendedor } from "@/lib/admin/configuracoes-vendedor";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin/session";
+import { ConfiguracoesComissaoForm } from "@/components/admin/configuracoes-comissao-form";
 import { ConfiguracoesVendedorForm } from "@/components/admin/configuracoes-vendedor-form";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +12,10 @@ export const dynamic = "force-dynamic";
 export default async function ConfiguracoesPage() {
   await requireAdmin();
   const supabase = createSupabaseAdminClient();
-  const configuracoes = await getConfiguracoesVendedor(supabase);
+  const [configuracoes, configuracoesComissao] = await Promise.all([
+    getConfiguracoesVendedor(supabase),
+    getConfiguracoesComissao(supabase),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -30,6 +35,22 @@ export default async function ConfiguracoesPage() {
         </header>
 
         <ConfiguracoesVendedorForm initial={configuracoes} />
+      </section>
+
+      <section className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+        <header className="mb-4">
+          <h2 className="text-lg font-semibold text-ink">Comissao de representantes</h2>
+          <p className="mt-1 text-sm text-muted">
+            Regra global aplicada quando a oficina de um representante paga a
+            mensalidade. Override individual em{" "}
+            <Link href="/admin/representantes" className="text-brand hover:underline">
+              Representantes
+            </Link>
+            . A regra vigente e congelada no momento de cada pagamento.
+          </p>
+        </header>
+
+        <ConfiguracoesComissaoForm initial={configuracoesComissao} />
       </section>
 
       <section className="rounded-2xl border border-line bg-white p-5 sm:p-6">

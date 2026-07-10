@@ -6,6 +6,7 @@ import {
   describeAcao,
   describeEntidade,
 } from "@/lib/admin/audit-actions";
+import { getComissaoResumoMes } from "@/lib/admin/comissoes";
 import { dayLabel, formatBRL, formatDateTime, formatRelative } from "@/lib/admin/format";
 import {
   getAtividadesRecentes,
@@ -54,7 +55,7 @@ function MetricCard({
 export default async function AdminOverviewPage() {
   const supabase = createSupabaseAdminClient();
 
-  const [mrr, counts, novas, receita, pendentes, falhos, atividades] =
+  const [mrr, counts, novas, receita, pendentes, falhos, atividades, comissao] =
     await Promise.all([
       getMrrEstimado(supabase),
       getOficinasCounts(supabase),
@@ -63,6 +64,7 @@ export default async function AdminOverviewPage() {
       getPagamentosPendentes(supabase),
       getPagamentosFalhosMes(supabase),
       getAtividadesRecentes(supabase, 20),
+      getComissaoResumoMes(supabase),
     ]);
 
   const empty = counts.ativas === 0 && counts.em_teste === 0 && novas === 0;
@@ -109,6 +111,19 @@ export default async function AdminOverviewPage() {
           label="Pagamentos falhos no mes"
           value={falhos}
           tone={falhos > 0 ? "danger" : "default"}
+        />
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Comissao prevista no mes"
+          value={formatBRL(comissao.previstoMes)}
+          hint="A pagar aos representantes"
+          tone={comissao.previstoMes > 0 ? "warning" : "default"}
+        />
+        <MetricCard
+          label="Comissao paga no mes"
+          value={formatBRL(comissao.pagoMes)}
         />
       </section>
 

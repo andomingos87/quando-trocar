@@ -18,7 +18,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0008](./0008-pagamento-no-mvp.md) | Pagamento via Mercado Pago | accepted | 2026-05-17 |
 | [0009](./0009-confirmacao-vs-pre-agendamento.md) | Bot não agenda — apenas faz a ponte entre cliente e oficina | accepted | 2026-05-17 |
 | [0010](./0010-painel-web-no-mvp.md) | Painel web mínimo na Fase 4, com login OTP WhatsApp | accepted | 2026-05-17 |
-| [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | accepted | 2026-05-17 |
+| [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | superseded (ADR-0019) | 2026-05-17 |
 | [0012](./0012-politica-de-preco.md) | Plano único com preço configurável por oficina via painel admin | accepted | 2026-05-17 |
 | [0013](./0013-painel-admin-escopo-billing-auditoria.md) | Painel admin — escopo, billing mensal recorrente e auditoria | accepted | 2026-05-17 |
 | [0014](./0014-cadencia-e-template-por-tipo-de-servico.md) | Cadência e template Meta por tipo de serviço | accepted | 2026-05-22 |
@@ -26,6 +26,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0016](./0016-suporte-imagem-pdf-sem-storage.md) | Suporte a imagem (vision) e documento PDF, sem Supabase Storage | accepted | 2026-05-21 |
 | [0017](./0017-confirmacao-antes-de-registrar-troca.md) | Confirmação da oficina antes de registrar a troca | accepted | 2026-06-02 |
 | [0018](./0018-cliente-final-concierge-pre-lembrete.md) | Concierge do cliente final antes do primeiro lembrete | accepted | 2026-06-14 |
+| [0019](./0019-representantes-e-comissao.md) | Representantes comerciais com atribuição e comissão configurável | accepted | 2026-07-09 |
 
 ### Em aberto (drafts)
 

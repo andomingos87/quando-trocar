@@ -1,5 +1,6 @@
 import { listOficinas, type OficinaListFilters } from "@/lib/admin/oficinas";
 import { listPlanos } from "@/lib/admin/planos";
+import { listRepresentantes } from "@/lib/admin/representantes";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { OficinasClient } from "@/components/admin/oficinas-client";
 
@@ -31,9 +32,10 @@ export default async function OficinasPage({
   const sp = await searchParams;
   const filters = pickFilters(sp);
   const supabase = createSupabaseAdminClient();
-  const [list, planos] = await Promise.all([
+  const [list, planos, representantes] = await Promise.all([
     listOficinas(supabase, filters),
     listPlanos(supabase),
+    listRepresentantes(supabase),
   ]);
 
   return (
@@ -48,6 +50,9 @@ export default async function OficinasPage({
         initial={list}
         filters={filters}
         planos={planos.filter((p) => p.ativo).map((p) => ({ id: p.id, nome: p.nome }))}
+        representantes={representantes
+          .filter((r) => r.ativo)
+          .map((r) => ({ id: r.id, nome: r.nome }))}
       />
     </div>
   );

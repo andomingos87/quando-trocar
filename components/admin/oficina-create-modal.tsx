@@ -6,10 +6,12 @@ import { WhatsAppInput } from "@/components/admin/ui";
 
 export function OficinaCreateModal({
   planos,
+  representantes,
   onClose,
   onSaved,
 }: {
   planos: Array<{ id: string; nome: string }>;
+  representantes: Array<{ id: string; nome: string }>;
   onClose: () => void;
   onSaved: (id: string) => void;
 }) {
@@ -21,6 +23,7 @@ export function OficinaCreateModal({
     preco_negociado: "",
     status: "ativa" as "ativa" | "pausada",
     observacao: "",
+    representante_id: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +41,7 @@ export function OficinaCreateModal({
         form.preco_negociado === "" ? null : Number(form.preco_negociado.replace(",", ".")),
       status: form.status,
       observacao: form.observacao.trim() || null,
+      representante_id: form.representante_id || null,
     };
     try {
       const res = await fetch("/api/admin/oficinas", {
@@ -143,6 +147,23 @@ export function OficinaCreateModal({
             >
               <option value="ativa">Ativa (com proximo_vencimento +30d)</option>
               <option value="pausada">Pausada</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-ink">
+              Representante (opt.)
+            </span>
+            <select
+              value={form.representante_id}
+              onChange={(e) => setForm({ ...form, representante_id: e.target.value })}
+              className="w-full rounded-lg border border-line px-3 py-2"
+            >
+              <option value="">Sem representante</option>
+              {representantes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nome}
+                </option>
+              ))}
             </select>
           </label>
           <label className="block text-sm">

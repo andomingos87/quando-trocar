@@ -17,11 +17,13 @@ const STATUS_BADGE: Record<string, string> = {
 export function OficinaEditModal({
   oficina,
   planos,
+  representantes,
   onClose,
   onSaved,
 }: {
   oficina: OficinaListRow;
   planos: Array<{ id: string; nome: string }>;
+  representantes: Array<{ id: string; nome: string }>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -33,6 +35,7 @@ export function OficinaEditModal({
   const [precoNegociado, setPrecoNegociado] = useState(
     oficina.preco_negociado !== null ? String(oficina.preco_negociado) : "",
   );
+  const [representanteId, setRepresentanteId] = useState(oficina.representante_id ?? "");
   const [status, setStatus] = useState<OficinaStatus>(oficina.status);
   const [motivo, setMotivo] = useState(oficina.motivo_pausa ?? "voluntaria");
   const [cancelName, setCancelName] = useState("");
@@ -80,6 +83,7 @@ export function OficinaEditModal({
       responsavel: responsavel.trim() || null,
       plano_id: planoId,
       status,
+      representante_id: representanteId || null,
     };
 
     if (precoNegociado.trim() === "") {
@@ -203,6 +207,23 @@ export function OficinaEditModal({
               />
             </Field>
           </div>
+
+          <Field
+            label="Representante"
+            hint="Comissao vale so para pagamentos apos a atribuicao."
+          >
+            <Select
+              value={representanteId}
+              onChange={(e) => setRepresentanteId(e.target.value)}
+            >
+              <option value="">Sem representante</option>
+              {representantes.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nome}
+                </option>
+              ))}
+            </Select>
+          </Field>
 
           <Field label="Status">
             <Select

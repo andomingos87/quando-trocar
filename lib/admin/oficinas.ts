@@ -24,6 +24,8 @@ export type OficinaListRow = {
   preco_negociado: number | null;
   preco_efetivo: number | null;
   proximo_vencimento: string | null;
+  representante_id: string | null;
+  representante_nome: string | null;
   ultima_atividade_em: string | null;
   created_at: string;
 };
@@ -55,6 +57,7 @@ export type OficinaCreateInput = {
   preco_negociado?: number | null;
   status?: "ativa" | "pausada";
   observacao?: string | null;
+  representante_id?: string | null;
 };
 
 export type OficinaPatchInput = Partial<{
@@ -66,6 +69,7 @@ export type OficinaPatchInput = Partial<{
   motivo_pausa: MotivoPausa | null;
   plano_id: string;
   preco_negociado: number | null;
+  representante_id: string | null;
   cancelConfirmationName: string;
 }>;
 
@@ -89,8 +93,9 @@ export async function listOficinas(
   let query = supabase
     .from("oficinas")
     .select(
-      `id, nome, responsavel, whatsapp_principal, cidade, status, origem, motivo_pausa, plano_id, preco_negociado, proximo_vencimento, created_at,
-       planos:plano_id (nome, preco_base)`,
+      `id, nome, responsavel, whatsapp_principal, cidade, status, origem, motivo_pausa, plano_id, preco_negociado, proximo_vencimento, representante_id, created_at,
+       planos:plano_id (nome, preco_base),
+       representantes:representante_id (nome)`,
       { count: "exact" },
     )
     .is("deleted_at", null)
@@ -140,6 +145,8 @@ export async function listOficinas(
       | { nome: string; preco_base: number }[]
       | null;
     const plano = Array.isArray(planoRaw) ? planoRaw[0] ?? null : planoRaw;
+    const repRaw = (o as { representantes?: unknown }).representantes;
+    const rep = Array.isArray(repRaw) ? repRaw[0] ?? null : repRaw;
     return {
       id: o.id,
       nome: o.nome,
@@ -158,6 +165,8 @@ export async function listOficinas(
         o.preco_negociado !== null ? Number(o.preco_negociado) : null,
       ),
       proximo_vencimento: o.proximo_vencimento,
+      representante_id: o.representante_id ?? null,
+      representante_nome: (rep as { nome?: string } | null)?.nome ?? null,
       ultima_atividade_em: ultimaAtividade.get(o.id) ?? null,
       created_at: o.created_at,
     };
@@ -173,8 +182,9 @@ export async function getOficinaById(
   const { data, error } = await supabase
     .from("oficinas")
     .select(
-      `id, nome, responsavel, whatsapp_principal, cidade, status, origem, motivo_pausa, plano_id, preco_negociado, proximo_vencimento, created_at,
-       planos:plano_id (nome, preco_base)`,
+      `id, nome, responsavel, whatsapp_principal, cidade, status, origem, motivo_pausa, plano_id, preco_negociado, proximo_vencimento, representante_id, created_at,
+       planos:plano_id (nome, preco_base),
+       representantes:representante_id (nome)`,
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -187,6 +197,8 @@ export async function getOficinaById(
     | { nome: string; preco_base: number }[]
     | null;
   const plano = Array.isArray(planoRaw) ? planoRaw[0] ?? null : planoRaw;
+  const repRaw = (data as { representantes?: unknown }).representantes;
+  const rep = Array.isArray(repRaw) ? repRaw[0] ?? null : repRaw;
 
   const { data: msgs } = await supabase
     .from("mensagens")
@@ -214,6 +226,8 @@ export async function getOficinaById(
       data.preco_negociado !== null ? Number(data.preco_negociado) : null,
     ),
     proximo_vencimento: data.proximo_vencimento,
+    representante_id: data.representante_id ?? null,
+    representante_nome: (rep as { nome?: string } | null)?.nome ?? null,
     ultima_atividade_em: ultima ?? null,
     created_at: data.created_at,
   };
@@ -404,8 +418,27 @@ export function validateOficinaCreate(
           : Number(input.preco_negociado),
       status: input.status ?? "ativa",
       observacao: input.observacao?.trim() || null,
+      representante_id: input.representante_id || null,
     },
   };
+}
+
+// ADR-0019: atribuicao manual so aceita representante ativo e nao excluido.
+async function assertRepresentanteAtivo(
+  supabase: SupabaseClient,
+  representanteId: string,
+): Promise<void> {
+  const { data } = await supabase
+    .from("representantes")
+    .select("id, ativo")
+    .eq("id", representanteId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!data || !data.ativo) {
+    const err = new Error("Representante selecionado esta inativo ou nao existe.");
+    Object.assign(err, { status: 400 });
+    throw err;
+  }
 }
 
 export async function createOficinaManual(
@@ -438,6 +471,10 @@ export async function createOficinaManual(
     throw err;
   }
 
+  if (input.representante_id) {
+    await assertRepresentanteAtivo(supabase, input.representante_id);
+  }
+
   const status = input.status ?? "ativa";
   const proximoVencimento =
     status === "ativa"
@@ -461,6 +498,7 @@ export async function createOficinaManual(
           preco_negociado: input.preco_negociado,
           status,
           observacao: input.observacao,
+          representante_id: input.representante_id ?? null,
         },
         proximo_vencimento: proximoVencimento,
       },
@@ -477,6 +515,7 @@ export async function createOficinaManual(
           status,
           origem: "manual",
           proximo_vencimento: proximoVencimento,
+          representante_id: input.representante_id ?? null,
         })
         .select("id")
         .single();
@@ -636,6 +675,17 @@ export async function patchOficina(
   }
 
   if (cadastroChanged) actions.push("oficina.update_cadastro");
+
+  // ADR-0019: atribuicao de representante e auditada em acao propria.
+  // Nao gera comissao retroativa — so pagamentos posteriores a atribuicao.
+  if (input.representante_id !== undefined) {
+    const next = input.representante_id || null;
+    if (next !== before.representante_id) {
+      if (next) await assertRepresentanteAtivo(supabase, next);
+      patch.representante_id = next;
+      actions.push("oficina.update_representante");
+    }
+  }
 
   if (Object.keys(patch).length === 1) {
     // nada mudou alem de updated_at

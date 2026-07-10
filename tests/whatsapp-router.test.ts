@@ -81,6 +81,70 @@ describe("resolveWhatsappConversation", () => {
     );
   });
 
+  test("captura #REP-<codigo> sem quebrar a frase-gatilho da landing (ADR-0019)", async () => {
+    const repository = {
+      getOficinaByWhatsapp: vi.fn(async () => null),
+      getConversationByWhatsapp: vi.fn(),
+      upsertConversation: vi.fn(),
+      upsertOficinaConversation: vi.fn(),
+      upsertLead: vi.fn(async () => ({ id: "lead-id", status: "em_conversa" as const })),
+      upsertSalesLeadConversation: vi.fn(async () => ({
+        id: "conversation-id",
+        agentMode: "vendas" as const,
+        participantType: "lead_oficina" as const,
+        context: {},
+        leadId: "lead-id",
+        oficinaId: null,
+      })),
+    };
+
+    await resolveWhatsappConversation({
+      repository,
+      whatsapp: "+5541999421180",
+      contactName: "Oficina Teste",
+      body: "Oi, quero testar o Quando Trocar #REP-CARLOS",
+    });
+
+    expect(repository.upsertLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origem: "landing_page",
+        representanteCodigo: "CARLOS",
+      }),
+    );
+  });
+
+  test("mensagem sem codigo de representante passa representanteCodigo null", async () => {
+    const repository = {
+      getOficinaByWhatsapp: vi.fn(async () => null),
+      getConversationByWhatsapp: vi.fn(),
+      upsertConversation: vi.fn(),
+      upsertOficinaConversation: vi.fn(),
+      upsertLead: vi.fn(async () => ({ id: "lead-id", status: "em_conversa" as const })),
+      upsertSalesLeadConversation: vi.fn(async () => ({
+        id: "conversation-id",
+        agentMode: "vendas" as const,
+        participantType: "lead_oficina" as const,
+        context: {},
+        leadId: "lead-id",
+        oficinaId: null,
+      })),
+    };
+
+    await resolveWhatsappConversation({
+      repository,
+      whatsapp: "+5541999421180",
+      contactName: "Oficina Teste",
+      body: "bom dia",
+    });
+
+    expect(repository.upsertLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origem: "manual_whatsapp",
+        representanteCodigo: null,
+      }),
+    );
+  });
+
   test("cliente final respondendo à confirmação (sem lembrete) vira concierge, não vendas", async () => {
     const upsertClienteFinalConversation = vi.fn(async () => ({
       id: "conv-cliente",

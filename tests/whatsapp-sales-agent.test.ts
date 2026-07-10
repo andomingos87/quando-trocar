@@ -13,6 +13,7 @@ import {
   detectSmallTalk,
   detectSocialTest,
   detectVaiPensar,
+  extractRepresentanteCodigo,
   extractVolumeOrTicket,
   matchFaq,
 } from "@/lib/whatsapp/sales-agent";
@@ -81,6 +82,40 @@ describe("whatsapp sales agent — deterministic detectors", () => {
     expect(detectLeadOrigin("Oi quero testar o Quando Trocar")).toBe("landing_page");
     expect(detectLeadOrigin("oi", ["oi"])).toBe("landing_page");
     expect(detectLeadOrigin("bom dia")).toBe("manual_whatsapp");
+  });
+
+  test("extractRepresentanteCodigo captures #REP token and cleans the message (ADR-0019)", () => {
+    expect(
+      extractRepresentanteCodigo("Oi quero testar o Quando Trocar #REP-CARLOS"),
+    ).toEqual({ codigo: "CARLOS", cleaned: "Oi quero testar o Quando Trocar" });
+    // case-insensitive + normaliza para maiusculas
+    expect(extractRepresentanteCodigo("oi #rep-carlos-sp tudo bem")).toEqual({
+      codigo: "CARLOS-SP",
+      cleaned: "oi tudo bem",
+    });
+    // espaco entre # e REP tolerado
+    expect(extractRepresentanteCodigo("# REP-A1 oi").codigo).toBe("A1");
+    // sem token → mensagem intacta
+    expect(extractRepresentanteCodigo("Oi quero testar o Quando Trocar")).toEqual({
+      codigo: null,
+      cleaned: "Oi quero testar o Quando Trocar",
+    });
+    // codigo de 1 caractere e invalido
+    expect(extractRepresentanteCodigo("oi #REP-X").codigo).toBeNull();
+    // hifen final descartado
+    expect(extractRepresentanteCodigo("oi #REP-ABC-").codigo).toBe("ABC");
+  });
+
+  test("extractRepresentanteCodigo + detectLeadOrigin: codigo nao quebra a frase-gatilho", () => {
+    const { codigo, cleaned } = extractRepresentanteCodigo(
+      "Oi quero testar o Quando Trocar #REP-CARLOS",
+    );
+    expect(codigo).toBe("CARLOS");
+    expect(detectLeadOrigin(cleaned)).toBe("landing_page");
+    // sem a limpeza, o match exato falharia
+    expect(detectLeadOrigin("Oi quero testar o Quando Trocar #REP-CARLOS")).toBe(
+      "manual_whatsapp",
+    );
   });
 
   test("detectPriceQuestion catches common price phrasing", () => {

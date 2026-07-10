@@ -18,6 +18,8 @@ Arquivos por fase:
 2. [Fase 2 - Conversao e onboarding](./fase-2-conversao-onboarding.md)
 3. [Fase 3 - Lembretes reais](./fase-3-lembretes-reais.md)
 4. [Fase 4 - Retorno e dashboard](./fase-4-retorno-dashboard.md)
+5. [Fase 5 - Audio](./fase-5-audio.md)
+6. [Fase Representantes - Atribuicao e comissao](./fase-representantes-comissao.md)
 
 Resumo consolidado:
 

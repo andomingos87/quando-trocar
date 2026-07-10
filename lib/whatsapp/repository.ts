@@ -183,10 +183,11 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     nome: string | null;
     origem: "landing_page" | "manual_whatsapp";
     status: LeadStatus;
+    representanteCodigo?: string | null;
   }) {
     const existingResult = (await this.supabase
       .from("leads_oficina")
-      .select("id,nome,origem,status,metadata")
+      .select("id,nome,origem,status,metadata,representante_id")
       .eq("whatsapp", input.whatsapp)
       .maybeSingle()) as SupabaseResult<{
       id: string;
@@ -194,6 +195,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       origem: "landing_page" | "manual_whatsapp";
       status: LeadStatus;
       metadata: Record<string, unknown>;
+      representante_id: string | null;
     }>;
 
     throwIfError(existingResult);
@@ -204,6 +206,13 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       status: input.status,
     });
 
+    // ADR-0019: atribui representante apenas se o lead ainda nao tem um e o
+    // codigo resolve para um representante ativo. Codigo invalido e ignorado.
+    let representanteId: string | null = null;
+    if (input.representanteCodigo && !existingResult.data?.representante_id) {
+      representanteId = await this.resolveRepresentanteIdByCodigo(input.representanteCodigo);
+    }
+
     const result = (await this.supabase
       .from("leads_oficina")
       .upsert(
@@ -212,6 +221,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
           nome: merged.nome,
           origem: merged.origem,
           status: merged.status,
+          ...(representanteId ? { representante_id: representanteId } : {}),
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -232,6 +242,19 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       nome: result.data!.nome,
       metadata: result.data!.metadata,
     };
+  }
+
+  private async resolveRepresentanteIdByCodigo(codigo: string): Promise<string | null> {
+    const result = (await this.supabase
+      .from("representantes")
+      .select("id")
+      .ilike("codigo", codigo)
+      .eq("ativo", true)
+      .is("deleted_at", null)
+      .maybeSingle()) as SupabaseResult<{ id: string }>;
+
+    if (result.error) return null;
+    return result.data?.id ?? null;
   }
 
   async upsertConversation(input: { leadId: string | null; whatsapp: string }) {
@@ -684,6 +707,15 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
   }) {
     const now = new Date().toISOString();
     const nome = input.nomeOficina?.trim() || OFICINA_SEM_NOME;
+
+    // ADR-0019: a oficina herda o representante atribuido ao lead.
+    const leadRepResult = (await this.supabase
+      .from("leads_oficina")
+      .select("representante_id")
+      .eq("id", input.leadId)
+      .maybeSingle()) as SupabaseResult<{ representante_id: string | null }>;
+    const representanteId = leadRepResult.data?.representante_id ?? null;
+
     const oficinaResult = (await this.supabase
       .from("oficinas")
       .upsert(
@@ -694,6 +726,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
           status: "ativa",
           plano: "teste",
           origem: "landing_whatsapp",
+          ...(representanteId ? { representante_id: representanteId } : {}),
           updated_at: now,
         },
         { onConflict: "whatsapp_principal" },

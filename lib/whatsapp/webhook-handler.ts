@@ -17,7 +17,7 @@ import {
   INADIMPLENCIA_MESSAGE,
 } from "./inadimplencia-guard";
 import { WhatsappOnboardingAgent } from "./onboarding-agent";
-import { extractWorkshopName } from "./sales-agent";
+import { extractRepresentanteCodigo, extractWorkshopName } from "./sales-agent";
 import { OFICINA_SEM_NOME } from "./repository";
 import { WhatsappReminderAgent } from "./reminder-agent";
 import { WhatsappClienteFinalConciergeAgent } from "./cliente-final-concierge";
@@ -890,6 +890,14 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           contextWhatsappMessageId: inbound.contextWhatsappMessageId,
           landingPhrases: salesConfig?.frasesLanding,
         });
+
+        // ADR-0019: o router ja extraiu/atribuiu o codigo do representante.
+        // Remove o token do body para o agente e a mensagem persistida nao o
+        // carregarem (o payload bruto preserva o original para auditoria).
+        const repToken = extractRepresentanteCodigo(inbound.body);
+        if (repToken.codigo) {
+          inbound.body = repToken.cleaned;
+        }
         const savedInbound = await deps.repository.saveInboundMessage({
           conversationId: resolved.conversationId,
           leadId: resolved.leadId,

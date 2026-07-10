@@ -58,6 +58,24 @@ export function detectLeadOrigin(
   return normalizedPhrases.includes(normalized) ? "landing_page" : "manual_whatsapp";
 }
 
+// ADR-0019: o link wa.me do representante embute "#REP-<codigo>" na primeira
+// mensagem. Extracao deterministica (sem LLM). O token precisa sair da
+// mensagem antes de detectLeadOrigin (match exato da frase-gatilho) e antes
+// do agente processar o texto.
+const REPRESENTANTE_CODIGO_REGEX = /#\s*REP-([A-Z0-9][A-Z0-9-]{0,29})/i;
+
+export function extractRepresentanteCodigo(message: string): {
+  codigo: string | null;
+  cleaned: string;
+} {
+  const match = message.match(REPRESENTANTE_CODIGO_REGEX);
+  if (!match) return { codigo: null, cleaned: message };
+
+  const codigo = match[1].toUpperCase().replace(/-+$/, "");
+  const cleaned = message.replace(REPRESENTANTE_CODIGO_REGEX, " ").replace(/\s+/g, " ").trim();
+  return { codigo: codigo.length >= 2 ? codigo : null, cleaned };
+}
+
 export function isExplicitLossMessage(message: string) {
   const normalized = normalizeText(message);
   return [
