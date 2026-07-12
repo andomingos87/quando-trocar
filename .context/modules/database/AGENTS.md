@@ -36,3 +36,5 @@ todos os outros modulos — mudanca aqui reverbera em bot, admin e billing.
 - Glossario (tabelas/termos): `docs/glossary.md`
 - Convencoes: `.context/conventions.md`
 - Regras Supabase: `AGENTS.md` (secao Supabase Rules)
+- Licoes: `.context/lessons/0001-security-definer-grants-vazam.md`,
+  `.context/lessons/0002-deploy-corre-na-frente-das-migrations.md`
