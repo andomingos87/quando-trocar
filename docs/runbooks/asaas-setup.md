@@ -23,7 +23,7 @@ O ASAAS é o provedor de cobrança das oficinas. A gestão (provedor ativo, ambi
    - URL: `https://<seu-dominio>/api/webhooks/asaas` (a página do admin mostra a URL exata).
    - Token de autenticação: o mesmo definido no passo 2.
    - Eventos: pagamentos (`PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`, ...).
-5. **Preencher `cpf_cnpj` das oficinas** que serão cobradas (o ASAAS exige um customer com CPF/CNPJ). Sem isso, a geração de cobrança retorna `missing_cpf_cnpj`.
+5. **Preencher `cpf_cnpj` das oficinas** que serão cobradas (o ASAAS exige um customer com CPF/CNPJ). Sem isso, a geração de cobrança retorna `missing_cpf_cnpj`. Preencha em `/admin/oficinas` → **Editar** (campo "CPF / CNPJ"); a listagem marca "sem CPF/CNPJ" e o detalhe mostra o badge "pronta p/ cobrança". Para achar as pendentes, use o filtro **Cobrança → Sem CPF/CNPJ**.
 
 ## Testar de ponta a ponta (sandbox)
 

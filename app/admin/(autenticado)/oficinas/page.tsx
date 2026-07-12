@@ -18,7 +18,11 @@ function pickFilters(sp: Record<string, string | string[] | undefined>): Oficina
     plano_id: get("plano_id") || undefined,
     origem: (get("origem") as OficinaListFilters["origem"]) || undefined,
     motivo_pausa: (get("motivo_pausa") as OficinaListFilters["motivo_pausa"]) || undefined,
+    representante_id: get("representante_id") || undefined,
+    cobranca: (get("cobranca") as OficinaListFilters["cobranca"]) || undefined,
     busca: get("busca") || undefined,
+    sort: (get("sort") as OficinaListFilters["sort"]) || undefined,
+    dir: (get("dir") as OficinaListFilters["dir"]) || undefined,
     page: Math.max(1, Number(get("page") || "1") || 1),
     pageSize: 50,
   };

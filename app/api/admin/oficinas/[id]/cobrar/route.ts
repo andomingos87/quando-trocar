@@ -18,8 +18,15 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     const r = await gerarCobrancaProxima(supabase, id, { force: true });
     if (!r.ok) {
+      const REASON_MSG: Record<string, string> = {
+        preco_zero: "Preco efetivo e zero — ajuste o plano ou o preco negociado.",
+        cancelada: "Oficina cancelada nao pode ser cobrada.",
+        missing_vencimento: "Oficina sem proximo vencimento.",
+        missing_plano: "Oficina sem plano definido.",
+        missing_cpf_cnpj: "Preencha o CPF/CNPJ da oficina antes de cobrar via ASAAS.",
+      };
       return NextResponse.json(
-        { ok: false, message: `nao_gerado:${r.reason}` },
+        { ok: false, message: REASON_MSG[r.reason] ?? `nao_gerado:${r.reason}` },
         { status: 400 },
       );
     }

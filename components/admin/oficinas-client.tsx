@@ -1,20 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import type {
   OficinaListFilters,
   OficinaListResult,
+  OficinaSortKey,
 } from "@/lib/admin/oficinas";
 import { formatBRL, formatDate, formatRelative } from "@/lib/admin/format";
-import { OficinaCreateModal } from "./oficina-create-modal";
-import { OficinaEditModal } from "./oficina-edit-modal";
+import { Button, StatusBadge } from "@/components/admin/ui";
+import { OficinaStatusBadge } from "@/components/admin/oficina-status-badge";
+import { OficinaFormModal } from "./oficina-form-modal";
 
-const STATUS_BADGE: Record<string, string> = {
-  ativa: "bg-cyan-soft text-ink",
-  pausada: "bg-orange-soft text-[#8a5a00]",
-  cancelada: "bg-line text-muted",
+const SORT_LABEL: Record<OficinaSortKey, string> = {
+  nome: "Nome",
+  cidade: "Cidade",
+  status: "Status",
+  proximo_vencimento: "Vencimento",
+  created_at: "Criada",
 };
 
 export function OficinasClient({
@@ -30,22 +35,62 @@ export function OficinasClient({
 }) {
   const router = useRouter();
   const sp = useSearchParams();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<OficinaListResult["rows"][number] | null>(null);
+  const [search, setSearch] = useState(filters.busca ?? "");
 
-  const updateFilter = (key: string, value: string | undefined) => {
+  const pushParams = (mutate: (p: URLSearchParams) => void) => {
     const params = new URLSearchParams(sp.toString());
-    if (value && value !== "todas" && value !== "") {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    params.delete("page");
+    mutate(params);
     startTransition(() => router.push(`/admin/oficinas?${params.toString()}`));
   };
 
+  const updateFilter = (key: string, value: string | undefined) => {
+    pushParams((params) => {
+      if (value && value !== "todas" && value !== "") params.set(key, value);
+      else params.delete(key);
+      params.delete("page");
+    });
+  };
+
+  // Busca com debounce (400ms), alem de Enter (imediato) e botao limpar.
+  useEffect(() => {
+    const current = filters.busca ?? "";
+    if (search === current) return;
+    const t = setTimeout(() => updateFilter("busca", search.trim() || undefined), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  const toggleSort = (key: OficinaSortKey) => {
+    const nextDir = initial.sort === key && initial.dir === "asc" ? "desc" : "asc";
+    pushParams((params) => {
+      params.set("sort", key);
+      params.set("dir", nextDir);
+      params.delete("page");
+    });
+  };
+
   const totalPages = Math.max(1, Math.ceil(initial.total / initial.pageSize));
+  const firstItem = initial.total === 0 ? 0 : (initial.page - 1) * initial.pageSize + 1;
+  const lastItem = Math.min(initial.page * initial.pageSize, initial.total);
+
+  const SortHeader = ({ k, className }: { k: OficinaSortKey; className?: string }) => {
+    const active = initial.sort === k;
+    return (
+      <th className={`px-4 py-3 font-medium ${className ?? ""}`}>
+        <button
+          type="button"
+          onClick={() => toggleSort(k)}
+          className={`inline-flex items-center gap-1 hover:text-ink ${active ? "text-ink" : ""}`}
+        >
+          {SORT_LABEL[k]}
+          <span className="text-[10px]">{active ? (initial.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+        </button>
+      </th>
+    );
+  };
 
   return (
     <>
@@ -54,162 +99,166 @@ export function OficinasClient({
           <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
             Busca
           </span>
-          <input
-            type="search"
-            defaultValue={filters.busca ?? ""}
-            onBlur={(e) => updateFilter("busca", e.target.value || undefined)}
-            placeholder="Nome, WhatsApp, cidade"
-            className="w-full sm:w-64 rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-brand"
-          />
+          <div className="relative sm:w-72">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") updateFilter("busca", search.trim() || undefined);
+              }}
+              placeholder="Nome, WhatsApp, cidade, CPF/CNPJ, e-mail"
+              className="w-full rounded-lg border border-line px-3 py-1.5 pr-8 text-sm outline-none focus:border-brand"
+            />
+            {search ? (
+              <button
+                type="button"
+                aria-label="Limpar busca"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
         </label>
-        <label className="block w-full text-sm sm:w-auto">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
-            Status
-          </span>
-          <select
-            value={filters.status ?? "todas"}
-            onChange={(e) => updateFilter("status", e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-brand sm:w-auto"
+        <FilterSelect
+          label="Status"
+          value={filters.status ?? "todas"}
+          onChange={(v) => updateFilter("status", v)}
+          options={[
+            ["todas", "Todas"],
+            ["ativa", "Ativa"],
+            ["pausada", "Pausada"],
+            ["cancelada", "Cancelada"],
+          ]}
+        />
+        <FilterSelect
+          label="Plano"
+          value={filters.plano_id ?? ""}
+          onChange={(v) => updateFilter("plano_id", v || undefined)}
+          options={[["", "Todos"], ...planos.map((p) => [p.id, p.nome] as [string, string])]}
+        />
+        <FilterSelect
+          label="Representante"
+          value={filters.representante_id ?? ""}
+          onChange={(v) => updateFilter("representante_id", v || undefined)}
+          options={[["", "Todos"], ...representantes.map((r) => [r.id, r.nome] as [string, string])]}
+        />
+        <FilterSelect
+          label="Cobranca"
+          value={filters.cobranca ?? ""}
+          onChange={(v) => updateFilter("cobranca", v || undefined)}
+          options={[
+            ["", "Todas"],
+            ["pronta", "Pronta (com CPF/CNPJ)"],
+            ["sem_documento", "Sem CPF/CNPJ"],
+          ]}
+        />
+        <FilterSelect
+          label="Origem"
+          value={filters.origem ?? ""}
+          onChange={(v) => updateFilter("origem", v || undefined)}
+          options={[
+            ["", "Todas"],
+            ["landing_whatsapp", "Landing WhatsApp"],
+            ["manual", "Manual"],
+            ["importacao", "Importacao"],
+          ]}
+        />
+        <div className="flex w-full gap-2 sm:ml-auto sm:w-auto">
+          <a
+            href={`/api/admin/oficinas/export?${sp.toString()}`}
+            className="inline-flex flex-1 items-center justify-center rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-paper-soft sm:flex-none"
           >
-            <option value="todas">Todas</option>
-            <option value="ativa">Ativa</option>
-            <option value="pausada">Pausada</option>
-            <option value="cancelada">Cancelada</option>
-          </select>
-        </label>
-        <label className="block w-full text-sm sm:w-auto">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
-            Plano
-          </span>
-          <select
-            value={filters.plano_id ?? ""}
-            onChange={(e) => updateFilter("plano_id", e.target.value || undefined)}
-            className="w-full rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-brand sm:w-auto"
-          >
-            <option value="">Todos</option>
-            {planos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block w-full text-sm sm:w-auto">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
-            Origem
-          </span>
-          <select
-            value={filters.origem ?? ""}
-            onChange={(e) => updateFilter("origem", e.target.value || undefined)}
-            className="w-full rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-brand sm:w-auto"
-          >
-            <option value="">Todas</option>
-            <option value="landing_whatsapp">Landing WhatsApp</option>
-            <option value="manual">Manual</option>
-            <option value="importacao">Importacao</option>
-          </select>
-        </label>
-        {filters.status === "pausada" ? (
-          <label className="block w-full text-sm sm:w-auto">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
-              Motivo
-            </span>
-            <select
-              value={filters.motivo_pausa ?? ""}
-              onChange={(e) => updateFilter("motivo_pausa", e.target.value || undefined)}
-              className="w-full rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-brand sm:w-auto"
-            >
-              <option value="">Todos</option>
-              <option value="inadimplencia">Inadimplencia</option>
-              <option value="voluntaria">Voluntaria</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-        ) : null}
-        <div className="w-full sm:ml-auto sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark sm:w-auto"
-          >
+            Exportar CSV
+          </a>
+          <Button onClick={() => setModalOpen(true)} className="flex-1 sm:flex-none">
             Nova oficina
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-line bg-white">
+      <div
+        className={`overflow-x-auto rounded-2xl border border-line bg-white transition-opacity ${
+          isPending ? "opacity-60" : ""
+        }`}
+      >
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-paper-soft text-xs uppercase tracking-wide text-muted">
             <tr>
-              <th className="px-4 py-3 font-medium">Nome</th>
+              <SortHeader k="nome" />
               <th className="px-4 py-3 font-medium">WhatsApp</th>
-              <th className="px-4 py-3 font-medium">Cidade</th>
-              <th className="px-4 py-3 font-medium">Status</th>
+              <SortHeader k="cidade" />
+              <SortHeader k="status" />
               <th className="px-4 py-3 font-medium">Plano</th>
               <th className="px-4 py-3 font-medium">Preco</th>
-              <th className="px-4 py-3 font-medium">Vencimento</th>
+              <th className="px-4 py-3 font-medium">Representante</th>
+              <SortHeader k="proximo_vencimento" />
               <th className="px-4 py-3 font-medium">Ultima atividade</th>
-              <th className="px-4 py-3 font-medium">Criada</th>
+              <th className="px-4 py-3 font-medium">Acoes</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line-soft">
             {initial.rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-left text-muted">
-                  Nenhuma oficina encontrada com esses filtros.
+                <td colSpan={10} className="px-4 py-16 text-center">
+                  <p className="text-sm font-medium text-ink">Nenhuma oficina encontrada</p>
+                  <p className="mt-1 text-sm text-muted">
+                    Ajuste os filtros ou cadastre uma nova oficina.
+                  </p>
+                  <Button className="mt-4" onClick={() => setModalOpen(true)}>
+                    Nova oficina
+                  </Button>
                 </td>
               </tr>
             ) : null}
             {initial.rows.map((row) => (
               <tr key={row.id} className="hover:bg-paper-soft">
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setEditRow(row)}
-                    className="text-left font-medium text-ink hover:text-brand hover:underline"
+                  <Link
+                    href={`/admin/oficinas/${row.id}`}
+                    className="font-medium text-ink hover:text-brand hover:underline"
                   >
                     {row.nome}
-                  </button>
+                  </Link>
+                  {!row.cobranca_pronta ? (
+                    <StatusBadge tone="erro" className="ml-2 align-middle">
+                      sem CPF/CNPJ
+                    </StatusBadge>
+                  ) : null}
                 </td>
-                <td className="px-4 py-3 text-ink tabular-nums">
-                  {row.whatsapp_principal}
-                </td>
+                <td className="px-4 py-3 text-ink tabular-nums">{row.whatsapp_principal}</td>
                 <td className="px-4 py-3 text-ink">{row.cidade ?? "—"}</td>
                 <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      STATUS_BADGE[row.status] ?? ""
-                    }`}
-                  >
-                    {row.status}
-                  </span>
-                  {row.motivo_pausa ? (
-                    <span className="ml-1 text-xs text-muted">
-                      ({row.motivo_pausa})
-                    </span>
-                  ) : null}
+                  <OficinaStatusBadge status={row.status} motivo={row.motivo_pausa} />
                 </td>
                 <td className="px-4 py-3 text-ink">{row.plano_nome ?? "—"}</td>
                 <td className="px-4 py-3 text-ink">
                   <span className="tabular-nums">{formatBRL(row.preco_efetivo)}</span>
-                  {row.preco_negociado !== null ? (
-                    <span className="ml-1 rounded bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand-deep">
-                      negociado
-                    </span>
-                  ) : (
-                    <span className="ml-1 rounded bg-line-soft px-1.5 py-0.5 text-[10px] font-medium text-muted">
-                      base
-                    </span>
-                  )}
+                  <span
+                    className={`ml-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      row.preco_negociado !== null
+                        ? "bg-brand-soft text-brand-deep"
+                        : "bg-line-soft text-muted"
+                    }`}
+                  >
+                    {row.preco_negociado !== null ? "negociado" : "base"}
+                  </span>
                 </td>
-                <td className="px-4 py-3 text-ink">
-                  {formatDate(row.proximo_vencimento)}
-                </td>
+                <td className="px-4 py-3 text-muted">{row.representante_nome ?? "—"}</td>
+                <td className="px-4 py-3 text-ink">{formatDate(row.proximo_vencimento)}</td>
                 <td className="px-4 py-3 text-muted">
                   {row.ultima_atividade_em ? formatRelative(row.ultima_atividade_em) : "—"}
                 </td>
-                <td className="px-4 py-3 text-muted">
-                  {formatDate(row.created_at)}
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditRow(row)}
+                    className="rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink hover:bg-line-soft"
+                  >
+                    Editar
+                  </button>
                 </td>
               </tr>
             ))}
@@ -217,20 +266,21 @@ export function OficinasClient({
         </table>
       </div>
 
-      {totalPages > 1 ? (
-        <div className="flex items-center justify-between text-sm text-muted">
-          <span>
-            Pagina {initial.page} de {totalPages}
-          </span>
-          <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+        <span>
+          {initial.total === 0
+            ? "Nenhum resultado"
+            : `Mostrando ${firstItem}–${lastItem} de ${initial.total}`}
+        </span>
+        {totalPages > 1 ? (
+          <div className="flex items-center gap-2">
+            <span>
+              Pagina {initial.page} de {totalPages}
+            </span>
             <button
               type="button"
               disabled={initial.page <= 1}
-              onClick={() => {
-                const params = new URLSearchParams(sp.toString());
-                params.set("page", String(initial.page - 1));
-                router.push(`/admin/oficinas?${params.toString()}`);
-              }}
+              onClick={() => pushParams((p) => p.set("page", String(initial.page - 1)))}
               className="rounded-lg border border-line px-3 py-1 disabled:opacity-50"
             >
               Anterior
@@ -238,33 +288,31 @@ export function OficinasClient({
             <button
               type="button"
               disabled={initial.page >= totalPages}
-              onClick={() => {
-                const params = new URLSearchParams(sp.toString());
-                params.set("page", String(initial.page + 1));
-                router.push(`/admin/oficinas?${params.toString()}`);
-              }}
+              onClick={() => pushParams((p) => p.set("page", String(initial.page + 1)))}
               className="rounded-lg border border-line px-3 py-1 disabled:opacity-50"
             >
               Proxima
             </button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {modalOpen ? (
-        <OficinaCreateModal
+        <OficinaFormModal
+          mode="create"
           planos={planos}
           representantes={representantes}
           onClose={() => setModalOpen(false)}
           onSaved={(id) => {
             setModalOpen(false);
-            router.push(`/admin/oficinas/${id}`);
+            if (id) router.push(`/admin/oficinas/${id}`);
           }}
         />
       ) : null}
 
       {editRow ? (
-        <OficinaEditModal
+        <OficinaFormModal
+          mode="edit"
           oficina={editRow}
           planos={planos}
           representantes={representantes}
@@ -276,5 +324,36 @@ export function OficinasClient({
         />
       ) : null}
     </>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  return (
+    <label className="block w-full text-sm sm:w-auto">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-brand sm:w-auto"
+      >
+        {options.map(([v, l]) => (
+          <option key={v} value={v}>
+            {l}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

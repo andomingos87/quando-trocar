@@ -5,3 +5,5 @@ export type { StatusTone } from "./status-badge";
 export { Card, CardHeader, CardLabel, CardValue, CardHint } from "./card";
 export { Input, Select, Textarea, Label, Field } from "./input";
 export { WhatsAppInput } from "./whatsapp-input";
+export { CpfCnpjInput, CepInput } from "./masked-input";
+export { Modal } from "./modal";

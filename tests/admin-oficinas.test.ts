@@ -57,6 +57,41 @@ describe("validateOficinaCreate", () => {
   });
 });
 
+describe("validateOficinaCreate — cadastro/fiscal", () => {
+  it("normaliza cpf_cnpj valido para digitos", () => {
+    const r = validateOficinaCreate({ ...validBase, cpf_cnpj: "529.982.247-25" });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.cpf_cnpj).toBe("52998224725");
+  });
+
+  it("rejeita cpf_cnpj invalido", () => {
+    const r = validateOficinaCreate({ ...validBase, cpf_cnpj: "111.111.111-11" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.field).toBe("cpf_cnpj");
+  });
+
+  it("rejeita email invalido", () => {
+    const r = validateOficinaCreate({ ...validBase, email: "x@y" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.field).toBe("email");
+  });
+
+  it("rejeita UF invalida", () => {
+    const r = validateOficinaCreate({ ...validBase, estado: "XX" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.field).toBe("estado");
+  });
+
+  it("normaliza cep (digitos) e uf (maiuscula)", () => {
+    const r = validateOficinaCreate({ ...validBase, cep: "01001-000", estado: "sp" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.cep).toBe("01001000");
+      expect(r.data.estado).toBe("SP");
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // patchOficina — edicao de cadastro (stubs minimos)
 // ---------------------------------------------------------------------------
@@ -157,6 +192,38 @@ describe("patchOficina — edicao de cadastro", () => {
     );
     expect(result.actions).toEqual([]);
     expect((supabase as unknown as { _update: { mock: { calls: unknown[] } } })._update.mock.calls.length).toBe(0);
+  });
+
+  it("rejeita cpf_cnpj invalido com 400", async () => {
+    const supabase = makeOficinaSupabase({ row: baseRow });
+    await expect(
+      patchOficina(supabase, OFICINA_ID, { cpf_cnpj: "123" }, { adminId: "a", ip: null }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("grava cpf_cnpj normalizado e audita oficina.update_fiscal", async () => {
+    const supabase = makeOficinaSupabase({ row: baseRow });
+    const result = await patchOficina(
+      supabase,
+      OFICINA_ID,
+      { cpf_cnpj: "529.982.247-25" },
+      { adminId: "a", ip: null },
+    );
+    expect(result.actions).toContain("oficina.update_fiscal");
+    const update = (supabase as unknown as { _update: { mock: { calls: unknown[][] } } })._update;
+    expect(update.mock.calls[0][0]).toMatchObject({ cpf_cnpj: "52998224725" });
+  });
+
+  it("rejeita janela de envio invertida (fim <= inicio) com 400", async () => {
+    const supabase = makeOficinaSupabase({ row: baseRow });
+    await expect(
+      patchOficina(
+        supabase,
+        OFICINA_ID,
+        { horario_envio_inicio: "18:00", horario_envio_fim: "08:00" },
+        { adminId: "a", ip: null },
+      ),
+    ).rejects.toMatchObject({ status: 400 });
   });
 });
 

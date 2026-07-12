@@ -228,7 +228,10 @@ Dados mínimos coletados no fluxo: `nome_oficina`, `whatsapp_principal`.
 ### 2.3 Cadastro manual de oficina (painel admin)
 - Admin pode criar oficina pelo painel com `origem = 'manual'` (pula bot vendedor).
 - Útil para captação offline, eventos, indicações.
-- Fonte: [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
+- Campos do formulário (`OficinaFormModal`, modo `create`): obrigatórios `nome`, `whatsapp`, `cidade`, `plano_id`; opcionais `responsavel`, `cpf_cnpj`, `email`, endereço (`cep`, `estado`/UF, `bairro`, `logradouro`, `numero`, `complemento`), `preco_negociado`, `representante_id`, `status` inicial (`ativa | pausada`), `ticket_medio`, `volume_trocas_mes`, `observacao`.
+- `observacao` é **persistida** em `oficinas.observacao` (antes o campo do formulário era descartado no payload de auditoria).
+- Validação/normalização de `cpf_cnpj`, `email`, `cep`, `estado` segue as mesmas regras da §2.5.
+- Fonte: [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md), `validateOficinaCreate`/`createOficinaManual` em `lib/admin/oficinas.ts`, `OficinaFormModal` em `components/admin/oficina-form-modal.tsx`.
 
 ### 2.4 Conversão manual de lead em oficina (painel admin)
 Admin pode converter um lead vivo em oficina sem passar pelo bot. Fechamento por telefone ou visita.
@@ -241,14 +244,17 @@ Ação atômica via RPC `convert_lead_to_oficina_manual`:
 - Fonte: `convertLeadManual` em `lib/admin/leads.ts`, migration `20260520120000_admin_lead_cliente_actions.sql`.
 
 ### 2.5 Edição do cadastro de oficina (painel admin)
-Admin edita o cadastro de uma oficina por um modal aberto ao clicar na oficina na listagem (`/admin/oficinas`). Campos editáveis: `nome`, `whatsapp_principal`, `cidade`, `responsavel`, `plano_id`, `preco_negociado`, `status` (e `motivo_pausa` quando pausada).
+Na listagem (`/admin/oficinas`) o **nome** leva à página de detalhe; a edição abre pelo botão **Editar** (na linha da lista ou no cabeçalho do detalhe), sempre no mesmo `OficinaFormModal` (modo `edit`). Campos editáveis: `nome`, `whatsapp_principal`, `responsavel`, `cpf_cnpj`, `email`, endereço (`cep`, `cidade`, `estado`, `bairro`, `logradouro`, `numero`, `complemento`), `plano_id`, `preco_negociado`, `representante_id`, `status` (e `motivo_pausa` quando pausada), `ticket_medio`, `volume_trocas_mes`, `observacao`.
 
 Regras:
-- `nome` obrigatório (não vazio); `cidade` e `responsavel` aceitam vazio → gravam `null`.
+- `nome` obrigatório (não vazio); campos de texto opcionais aceitam vazio → gravam `null`.
 - `whatsapp_principal` é normalizado para E.164 e validado contra unicidade — bloqueia (409) se já estiver em uso por outra oficina não-cancelada.
+- `cpf_cnpj` valida dígito verificador (CPF ou CNPJ) e é gravado **só com dígitos**; habilita a cobrança ASAAS (§9.5). `email` valida formato; `cep` exige 8 dígitos (gravado só dígitos); `estado` valida UF (gravado em maiúsculo); `ticket_medio` ≥ 0; `volume_trocas_mes` inteiro ≥ 0.
 - Mudança de `status` segue as mesmas regras de [§10](#10-inadimplência-e-pausa-de-oficina): cancelar exige confirmar o nome e é irreversível por esta tela; oficina cancelada não volta atrás aqui.
-- Auditoria: uma entrada por ação distinta (`oficina.update_cadastro`, `oficina.update_status`, `oficina.update_plano`, `oficina.update_preco`).
-- Fonte: `patchOficina` em `lib/admin/oficinas.ts`, `OficinaEditModal` em `components/admin/oficina-edit-modal.tsx`, rota `PATCH /api/admin/oficinas/[id]`.
+- Auditoria: uma entrada por ação distinta (`oficina.update_cadastro`, `oficina.update_fiscal`, `oficina.update_status`, `oficina.update_plano`, `oficina.update_preco`, `oficina.update_representante`, `oficina.update_lembrete_config`).
+- Fonte: `patchOficina` em `lib/admin/oficinas.ts`, `OficinaFormModal` em `components/admin/oficina-form-modal.tsx`, rota `PATCH /api/admin/oficinas/[id]`.
+
+A **automação de lembretes por oficina** (`dias_lembrete_padrao`, `horario_envio_inicio`/`fim`, `mensagem_lembrete_padrao`) é editável na página de detalhe (`OficinaLembreteConfigCard`), pela mesma rota `PATCH`. `dias_lembrete_padrao` deve estar entre 1 e 365; a janela de envio exige `fim > inicio`. Audita `oficina.update_lembrete_config`.
 
 ### 2.6 Exclusão de oficina — soft delete (painel admin)
 Admin pode excluir uma oficina pela "zona de perigo" do mesmo modal de edição (`/admin/oficinas`). Exclusão é **soft delete**, distinta de `status = 'cancelada'`:
@@ -261,7 +267,7 @@ Regras:
 - **Irreversível por esta tela** — restauração só diretamente no banco (limpar `deleted_at`).
 - O WhatsApp de uma oficina excluída deixa de bloquear unicidade, podendo ser reusado por um novo cadastro.
 - Auditoria: uma entrada `oficina.soft_delete`.
-- Fonte: `softDeleteOficina` em `lib/admin/oficinas.ts`, `OficinaEditModal` em `components/admin/oficina-edit-modal.tsx`, rota `DELETE /api/admin/oficinas/[id]`, migration `20260602000000_oficinas_soft_delete.sql`.
+- Fonte: `softDeleteOficina` em `lib/admin/oficinas.ts`, `OficinaFormModal` (zona de perigo) em `components/admin/oficina-form-modal.tsx`, rota `DELETE /api/admin/oficinas/[id]`, migration `20260602000000_oficinas_soft_delete.sql`.
 
 ### 2.7 Backfill do nome da oficina ("Oficina sem nome")
 Oficinas convertidas antes da captura obrigatória (ou cujo lead não respondeu o nome) ficam com `nome = "Oficina sem nome"`. Na **próxima interação** dessa oficina (modo `onboarding`/`operacao`), o webhook intercepta antes do agente de onboarding:
@@ -618,7 +624,7 @@ Mudar copy de um template = nova versão + aprovação Meta (horas a dias).
 - A troca de provedor só vale para **novas** cobranças; pendentes seguem no provedor em que foram criadas.
 - **Credenciais** (API keys / tokens) ficam cifradas no **Supabase Vault** (nomes fixos: `asaas_api_key`, `asaas_webhook_token`, `mercado_pago_access_token`, `mercado_pago_webhook_secret`), gravadas/lidas só via funções `SECURITY DEFINER` acessíveis pelo `service_role`. A UI mostra apenas se cada segredo **está configurado** — nunca o valor. Auditoria nunca registra segredo.
 - Um provedor só pode ser **ativado** quando tem credencial usável (guard em `validateConfiguracoesPagamentoInput`).
-- **ASAAS** exige um *customer* com `oficinas.cpf_cnpj` antes de cobrar; o id fica em `oficinas.asaas_customer_id`. Sem CPF/CNPJ, a geração retorna `missing_cpf_cnpj`. A cobrança usa `billingType: UNDEFINED` (cliente escolhe PIX / boleto / cartão).
+- **ASAAS** exige um *customer* com `oficinas.cpf_cnpj` antes de cobrar; o id fica em `oficinas.asaas_customer_id`. Sem CPF/CNPJ, a geração retorna `missing_cpf_cnpj`. O `cpf_cnpj` é preenchido no cadastro/edição da oficina (§2.3/§2.5); a listagem sinaliza "sem CPF/CNPJ" e o detalhe mostra badge "pronta p/ cobrança". A cobrança usa `billingType: UNDEFINED` (cliente escolhe PIX / boleto / cartão).
 - Webhooks: `POST /api/webhooks/mercado-pago` e `POST /api/webhooks/asaas`. Ambos passam pelo mesmo handler idempotente (`lib/payments/process-webhook.ts`). O ASAAS é validado pelo header `asaas-access-token`; o MP pela assinatura `x-signature`.
 - Fonte: [ADR-0021](./adr/0021-gateway-pagamento-multiplo-asaas.md), `docs/runbooks/asaas-setup.md`.
 

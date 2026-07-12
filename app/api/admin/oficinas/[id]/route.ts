@@ -57,6 +57,41 @@ export async function PATCH(request: Request, ctx: Ctx) {
     patch.cancelConfirmationName = body.cancelConfirmationName;
   }
 
+  // Cadastro / fiscal / endereco / observacao (string | null).
+  const STRING_FIELDS = [
+    "cpf_cnpj",
+    "email",
+    "cep",
+    "logradouro",
+    "numero",
+    "complemento",
+    "bairro",
+    "estado",
+    "observacao",
+    "mensagem_lembrete_padrao",
+  ] as const;
+  for (const key of STRING_FIELDS) {
+    const v = body[key];
+    if (v === null || typeof v === "string") patch[key] = v;
+  }
+
+  // Qualificacao (number | null).
+  for (const key of ["ticket_medio", "volume_trocas_mes"] as const) {
+    const v = body[key];
+    if (v === null || typeof v === "number") patch[key] = v;
+  }
+
+  // Config de lembrete.
+  if (typeof body.dias_lembrete_padrao === "number") {
+    patch.dias_lembrete_padrao = body.dias_lembrete_padrao;
+  }
+  if (typeof body.horario_envio_inicio === "string") {
+    patch.horario_envio_inicio = body.horario_envio_inicio;
+  }
+  if (typeof body.horario_envio_fim === "string") {
+    patch.horario_envio_fim = body.horario_envio_fim;
+  }
+
   try {
     const supabase = createSupabaseAdminClient();
     const ip = getRequestIp(request);
