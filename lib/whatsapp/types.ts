@@ -94,12 +94,45 @@ export type FaqVendasRecord = {
   ordem: number;
 };
 
+// Modo da camada de geracao conversacional (ADR-0020, fase CV1).
+// - off: o bot envia apenas a resposta deterministica ("enlatada") — comportamento atual.
+// - sombra: gera + valida + audita o que *diria*, mas ainda envia a enlatada.
+// - on: envia a gerada quando aprovada no validador; senao cai na enlatada.
+export type GeracaoLlmModo = "off" | "sombra" | "on";
+
 export type ConfiguracoesVendedor = {
   taxaRecuperacaoRoi: number;
   whatsappHandoffComercial: string;
   frasesLanding: string[];
   precoPartida: number;
+  geracaoLlmModo: GeracaoLlmModo;
 };
+
+// Uma linha do historico da conversa lida pelo gerador (continuidade de tom).
+export type RecentMessage = {
+  direction: "inbound" | "outbound";
+  body: string;
+  sentAt: string | null;
+};
+
+// Resultado do validador deterministico de saida (ADR-0020, poder de veto).
+export type ReplyValidationResult = { ok: true } | { ok: false; reason: string };
+
+// Entrada do gerador conversacional. `deterministicReply` e o "esqueleto de
+// fatos + CTA" que o LLM deve apenas reescrever (naturalizar), sem inventar.
+export type ReplyGenerationInput = {
+  deterministicReply: string;
+  intent: string | null;
+  agentMode: string;
+  history: RecentMessage[];
+  salesConfig: ConfiguracoesVendedor | null;
+};
+
+// Contrato do gerador. `generate` devolve a string reescrita ou `null` quando
+// nao pode/nao deve gerar (sem key, erro, timeout) — o caller usa a enlatada.
+export interface ReplyGenerator {
+  generate(input: ReplyGenerationInput): Promise<string | null>;
+}
 
 export type TipoServico = "troca_oleo" | "amortecedor" | "revisao" | "outro";
 
@@ -501,6 +534,13 @@ export type WhatsappRepository = {
   }): Promise<void>;
   listActiveFaqs?(): Promise<FaqVendasRecord[]>;
   getConfiguracoesVendedor?(): Promise<ConfiguracoesVendedor>;
+  // Ultimas N mensagens da conversa (asc por tempo). Primeira leitura de
+  // historico do projeto — usada como contexto do gerador conversacional
+  // (ADR-0020). Opcional: quando ausente, o gerador roda sem historico.
+  listRecentMessages?(input: {
+    conversationId: string;
+    limit: number;
+  }): Promise<RecentMessage[]>;
 };
 
 export type WhatsappSender = {

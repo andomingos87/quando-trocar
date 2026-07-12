@@ -776,6 +776,19 @@ Lista das coisas que o bot **nunca** faz, com fonte:
 | Expor secret server-only para client component | Item 12.3 |
 | Suporte: prometer prazo de retorno, reabrir acesso, mudar `oficinas.status` ou tocar `pagamentos` | Item 14 |
 | Cobrança: prometer prazo, parcelamento, desconto ou condição comercial; gerar link MP novo | Item 15 |
+| Enviar resposta gerada por LLM sem passar pelo validador determinístico; texto gerado mudar estado | [ADR-0020](./adr/0020-camada-geracao-conversacional.md) |
+| Inventar resposta fora do conhecimento fornecido (deve admitir e encaminhar — protocolo "não sei") | [ADR-0020](./adr/0020-camada-geracao-conversacional.md) |
+
+### 13.1 Camada de geração conversacional (ADR-0020)
+
+O bot pode **gerar** o texto de saída via LLM (`OPENAI_MODEL_RESPONDER`), mas dentro de uma camada com garantias determinísticas:
+
+- **Fronteira de estado**: a geração produz apenas `string`. Toda decisão de estado (`lead.status`, `participant_type`, `agent_mode`, pagamento, opt-out, status de lembrete) continua determinística ([ADR-0001](./adr/0001-llm-como-conselheiro-nao-decisor.md)). O backend define o esqueleto (fatos permitidos + ação + CTA); o LLM define a redação.
+- **Validador de saída** (`lib/whatsapp/reply-validator.ts`): reprova preço ≠ `precoPartida` — numérico (parsing pt-BR distingue milhar de decimal: `R$ 5.9` ≠ `R$ 59`) ou escrito por extenso ("cento e noventa reais") —, promessa de resultado/agenda/prazo, URL fora da allowlist (links são normalizados por NFKC + mapa de confusáveis Unicode antes da checagem: pontos/barras ideográficos e hosts com homóglifo não burlam a allowlist), vazamento cross-tenant e tamanho acima do cap. Em qualquer dúvida, reprova (fail-safe → enlatada).
+- **Fallback**: erro, timeout ou reprovação → envia a resposta enlatada padrão (comportamento pré-ADR-0020). Nunca há regressão pior que o bot determinístico.
+- **Modo** (`configuracoes_vendedor.geracao_llm_modo`): `off` (idêntico ao histórico) · `sombra` (gera+valida+loga, envia enlatada) · `on` (envia gerada aprovada). Kill switch permanente.
+- **Auditoria**: cada geração registra versão do prompt, intenção, aprovação/reprovação e uso de fallback em `agent_tool_calls`.
+- **Protocolo "não sei"**: fora do conhecimento fornecido, admite e encaminha; a pergunta vira registro em `perguntas_sem_resposta`.
 
 ---
 

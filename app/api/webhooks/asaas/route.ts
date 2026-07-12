@@ -5,17 +5,16 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Webhook do Mercado Pago (ADR-0008). A logica e agnostica de provedor e vive
-// em lib/payments/process-webhook.ts (ADR-0021); aqui so resolvemos o gateway.
+// Webhook do ASAAS (ADR-0021). Configure esta URL no painel do ASAAS com um
+// authToken; o token e validado em AsaasGateway.verifyWebhook (asaas-access-token).
 export async function POST(request: Request) {
   const rawBody = await request.text();
   const supabase = createSupabaseAdminClient();
   let gateway;
   try {
-    gateway = await getGateway(supabase, "mercado_pago");
+    gateway = await getGateway(supabase, "asaas");
   } catch (err) {
-    console.error("mp webhook gateway unavailable", err);
-    // 200 para o MP nao reenfileirar infinitamente quando billing esta desligado.
+    console.error("asaas webhook gateway unavailable", err);
     return new Response(JSON.stringify({ ok: true, ignored: "gateway_unavailable" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },

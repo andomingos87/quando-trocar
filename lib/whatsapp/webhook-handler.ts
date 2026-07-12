@@ -23,6 +23,11 @@ import { WhatsappReminderAgent } from "./reminder-agent";
 import { WhatsappClienteFinalConciergeAgent } from "./cliente-final-concierge";
 import { WhatsappSupportAgent } from "./support-agent";
 import {
+  OpenAiReplyGenerator,
+  maybeGenerateConversationalReply,
+} from "./reply-generator";
+import { siteConfig, whatsappLink } from "../config";
+import {
   extractInboundMessages,
   extractProviderEventId,
   extractStatusEvents,
@@ -42,8 +47,10 @@ import type {
   ConversationAgentMode,
   InboundWhatsappMessage,
   OnboardingAgent,
+  RecentMessage,
   RegisterServiceInput,
   ReminderAgent,
+  ReplyGenerator,
   SalesAgent,
   SupportAgent,
   TranscriptionStatus,
@@ -159,6 +166,7 @@ type HandlerDeps = {
   conciergeAgent?: ClienteFinalConciergeAgent;
   supportAgent?: SupportAgent;
   cobrancaAgent?: CobrancaAgent;
+  replyGenerator?: ReplyGenerator;
   mediaDownloader?: MediaDownloader;
   audioTranscriber?: AudioTranscriber;
   imageDescriber?: ImageDescriber;
@@ -659,6 +667,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
     deps.conciergeAgent ?? new WhatsappClienteFinalConciergeAgent();
   const supportAgent = deps.supportAgent ?? new WhatsappSupportAgent();
   const cobrancaAgent = deps.cobrancaAgent ?? new WhatsappCobrancaAgent();
+  // Gerador conversacional (ADR-0020). So existe quando ha OPENAI key; ausente
+  // => modo off efetivo (maybeGenerateConversationalReply cai na enlatada).
+  const replyGenerator: ReplyGenerator | undefined =
+    deps.replyGenerator ??
+    (process.env.OPENAI_API_KEY ? new OpenAiReplyGenerator() : undefined);
   const mediaDownloader: MediaDownloader | null =
     deps.mediaDownloader ??
     (typeof (deps.whatsapp as Partial<MediaDownloader>).getMediaMetadata === "function" &&
@@ -1514,6 +1527,61 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           } else {
             replyBody = "Recebi sua mensagem. Um humano segue com os próximos passos por aqui.";
           }
+
+          // Camada de geracao conversacional (ADR-0020). Nesse ponto replyBody
+          // ja e a resposta deterministica ("enlatada") de qualquer modo. O
+          // gerador so naturaliza o tom; nunca muda estado. Modo off => no-op.
+          const geracaoModo = salesConfig?.geracaoLlmModo ?? "off";
+          let recentHistory: RecentMessage[] = [];
+          if (geracaoModo !== "off" && deps.repository.listRecentMessages) {
+            try {
+              recentHistory = await deps.repository.listRecentMessages({
+                conversationId: resolved.conversationId,
+                limit: 10,
+              });
+            } catch {
+              recentHistory = [];
+            }
+          }
+
+          const allowedLinks = [
+            whatsappLink({ message: "" }),
+            siteConfig.siteUrl,
+          ];
+          if (salesConfig?.whatsappHandoffComercial) {
+            allowedLinks.push(
+              whatsappLink({ phone: salesConfig.whatsappHandoffComercial }),
+            );
+          }
+          const allowedNames = [resolved.oficinaNome].filter(
+            (name): name is string => Boolean(name),
+          );
+
+          const generation = await maybeGenerateConversationalReply({
+            deterministicReply: replyBody,
+            mode: geracaoModo,
+            intent: null,
+            agentMode: effectiveAgentMode,
+            generator: replyGenerator,
+            history: recentHistory,
+            salesConfig: salesConfig ?? null,
+            allowedLinks,
+            allowedNames,
+          });
+
+          if (generation.audit) {
+            await deps.repository.saveAgentToolCall({
+              conversationId: resolved.conversationId,
+              leadId: resolved.leadId,
+              oficinaId: resolved.oficinaId,
+              clienteId: resolved.clienteId,
+              toolName: generation.audit.toolName,
+              input: generation.audit.input,
+              output: generation.audit.output,
+            });
+          }
+
+          replyBody = generation.finalBody;
 
           const outbox = await deps.repository.createOutboundMessage({
             conversationId: resolved.conversationId,

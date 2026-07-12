@@ -513,6 +513,37 @@ Exemplo:
 NEXT_PUBLIC_WHATSAPP_NUMBER=5541999999999
 ```
 
+## 11. Templates de follow-up de lead (ADR-0020 / fase CV4)
+
+> **Submeter com antecedência.** A fase CV4 (follow-up proativo de leads) depende destes templates **aprovados**. A aprovação da Meta leva de horas a dias — submeta assim que a fase CV0 fechar, mesmo que o código da CV4 venha depois.
+
+Categoria: **Utility** (não Marketing — é reengajamento de contato já em conversa, não promoção fria). Idioma: `pt_BR`.
+
+**`followup_lead_24h`** (1º follow-up, ~24h sem resposta):
+
+```text
+Oi {{1}}, aqui e do Quando Trocar. Ficou alguma duvida sobre como o teste gratis de 14 dias funciona pra sua oficina? Posso te explicar rapidinho.
+```
+
+- `{{1}}` = nome do lead (fallback "chefe" quando não houver nome).
+
+**`followup_lead_72h`** (2º e último follow-up, ~72h sem resposta):
+
+```text
+Oi {{1}}, e o ultimo toque por aqui :) se quiser ativar os 14 dias gratis do Quando Trocar e so responder essa mensagem. Qualquer coisa, tamo por aqui.
+```
+
+- `{{1}}` = nome do lead.
+
+Regras de uso (implementadas na CV4, ver `regras-de-negocio.md §1`):
+
+- Máximo **2 follow-ups por lead** (`leads_oficina.followup_count`), controlados por `last_followup_at`.
+- Nunca enviar para lead `perdido`, `convertido`, `teste_aceito` ou conversa com `handoff_required`.
+- Respeita opt-out e horário comercial da configuração.
+- Guardar a versão textual renderizada em `mensagens.body` (a API pode devolver só o `wamid`).
+
+Depois de aprovados, os nomes exatos entram na configuração/uso do job `app/api/jobs/followup-leads`.
+
 ## Links oficiais
 
 - Meta Webhooks: https://developers.facebook.com/docs/graph-api/webhooks

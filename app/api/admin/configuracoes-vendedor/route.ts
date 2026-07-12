@@ -50,6 +50,9 @@ export async function PATCH(request: Request) {
   if (Array.isArray(body.frases_landing)) {
     patch.frases_landing = body.frases_landing as string[];
   }
+  if (typeof body.geracao_llm_modo === "string") {
+    patch.geracao_llm_modo = body.geracao_llm_modo as ConfiguracoesVendedorUpdate["geracao_llm_modo"];
+  }
 
   try {
     const supabase = createSupabaseAdminClient();

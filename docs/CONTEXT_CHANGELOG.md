@@ -19,6 +19,16 @@ Não registrar:
 
 ---
 
+## 2026-07-11 — Camada de geração conversacional com validador
+
+### Adicionado
+
+- **[ADR-0020](./adr/0020-camada-geracao-conversacional.md)** — o bot ganha uma camada de **geração de texto por LLM** entre a decisão determinística de estado e o envio, cercada por um **validador determinístico** com poder de veto. Complementa (não altera) a [ADR-0001](./adr/0001-llm-como-conselheiro-nao-decisor.md): o texto gerado nunca muda estado; reprovação/erro/timeout cai no fallback enlatado atual. Modo `off`/`sombra`/`on` via `configuracoes_vendedor.geracao_llm_modo` (kill switch sem deploy).
+- **Plano por fases** em [fase-camada-conversacional](./backlog-whatsapp-bot/fase-camada-conversacional.md) (CV0–CV8): fundação (gerador + validador + sombra), fallback conversacional em vendas, objeções/handoff com contexto/botões, follow-up proativo, volante de aprendizado (`perguntas_sem_resposta` + pgvector), operação como assistente, humanização fina + métricas, concierge do cliente final.
+- **Seção 13 de `regras-de-negocio.md`** atualizada: resposta gerada por LLM passa por validador; reprovada → enlatada; texto gerado nunca muda estado.
+
+---
+
 ## 2026-07-09 — Representantes comerciais e comissão configurável
 
 ### Adicionado

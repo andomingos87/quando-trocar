@@ -42,13 +42,9 @@ export async function POST(request: Request) {
 
   for (const o of oficinas ?? []) {
     try {
-      const r = await gerarCobrancaProxima(supabase, o.id, {
-        notificationUrl:
-          process.env.MERCADO_PAGO_NOTIFICATION_URL ||
-          process.env.NEXT_PUBLIC_SITE_URL
-            ? `${process.env.MERCADO_PAGO_NOTIFICATION_URL ?? process.env.NEXT_PUBLIC_SITE_URL}/api/webhooks/mercado-pago`
-            : undefined,
-      });
+      // notification_url e resolvida dentro de gerarCobrancaProxima conforme o
+      // gateway ativo (ADR-0021).
+      const r = await gerarCobrancaProxima(supabase, o.id);
       if (r.ok && !r.reused) preferenciasGeradas += 1;
     } catch (err) {
       erros.push({ oficina_id: o.id, error: String(err) });

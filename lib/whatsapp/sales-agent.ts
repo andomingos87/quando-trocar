@@ -885,6 +885,7 @@ function defaultConfig(): ConfiguracoesVendedor {
     whatsappHandoffComercial: DEFAULT_HANDOFF_WHATSAPP,
     frasesLanding: DEFAULT_LANDING_PHRASES,
     precoPartida: DEFAULT_PRECO_PARTIDA,
+    geracaoLlmModo: "off",
   };
 }
 

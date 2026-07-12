@@ -4,11 +4,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { withAdminAudit } from "./audit";
 
+export type GeracaoLlmModo = "off" | "sombra" | "on";
+
+const GERACAO_LLM_MODOS: readonly GeracaoLlmModo[] = ["off", "sombra", "on"];
+
 export type ConfiguracoesVendedorRow = {
   id: string;
   taxa_recuperacao_roi: number;
   whatsapp_handoff_comercial: string;
   frases_landing: string[];
+  geracao_llm_modo: GeracaoLlmModo;
   updated_at: string;
 };
 
@@ -16,12 +21,14 @@ export type ConfiguracoesVendedorUpdate = {
   taxa_recuperacao_roi?: number;
   whatsapp_handoff_comercial?: string;
   frases_landing?: string[];
+  geracao_llm_modo?: GeracaoLlmModo;
 };
 
 export type ConfiguracoesValidationError =
   | { field: "taxa_recuperacao_roi"; message: string }
   | { field: "whatsapp_handoff_comercial"; message: string }
-  | { field: "frases_landing"; message: string };
+  | { field: "frases_landing"; message: string }
+  | { field: "geracao_llm_modo"; message: string };
 
 const WHATSAPP_REGEX = /^\+[1-9][0-9]{7,14}$/;
 
@@ -61,6 +68,14 @@ export function validateConfiguracoesInput(
       return { field: "frases_landing", message: "Frases nao podem ser vazias." };
     }
   }
+  if (input.geracao_llm_modo !== undefined) {
+    if (!GERACAO_LLM_MODOS.includes(input.geracao_llm_modo)) {
+      return {
+        field: "geracao_llm_modo",
+        message: "Modo deve ser off, sombra ou on.",
+      };
+    }
+  }
   return null;
 }
 
@@ -69,7 +84,7 @@ export async function getConfiguracoesVendedor(
 ): Promise<ConfiguracoesVendedorRow> {
   const { data, error } = await supabase
     .from("configuracoes_vendedor")
-    .select("id, taxa_recuperacao_roi, whatsapp_handoff_comercial, frases_landing, updated_at")
+    .select("id, taxa_recuperacao_roi, whatsapp_handoff_comercial, frases_landing, geracao_llm_modo, updated_at")
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`get_configuracoes_failed: ${error.message}`);
@@ -80,6 +95,7 @@ export async function getConfiguracoesVendedor(
     ...data,
     taxa_recuperacao_roi: Number(data.taxa_recuperacao_roi),
     frases_landing: data.frases_landing ?? [],
+    geracao_llm_modo: data.geracao_llm_modo ?? "off",
   };
 }
 
@@ -112,6 +128,9 @@ export async function updateConfiguracoesVendedor(
       .map((f) => f.trim())
       .filter((f) => f.length > 0);
   }
+  if (input.geracao_llm_modo !== undefined) {
+    patch.geracao_llm_modo = input.geracao_llm_modo;
+  }
 
   return withAdminAudit(
     supabase,
@@ -128,13 +147,14 @@ export async function updateConfiguracoesVendedor(
         .from("configuracoes_vendedor")
         .update(patch)
         .eq("id", before.id)
-        .select("id, taxa_recuperacao_roi, whatsapp_handoff_comercial, frases_landing, updated_at")
+        .select("id, taxa_recuperacao_roi, whatsapp_handoff_comercial, frases_landing, geracao_llm_modo, updated_at")
         .single();
       if (error) throw new Error(`update_configuracoes_failed: ${error.message}`);
       return {
         ...data,
         taxa_recuperacao_roi: Number(data.taxa_recuperacao_roi),
         frases_landing: data.frases_landing ?? [],
+        geracao_llm_modo: data.geracao_llm_modo ?? "off",
       };
     },
   );

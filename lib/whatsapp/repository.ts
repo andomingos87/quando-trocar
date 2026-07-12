@@ -5,9 +5,11 @@ import type {
   ConversationAgentMode,
   ConversationContext,
   FaqVendasRecord,
+  GeracaoLlmModo,
   InboundMediaType,
   LeadStatus,
   ParticipantType,
+  RecentMessage,
   RegisterServiceInput,
   RegisteredService,
   SavedConversation,
@@ -123,12 +125,13 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
 
     const result = (await this.supabase
       .from("configuracoes_vendedor")
-      .select("taxa_recuperacao_roi,whatsapp_handoff_comercial,frases_landing")
+      .select("taxa_recuperacao_roi,whatsapp_handoff_comercial,frases_landing,geracao_llm_modo")
       .limit(1)
       .maybeSingle()) as SupabaseResult<{
       taxa_recuperacao_roi: number | string;
       whatsapp_handoff_comercial: string;
       frases_landing: string[] | null;
+      geracao_llm_modo: GeracaoLlmModo | null;
     }>;
 
     throwIfError(result);
@@ -148,10 +151,43 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       whatsappHandoffComercial: result.data?.whatsapp_handoff_comercial ?? "+5511945207618",
       frasesLanding: result.data?.frases_landing ?? ["oi quero testar o quando trocar"],
       precoPartida: Number(planResult.data?.preco_base ?? 59),
+      geracaoLlmModo: result.data?.geracao_llm_modo ?? "off",
     };
 
     this.configCache = { value, loadedAt: Date.now() };
     return value;
+  }
+
+  async listRecentMessages(input: {
+    conversationId: string;
+    limit: number;
+  }): Promise<RecentMessage[]> {
+    // Ultimas N mensagens da conversa como contexto do gerador (ADR-0020).
+    // Busca as mais recentes (desc) e devolve em ordem cronologica (asc) para
+    // o prompt ler do mais antigo ao mais novo. Ordena por created_at (sempre
+    // preenchido); sent_at pode ser nulo em inbound sem timestamp.
+    const result = (await this.supabase
+      .from("mensagens")
+      .select("direction,body,sent_at,created_at")
+      .eq("conversa_id", input.conversationId)
+      .order("created_at", { ascending: false })
+      .limit(input.limit)) as SupabaseResult<
+      Array<{
+        direction: "inbound" | "outbound";
+        body: string | null;
+        sent_at: string | null;
+        created_at: string | null;
+      }>
+    >;
+
+    throwIfError(result);
+    return (result.data ?? [])
+      .reverse()
+      .map((row) => ({
+        direction: row.direction,
+        body: row.body ?? "",
+        sentAt: row.sent_at ?? row.created_at ?? null,
+      }));
   }
 
 

@@ -55,4 +55,18 @@ describe("validateConfiguracoesInput", () => {
   it("accepts empty patch (no fields touched)", () => {
     expect(validateConfiguracoesInput({})).toBeNull();
   });
+
+  it("accepts valid geracao_llm_modo values", () => {
+    expect(validateConfiguracoesInput({ geracao_llm_modo: "off" })).toBeNull();
+    expect(validateConfiguracoesInput({ geracao_llm_modo: "sombra" })).toBeNull();
+    expect(validateConfiguracoesInput({ geracao_llm_modo: "on" })).toBeNull();
+  });
+
+  it("rejects invalid geracao_llm_modo", () => {
+    expect(
+      validateConfiguracoesInput({
+        geracao_llm_modo: "ligado" as unknown as "off",
+      }),
+    ).toMatchObject({ field: "geracao_llm_modo" });
+  });
 });

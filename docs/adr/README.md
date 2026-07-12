@@ -27,6 +27,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0017](./0017-confirmacao-antes-de-registrar-troca.md) | Confirmação da oficina antes de registrar a troca | accepted | 2026-06-02 |
 | [0018](./0018-cliente-final-concierge-pre-lembrete.md) | Concierge do cliente final antes do primeiro lembrete | accepted | 2026-06-14 |
 | [0019](./0019-representantes-e-comissao.md) | Representantes comerciais com atribuição e comissão configurável | accepted | 2026-07-09 |
+| [0020](./0020-camada-geracao-conversacional.md) | Camada de geração conversacional com validador determinístico | accepted | 2026-07-11 |
 
 ### Em aberto (drafts)
 

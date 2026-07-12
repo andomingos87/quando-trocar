@@ -24,6 +24,7 @@ const baseConfig: ConfiguracoesVendedor = {
   whatsappHandoffComercial: "+5511945207618",
   frasesLanding: ["oi quero testar o quando trocar"],
   precoPartida: 59,
+  geracaoLlmModo: "off",
 };
 
 const faqs: FaqVendasRecord[] = [

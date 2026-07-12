@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { MercadoPagoClient } from "@/lib/mercado-pago/client";
+import { AsaasGateway } from "@/lib/payments/asaas-gateway";
+import { getActiveGateway } from "@/lib/payments/factory";
 import { WhatsAppCloudApiClient } from "@/lib/whatsapp/whatsapp-client";
 
 export type OficinaForBilling = {
@@ -32,7 +33,19 @@ export function precoEfetivo(input: {
 
 export type GerarCobrancaResult =
   | { ok: true; pagamentoId: string; preferenceId: string; initPoint: string; reused: boolean }
-  | { ok: false; reason: "preco_zero" | "cancelada" | "missing_vencimento" | "missing_plano" };
+  | {
+      ok: false;
+      reason: "preco_zero" | "cancelada" | "missing_vencimento" | "missing_plano" | "missing_cpf_cnpj";
+    };
+
+// Monta a notification_url (usada pelo Mercado Pago por preferencia). O ASAAS
+// ignora — seu webhook e configurado globalmente no painel do provedor.
+function buildNotificationUrl(slug: string): string | undefined {
+  const base = process.env.MERCADO_PAGO_NOTIFICATION_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  if (!base) return undefined;
+  const path = slug === "asaas" ? "asaas" : "mercado-pago";
+  return `${base}/api/webhooks/${path}`;
+}
 
 export async function gerarCobrancaProxima(
   supabase: SupabaseClient,
@@ -42,7 +55,8 @@ export async function gerarCobrancaProxima(
   const { data: oficina, error } = await supabase
     .from("oficinas")
     .select(
-      `id, nome, whatsapp_principal, status, motivo_pausa, proximo_vencimento, preco_negociado, plano_id,
+      `id, nome, whatsapp_principal, status, motivo_pausa, proximo_vencimento, preco_negociado,
+       plano_id, cpf_cnpj, asaas_customer_id,
        planos:plano_id (preco_base)`,
     )
     .eq("id", oficinaId)
@@ -66,10 +80,12 @@ export async function gerarCobrancaProxima(
   const vencimento = oficina.proximo_vencimento as string | null;
   if (!vencimento && !options.force) return { ok: false, reason: "missing_vencimento" };
 
+  const gateway = await getActiveGateway(supabase);
+
   // Idempotencia: ja existe pagamento pendente para esse ciclo?
   const { data: existingPendente } = await supabase
     .from("pagamentos")
-    .select("id, mp_preference_id")
+    .select("id, gateway_charge_id, payment_url")
     .eq("oficina_id", oficinaId)
     .eq("vencimento", vencimento)
     .eq("status", "pendente")
@@ -79,8 +95,8 @@ export async function gerarCobrancaProxima(
     return {
       ok: true,
       pagamentoId: existingPendente.id,
-      preferenceId: existingPendente.mp_preference_id ?? "",
-      initPoint: "",
+      preferenceId: existingPendente.gateway_charge_id ?? "",
+      initPoint: existingPendente.payment_url ?? "",
       reused: true,
     };
   }
@@ -93,16 +109,34 @@ export async function gerarCobrancaProxima(
     .eq("vencimento", vencimento);
   const tentativa = (prevCount ?? 0) + 1;
 
-  // Criar preferencia MP
-  const mp = new MercadoPagoClient();
+  // ASAAS exige um customer (com cpfCnpj) antes de cobrar. Cria uma vez e
+  // reaproveita nos ciclos seguintes.
+  let asaasCustomerId = oficina.asaas_customer_id as string | null;
+  if (gateway instanceof AsaasGateway) {
+    const cpfCnpj = (oficina.cpf_cnpj as string | null)?.trim();
+    if (!cpfCnpj) return { ok: false, reason: "missing_cpf_cnpj" };
+    if (!asaasCustomerId) {
+      asaasCustomerId = await gateway.createCustomer({
+        name: oficina.nome,
+        cpfCnpj,
+        externalReference: oficinaId,
+      });
+      await supabase
+        .from("oficinas")
+        .update({ asaas_customer_id: asaasCustomerId, updated_at: new Date().toISOString() })
+        .eq("id", oficinaId);
+    }
+  }
+
   const externalReference = `oficina:${oficinaId}|venc:${vencimento ?? "manual"}|t:${tentativa}`;
-  const pref = await mp.createPreference({
+  const charge = await gateway.createCharge({
     valor: preco,
     descricao: `Quando Trocar — Mensalidade ${vencimento ?? ""}`.trim(),
     externalReference,
     oficinaId,
     vencimento,
-    notificationUrl: options.notificationUrl,
+    notificationUrl: options.notificationUrl ?? buildNotificationUrl(gateway.slug),
+    gatewayCustomerId: asaasCustomerId,
   });
 
   // Inserir pagamento pendente
@@ -112,7 +146,11 @@ export async function gerarCobrancaProxima(
       oficina_id: oficinaId,
       valor: preco,
       status: "pendente",
-      mp_preference_id: pref.id,
+      gateway: gateway.slug,
+      gateway_charge_id: charge.chargeId,
+      gateway_payment_id: charge.paymentId,
+      payment_url: charge.payUrl,
+      external_reference: externalReference,
       vencimento,
       tentativa,
       descricao: `Mensalidade ${vencimento ?? "(manual)"}`,
@@ -136,7 +174,7 @@ export async function gerarCobrancaProxima(
             style: "currency",
             currency: "BRL",
           }).format(preco),
-          pref.init_point,
+          charge.payUrl,
         ],
       });
     } catch (err) {
@@ -147,8 +185,8 @@ export async function gerarCobrancaProxima(
   return {
     ok: true,
     pagamentoId: pagamento.id,
-    preferenceId: pref.id,
-    initPoint: pref.init_point,
+    preferenceId: charge.chargeId,
+    initPoint: charge.payUrl,
     reused: false,
   };
 }

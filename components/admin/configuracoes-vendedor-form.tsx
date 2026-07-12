@@ -3,13 +3,39 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import type { ConfiguracoesVendedorRow } from "@/lib/admin/configuracoes-vendedor";
+import type {
+  ConfiguracoesVendedorRow,
+  GeracaoLlmModo,
+} from "@/lib/admin/configuracoes-vendedor";
 
 type FormState = {
   taxa_recuperacao_roi: string;
   whatsapp_handoff_comercial: string;
   frases_landing: string;
+  geracao_llm_modo: GeracaoLlmModo;
 };
+
+const GERACAO_LLM_OPCOES: ReadonlyArray<{
+  value: GeracaoLlmModo;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "off",
+    label: "Desligado",
+    hint: "O bot envia apenas as respostas padrao (enlatadas). Comportamento atual.",
+  },
+  {
+    value: "sombra",
+    label: "Sombra",
+    hint: "O bot gera e valida a resposta com IA, registra para comparacao, mas ainda envia a padrao. Use para avaliar sem risco.",
+  },
+  {
+    value: "on",
+    label: "Ligado",
+    hint: "O bot envia a resposta gerada por IA quando ela passa no validador; senao cai na padrao.",
+  },
+];
 
 export function ConfiguracoesVendedorForm({
   initial,
@@ -21,6 +47,7 @@ export function ConfiguracoesVendedorForm({
     taxa_recuperacao_roi: String(Math.round(initial.taxa_recuperacao_roi * 100)),
     whatsapp_handoff_comercial: initial.whatsapp_handoff_comercial,
     frases_landing: initial.frases_landing.join("\n"),
+    geracao_llm_modo: initial.geracao_llm_modo ?? "off",
   }));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +80,7 @@ export function ConfiguracoesVendedorForm({
       taxa_recuperacao_roi: taxaPercent / 100,
       whatsapp_handoff_comercial: form.whatsapp_handoff_comercial.trim(),
       frases_landing: frases,
+      geracao_llm_modo: form.geracao_llm_modo,
     };
 
     try {
@@ -135,6 +163,31 @@ export function ConfiguracoesVendedorForm({
           Uma frase por linha. Mensagens identicas (ignorando acentos e
           pontuacao) marcam o lead como vindo da landing. Demais entradas viram
           &ldquo;manual_whatsapp&rdquo;.
+        </span>
+      </label>
+
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium text-ink">
+          Respostas com IA (geracao conversacional)
+        </span>
+        <select
+          value={form.geracao_llm_modo}
+          onChange={(e) =>
+            setForm({
+              ...form,
+              geracao_llm_modo: e.target.value as FormState["geracao_llm_modo"],
+            })
+          }
+          className="w-full rounded-lg border border-line px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 sm:w-72"
+        >
+          {GERACAO_LLM_OPCOES.map((opcao) => (
+            <option key={opcao.value} value={opcao.value}>
+              {opcao.label}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-muted">
+          {GERACAO_LLM_OPCOES.find((o) => o.value === form.geracao_llm_modo)?.hint}
         </span>
       </label>
 

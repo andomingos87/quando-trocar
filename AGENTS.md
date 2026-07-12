@@ -25,6 +25,35 @@ Important project docs:
 - Decision and context history: `docs/CONTEXT_CHANGELOG.md`.
 - Business rules index: `docs/regras-de-negocio.md` (must stay in sync with code — see Development Workflow).
 
+## Context Layer
+
+This repo uses the Aurea context layer under `.context/`:
+
+- `.context/modules/<module>/AGENTS.md` — per-module doc (purpose, boundaries, key files, invariants, tests). Modules: `whatsapp-bot`, `painel-admin`, `billing`, `site-publico`, `database`.
+- `.context/conventions.md` — detected and confirmed stack conventions (layering, error handling, auth, commit style, "never do" list).
+- `.context/decisions/` — Aurea slot for ADRs; the canonical ADRs currently live in `docs/adr/`.
+- `.context/lessons/` — recorded project pitfalls.
+
+Code lives inside a declared module. When behaviour changes, update that module's doc in the same change (doc-follows-feature). The `.context/` layer is written in Brazilian Portuguese (matching `docs/`); this file and `CLAUDE.md` stay in English.
+
+<!-- AUREA:SYNC:START -->
+## Aurea Rules (invariants)
+
+1. Code only lives inside a module declared under `.context/modules/<module>/`.
+2. Every feature assesses its documentation impact (stale docs are a bug).
+3. Mandatory quality gates: correctness (with tests), performance, security, consistency, professional completeness, reversibility. Nothing is "done" until it passes all of them.
+4. An information gap becomes a question, never a guess. But proposing the complete professional scope is not a guess — it is expected (senior-level completeness).
+5. MCP: use only the project-local `.mcp.json`. No global MCP.
+
+## Execution Mode
+
+How any agent/AI should work in this project:
+
+- **Autonomy** — work autonomously; do not narrate every step or send progress messages; fix your own errors when possible; deliver the complete professional product, not the literal minimum requested (anticipate states, validation, security, recovery, edge cases); run lint and tests before finishing.
+- **When to interrupt** — only when the decision is the user's: architecture, library or implementation choice; ambiguous requirement; destructive change (data deletion, irreversible migration) or an outward action (deploy, publish, PR, touching a secret). In those cases, explain the options and wait.
+- **Final response** — on completion: implementation summary, files changed, test results, open items (if any).
+<!-- AUREA:SYNC:END -->
+
 ## Setup Commands
 
 - Install dependencies: `npm install`.
