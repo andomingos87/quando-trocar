@@ -19,6 +19,9 @@ LOGO QUANDO TROCAR.pdf
 # TypeScript
 *.tsbuildinfo
 
+# Codex — config.toml contains a Supabase access token; keep prompts/ versioned
+.codex/config.toml
+
 # Environment
 .env
 .env.local
