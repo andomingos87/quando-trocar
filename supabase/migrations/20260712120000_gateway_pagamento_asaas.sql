@@ -122,9 +122,13 @@ as $$
 $$;
 
 -- Trava de acesso: ninguem alem do service_role executa.
-revoke all on function public.set_payment_secret(text, text) from public;
-revoke all on function public.get_payment_secret(text) from public;
-revoke all on function public.payment_secret_exists(text) from public;
+-- IMPORTANTE: o Supabase concede EXECUTE a anon/authenticated via default
+-- privileges no schema public — revogar de `public` NAO basta. Sem revogar
+-- explicitamente de anon/authenticated, get_payment_secret ficaria chamavel
+-- pela REST API publica (/rest/v1/rpc/...) e exporia o segredo em claro.
+revoke all on function public.set_payment_secret(text, text) from public, anon, authenticated;
+revoke all on function public.get_payment_secret(text) from public, anon, authenticated;
+revoke all on function public.payment_secret_exists(text) from public, anon, authenticated;
 grant execute on function public.set_payment_secret(text, text) to service_role;
 grant execute on function public.get_payment_secret(text) to service_role;
 grant execute on function public.payment_secret_exists(text) to service_role;

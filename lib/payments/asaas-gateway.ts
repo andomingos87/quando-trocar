@@ -132,7 +132,7 @@ export class AsaasGateway implements PaymentGateway {
     };
   }
 
-  verifyWebhook(headers: Headers, _rawBody: string): boolean {
+  verifyWebhook(headers: Headers): boolean {
     if (!this.webhookToken) {
       // Sem token configurado (dev): aceita sem validar.
       return true;

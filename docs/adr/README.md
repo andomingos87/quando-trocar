@@ -15,7 +15,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0005](./0005-templates-meta-vs-mensagem-livre.md) | Templates Meta fora da janela 24h, livre dentro | accepted | 2026-04-25 |
 | [0006](./0006-idempotencia-via-provider-ids.md) | Idempotência via unique index em provider IDs e business keys | accepted | 2026-04-25 |
 | [0007](./0007-provedor-whatsapp-business-cloud.md) | Provedor WhatsApp — Meta Business Cloud API direta | accepted | 2026-05-17 |
-| [0008](./0008-pagamento-no-mvp.md) | Pagamento via Mercado Pago | accepted | 2026-05-17 |
+| [0008](./0008-pagamento-no-mvp.md) | Pagamento via Mercado Pago | accepted (complementada ADR-0021) | 2026-05-17 |
 | [0009](./0009-confirmacao-vs-pre-agendamento.md) | Bot não agenda — apenas faz a ponte entre cliente e oficina | accepted | 2026-05-17 |
 | [0010](./0010-painel-web-no-mvp.md) | Painel web mínimo na Fase 4, com login OTP WhatsApp | accepted | 2026-05-17 |
 | [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | superseded (ADR-0019) | 2026-05-17 |
@@ -28,6 +28,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0018](./0018-cliente-final-concierge-pre-lembrete.md) | Concierge do cliente final antes do primeiro lembrete | accepted | 2026-06-14 |
 | [0019](./0019-representantes-e-comissao.md) | Representantes comerciais com atribuição e comissão configurável | accepted | 2026-07-09 |
 | [0020](./0020-camada-geracao-conversacional.md) | Camada de geração conversacional com validador determinístico | accepted | 2026-07-11 |
+| [0021](./0021-gateway-pagamento-multiplo-asaas.md) | Gateway de pagamento pluggável (ASAAS + Mercado Pago), gerenciado no painel admin | accepted | 2026-07-12 |
 
 ### Em aberto (drafts)
 

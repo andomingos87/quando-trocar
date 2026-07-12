@@ -17,6 +17,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { href: "/admin/inteligencia-mercado", label: "Inteligencia mercado" },
   { href: "/admin/planos", label: "Planos" },
   { href: "/admin/pagamentos", label: "Pagamentos" },
+  { href: "/admin/configuracoes/pagamentos", label: "Gateway pagamento" },
   { href: "/admin/representantes", label: "Representantes" },
   { href: "/admin/comissoes", label: "Comissoes" },
   { href: "/admin/admins", label: "Admins" },

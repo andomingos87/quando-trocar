@@ -19,6 +19,17 @@ Não registrar:
 
 ---
 
+## 2026-07-12 — Gateway de pagamento pluggável (ASAAS + Mercado Pago)
+
+### Adicionado
+
+- **[ADR-0021](./adr/0021-gateway-pagamento-multiplo-asaas.md)** — complementa a [ADR-0008](./adr/0008-pagamento-no-mvp.md): o pagamento deixa de ser acoplado ao Mercado Pago. Camada `lib/payments/` com interface `PaymentGateway` e duas implementações (`mercado-pago-gateway`, `asaas-gateway`); provedor ativo escolhido em runtime pela config. **ASAAS** vira o provedor ativo (cobrança avulsa por ciclo, `billingType: UNDEFINED` = PIX/boleto/cartão); Mercado Pago fica **configurado porém dormente**. Webhook único e idempotente (`process-webhook.ts`) para os dois; nova rota `POST /api/webhooks/asaas`.
+- **Gestão pelo painel admin** — `/admin/configuracoes/pagamentos` (provedor ativo, ambiente ASAAS, credenciais). **Segredos no Supabase Vault** (funções `SECURITY DEFINER` só `service_role`); a UI só mostra se cada segredo está configurado, nunca o valor; auditoria nunca registra segredo. Um provedor só é ativável com credencial usável.
+- **Schema** — migration `20260712120000_gateway_pagamento_asaas.sql`: colunas genéricas em `pagamentos` (`gateway`, `gateway_charge_id`, `gateway_payment_id`, `payment_url`, `external_reference`; `mp_*` mantidas/deprecadas e backfilladas), `oficinas.cpf_cnpj` + `oficinas.asaas_customer_id`, tabela singleton `configuracoes_pagamento`, funções de Vault. Aditiva e reversível.
+- **Seções 9.3/9.5 de `regras-de-negocio.md`** e runbook [asaas-setup](./runbooks/asaas-setup.md).
+
+---
+
 ## 2026-07-11 — Camada de geração conversacional com validador
 
 ### Adicionado

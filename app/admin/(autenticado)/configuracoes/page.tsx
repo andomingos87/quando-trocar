@@ -75,6 +75,15 @@ export default async function ConfiguracoesPage() {
             </Link>
             <span className="text-muted"> — perguntas que o bot responde automaticamente.</span>
           </li>
+          <li>
+            <Link href="/admin/configuracoes/pagamentos" className="text-brand hover:underline">
+              Gateway de pagamento
+            </Link>
+            <span className="text-muted">
+              {" "}
+              — provedor ativo (Mercado Pago / ASAAS), ambiente e credenciais.
+            </span>
+          </li>
         </ul>
       </section>
     </div>

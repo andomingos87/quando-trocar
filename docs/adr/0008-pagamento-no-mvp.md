@@ -1,9 +1,11 @@
 # ADR 0008: Pagamento via Mercado Pago
 
-- **Status**: accepted
+- **Status**: accepted (complementada por [ADR-0021](./0021-gateway-pagamento-multiplo-asaas.md))
 - **Data**: 2026-05-17
 - **Decisores**: Anderson Domingos
 - **Fonte**: `docs/product/PRD-whatsapp-bot.md §24`
+
+> **Atualização (2026-07-12, ADR-0021):** o pagamento deixou de ser acoplado ao Mercado Pago. Agora há uma camada de gateway pluggável (`lib/payments/`) com o **ASAAS** como provedor ativo padrão; o Mercado Pago descrito abaixo permanece **configurado porém dormente** e pode ser reativado no painel admin. A escolha do provedor e as credenciais são geridas em `/admin/configuracoes/pagamentos` (segredos no Supabase Vault).
 
 ## Contexto
 

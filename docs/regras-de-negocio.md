@@ -603,15 +603,24 @@ Mudar copy de um template = nova versão + aprovação Meta (horas a dias).
 
 ### 9.3 Ciclo de cobrança
 - Mensal único. Sem opção anual no MVP.
-- Cron diário gera **preferência avulsa** Mercado Pago para oficinas com vencimento em D-3 e envia link por WhatsApp.
-- **Não usa** Mercado Pago Subscriptions (não suporta Pix recorrente).
-- Idempotência via `pagamentos.mp_payment_id UNIQUE`.
+- Cron diário gera **cobrança avulsa** no provedor ativo para oficinas com vencimento em D-3 e envia o link por WhatsApp.
+- **Cobrança avulsa por ciclo** (não recorrência nativa): nem Mercado Pago Subscriptions nem ASAAS Subscriptions.
+- Idempotência do webhook via índice único `pagamentos(gateway, gateway_payment_id)`; idempotência da geração via pagamento `pendente` do mesmo ciclo.
 
-- Fonte: [ADR-0008](./adr/0008-pagamento-no-mvp.md), [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
+- Fonte: [ADR-0008](./adr/0008-pagamento-no-mvp.md), [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md), [ADR-0021](./adr/0021-gateway-pagamento-multiplo-asaas.md).
 
 ### 9.4 Vencimento e próxima cobrança
 - `oficinas.proximo_vencimento date` indica data alvo da próxima cobrança.
 - Inicializado quando a oficina ativa o plano pago.
+
+### 9.5 Gateway de pagamento configurável (ADR-0021)
+- O **provedor** que gera as cobranças é configurável no painel admin em `/admin/configuracoes/pagamentos`: **Mercado Pago** ou **ASAAS**. Padrão do produto: ASAAS ativo; Mercado Pago fica configurado porém dormente.
+- A troca de provedor só vale para **novas** cobranças; pendentes seguem no provedor em que foram criadas.
+- **Credenciais** (API keys / tokens) ficam cifradas no **Supabase Vault** (nomes fixos: `asaas_api_key`, `asaas_webhook_token`, `mercado_pago_access_token`, `mercado_pago_webhook_secret`), gravadas/lidas só via funções `SECURITY DEFINER` acessíveis pelo `service_role`. A UI mostra apenas se cada segredo **está configurado** — nunca o valor. Auditoria nunca registra segredo.
+- Um provedor só pode ser **ativado** quando tem credencial usável (guard em `validateConfiguracoesPagamentoInput`).
+- **ASAAS** exige um *customer* com `oficinas.cpf_cnpj` antes de cobrar; o id fica em `oficinas.asaas_customer_id`. Sem CPF/CNPJ, a geração retorna `missing_cpf_cnpj`. A cobrança usa `billingType: UNDEFINED` (cliente escolhe PIX / boleto / cartão).
+- Webhooks: `POST /api/webhooks/mercado-pago` e `POST /api/webhooks/asaas`. Ambos passam pelo mesmo handler idempotente (`lib/payments/process-webhook.ts`). O ASAAS é validado pelo header `asaas-access-token`; o MP pela assinatura `x-signature`.
+- Fonte: [ADR-0021](./adr/0021-gateway-pagamento-multiplo-asaas.md), `docs/runbooks/asaas-setup.md`.
 
 ---
 
@@ -643,7 +652,7 @@ Quando inbound chega para uma oficina pausada, o webhook chama `getOficinaPauseS
 | `admin` | qualquer | Mensagem fixa de suspensão administrativa, bot **não** entra em cobrança |
 | `inadimplencia` ou `voluntaria` | `cliente_final` / outro | Mensagem fixa de inadimplência (bot não conversa em cobrança com não-oficina) |
 
-`agent_mode='cobranca'` é um **override de runtime** dentro do webhook — não persiste em `conversas.agent_mode`. Quando a oficina é reativada (webhook MP confirma pagamento), a próxima mensagem cai naturalmente no modo `operacao` / `onboarding`.
+`agent_mode='cobranca'` é um **override de runtime** dentro do webhook — não persiste em `conversas.agent_mode`. Quando a oficina é reativada (webhook do provedor de pagamento confirma o pagamento), a próxima mensagem cai naturalmente no modo `operacao` / `onboarding`.
 
 Inbound sempre é persistido em `mensagens` para auditoria, independentemente do tratamento.
 
@@ -744,9 +753,10 @@ Variáveis que **nunca** podem vazar para cliente:
 - `WHATSAPP_APP_SECRET`
 - `MERCADO_PAGO_ACCESS_TOKEN`
 - `MERCADO_PAGO_WEBHOOK_SECRET`
+- `ASAAS_API_KEY` / `ASAAS_WEBHOOK_TOKEN` (fallback dev; em produção ficam no Vault)
 - `INTERNAL_JOB_SECRET`
 
-Prefixo `NEXT_PUBLIC_` é browser-exposed — nunca usar para secrets.
+Prefixo `NEXT_PUBLIC_` é browser-exposed — nunca usar para secrets. Os segredos dos gateways de pagamento, em produção, ficam no **Supabase Vault** e são geridos pelo painel admin (ADR-0021), não em env.
 
 - Fonte: [`AGENTS.md §Environment`](../AGENTS.md), [runbook env-setup](./runbooks/env-setup.md).
 
