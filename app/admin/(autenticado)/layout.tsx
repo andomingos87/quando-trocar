@@ -7,7 +7,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { AdminNav } from "./admin-nav";
 import { AdminUserMenu } from "./admin-user-menu";
 import { MobileMenu } from "./mobile-menu";
-import { ADMIN_NAV_ITEMS } from "./nav-items";
 import { SidebarFooter } from "./sidebar-footer";
 
 export default async function AdminAuthenticatedLayout({
@@ -39,7 +38,7 @@ export default async function AdminAuthenticatedLayout({
           Painel admin
         </p>
         <div className="flex-1 overflow-y-auto">
-          <AdminNav items={ADMIN_NAV_ITEMS} />
+          <AdminNav />
         </div>
         <SidebarFooter />
       </aside>

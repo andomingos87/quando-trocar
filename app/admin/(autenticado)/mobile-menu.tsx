@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AdminNav } from "./admin-nav";
-import { ADMIN_NAV_ITEMS } from "./nav-items";
 import { SidebarFooter } from "./sidebar-footer";
 
 export function MobileMenu() {
@@ -115,7 +114,7 @@ export function MobileMenu() {
               Painel admin
             </p>
             <div className="flex-1 overflow-y-auto">
-              <AdminNav items={ADMIN_NAV_ITEMS} onNavigate={() => setOpen(false)} />
+              <AdminNav onNavigate={() => setOpen(false)} />
             </div>
             <SidebarFooter onNavigate={() => setOpen(false)} />
           </aside>
