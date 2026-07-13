@@ -1,31 +1,24 @@
 import { ArrowRight, Check } from "lucide-react";
-import { Button } from "./ui/button";
+import { LandingCta } from "./landing-cta";
 import { Eyebrow, Section, SectionLead, SectionTitle } from "./section";
 import { Reveal, RevealStagger, RevealItem } from "./reveal";
-
-const features = [
-  "Sem cartão de crédito",
-  "Sem contrato",
-  "Sem instalação de app",
-  "Clientes ilimitados no teste",
-  "Suporte direto pelo WhatsApp",
-];
+import { LANDING_OFFER } from "@/lib/landing-offer";
 
 export function Preco() {
   return (
-    <Section tone="dark" id="preco" className="overflow-hidden text-center">
+    <Section tone="dark" id="preco" className="overflow-hidden">
       <div className="bg-dots pointer-events-none absolute inset-0 text-white/[0.03]" />
 
       <div className="relative">
-        <Reveal className="flex flex-col items-center">
-          <Eyebrow tone="white">teste grátis · 30 dias</Eyebrow>
-          <SectionTitle className="mx-auto text-white">
-            30 dias pra decidir.
-            <br />
-            <span className="text-brand">Risco zero.</span>
+        <Reveal>
+          <Eyebrow tone="white">oferta clara desde o início</Eyebrow>
+          <SectionTitle className="text-white">
+            Teste por {LANDING_OFFER.trialDays} dias.
+            <br /><span className="text-brand">Depois, R$ {LANDING_OFFER.monthlyPrice} por mês.</span>
           </SectionTitle>
-          <SectionLead className="mx-auto text-white/60">
-            Se cliente voltar, a gente continua. Se não, você segue sua vida.
+          <SectionLead className="text-white/65">
+            Durante o teste, você usa o Quando Trocar sem cartão e sem cobrança.
+            Ao final, o serviço é pausado até você confirmar a assinatura pelo WhatsApp.
           </SectionLead>
         </Reveal>
 
@@ -34,16 +27,16 @@ export function Preco() {
           delay={0.15}
           className="relative mx-auto mt-14 max-w-[540px]"
         >
-          <span className="absolute -top-4 left-1/2 z-10 -translate-x-1/2 -rotate-[2.5deg] rounded-full border border-ink bg-brand px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink shadow-[0_6px_0_rgba(0,0,0,0.25)]">
-            teste · 30 dias
+          <span className="absolute -top-4 left-1/2 z-10 -translate-x-1/2 -rotate-[2.5deg] rounded-full border border-ink bg-brand px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink shadow-lg">
+            teste · {LANDING_OFFER.trialDays} dias
           </span>
 
-          <div className="relative rounded-3xl border border-ink bg-paper p-8 text-left text-ink shadow-[0_30px_60px_-25px_rgba(0,0,0,0.5)] sm:p-12">
+          <div className="relative rounded-3xl border border-ink bg-paper p-8 text-left text-ink shadow-2xl sm:p-12">
             <div className="flex items-start justify-between gap-4 border-b border-line pb-6">
               <div>
                 <h3 className="font-display text-[clamp(1.5rem,2.6vw,2.125rem)] font-bold leading-tight">
-                  A gente faz
-                  <br />o cliente voltar.
+                  Quando Trocar
+                  <br />mensal
                 </h3>
               </div>
               <div className="font-mono text-right text-[10.5px] uppercase tracking-[0.18em] text-muted">
@@ -58,9 +51,7 @@ export function Preco() {
                 R$ 0
               </span>
               <span className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                / primeiros
-                <br />
-                30 dias
+                / primeiros<br />{LANDING_OFFER.trialDays} dias
               </span>
             </div>
 
@@ -70,7 +61,7 @@ export function Preco() {
               stagger={0.06}
               delay={0.15}
             >
-              {features.map((f) => (
+              {LANDING_OFFER.benefits.map((f) => (
                 <RevealItem
                   as="li"
                   key={f}
@@ -84,14 +75,14 @@ export function Preco() {
               ))}
             </RevealStagger>
 
-            <Button href="#cta-final" className="group mt-8 w-full">
-              Quero testar na minha oficina
+            <LandingCta source="landing_oferta" className="group mt-8 w-full">
+              {LANDING_OFFER.ctaLabel}
               <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
-            </Button>
+            </LandingCta>
 
             <p className="mt-4 text-center text-xs leading-relaxed text-muted">
-              Se cliente voltar, a gente conversa sobre continuar. Se não
-              voltar, você não paga nada.
+              Para continuar depois do teste, confirme {LANDING_OFFER.monthlyPriceLabel} pelo WhatsApp.
+              Sem confirmação, nada é cobrado e o serviço fica pausado.
             </p>
           </div>
         </Reveal>

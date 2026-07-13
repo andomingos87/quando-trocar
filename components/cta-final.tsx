@@ -2,34 +2,29 @@ import { WhatsappIcon } from "./ui/whatsapp-icon";
 import { Button } from "./ui/button";
 import { Eyebrow, SectionLead, SectionTitle } from "./section";
 import { Reveal } from "./reveal";
-import { whatsappLink } from "@/lib/config";
+import { LandingCta } from "./landing-cta";
+import { LANDING_OFFER } from "@/lib/landing-offer";
 
 export function CtaFinal() {
   return (
     <section
       id="cta-final"
-      className="relative isolate overflow-hidden bg-brand px-5 py-24 text-center text-white sm:px-8 md:py-32"
+      className="relative isolate overflow-hidden bg-brand px-5 py-24 text-white sm:px-8 md:py-32"
     >
       {/* gradient base — amber impulse from logo's "CAR" */}
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#f0b76e_0%,#E19D4E_35%,#a37033_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-brand" />
 
       {/* blueprint grid — spans full width, fades toward edges */}
       <div className="bg-blueprint bg-blueprint-fade pointer-events-none absolute inset-0" />
 
       {/* diagonal warning stripes — subtle, bottom band */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-24 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(45deg, #000 0 14px, transparent 14px 28px)",
-        }}
-      />
+      <div className="bg-stripes-soft pointer-events-none absolute inset-x-0 bottom-0 h-24 opacity-40" />
 
       {/* radial glow from top */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_0%,rgba(255,255,255,0.28),transparent_65%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_50%_0%,color-mix(in_srgb,var(--color-paper)_28%,transparent),transparent_65%)]" />
 
       {/* inner vignette */}
-      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_200px_rgba(0,0,0,0.22)]" />
+      <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_200px_color-mix(in_srgb,var(--color-ink)_22%,transparent)]" />
 
       {/* grain */}
       <div className="bg-grain pointer-events-none absolute inset-0 opacity-50 mix-blend-overlay" />
@@ -37,9 +32,9 @@ export function CtaFinal() {
       {/* corner tick marks — full-section */}
       <CornerTicks />
 
-      <Reveal className="relative mx-auto max-w-[820px]">
+      <Reveal className="relative mx-auto max-w-[820px] text-left">
         <Eyebrow tone="ink">tá esperando o quê?</Eyebrow>
-        <SectionTitle className="mx-auto text-white">
+        <SectionTitle className="text-white">
           Você já tem cliente.
           <br />
           Só precisa{" "}
@@ -47,22 +42,16 @@ export function CtaFinal() {
             lembrar ele de voltar.
           </span>
         </SectionTitle>
-        <SectionLead className="mx-auto text-white/90">
-          Teste 30 dias. Sem cartão. Sem pegadinha. Se cliente voltar, a gente
-          continua. Se não, você segue sua vida.
+        <SectionLead className="text-white/90">
+          Comece sem cartão e sem cobrança automática. Depois dos {LANDING_OFFER.trialDays} dias,
+          continue por {LANDING_OFFER.monthlyPriceLabel} ou deixe o serviço pausado.
         </SectionLead>
 
-        <div className="mt-12 flex flex-wrap justify-center gap-3">
-          <Button
-            href={whatsappLink("Oi, quero testar o Quando Trocar")}
-            target="_blank"
-            rel="noopener noreferrer"
-            variant="white"
-            className="group"
-          >
-            <WhatsappIcon className="size-5 text-[#25d366] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[-8deg]" />
-            Testar agora no WhatsApp
-          </Button>
+        <div className="mt-12 flex flex-wrap gap-3">
+          <LandingCta source="landing_cta_final" variant="white" className="group">
+            <WhatsappIcon className="size-5 text-wa-green transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[-8deg]" />
+            {LANDING_OFFER.ctaLabel}
+          </LandingCta>
           <Button
             href="#como"
             variant="ghost"
@@ -72,8 +61,8 @@ export function CtaFinal() {
           </Button>
         </div>
 
-        <p className="mt-8 font-mono text-[11.5px] uppercase tracking-[0.18em] text-white/80">
-          Testando com poucas oficinas nessa rodada · ainda tem vagas
+        <p className="mt-8 font-mono text-[11.5px] uppercase tracking-[0.14em] text-white/85">
+          Sem cartão · sem fidelidade · cancele quando quiser
         </p>
       </Reveal>
     </section>

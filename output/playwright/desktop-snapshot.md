@@ -1,0 +1,173 @@
+- generic [active] [ref=e1] [box=0,0,1440,7372]:
+  - navigation [ref=e2] [box=0,0,1440,77]:
+    - generic [ref=e3] [box=120,0,1200,76]:
+      - link "Quando Trocar by Perfect Automotive" [ref=e4] [cursor=pointer] [box=152,16,114,44]:
+        - /url: /
+        - img "Quando Trocar by Perfect Automotive" [ref=e6] [box=152,16,114,44]
+      - generic [ref=e10] [box=646,24,309,28]:
+        - link "Como funciona" [ref=e11] [cursor=pointer] [box=646,24,95,28]:
+          - /url: "#como"
+        - link "Benefícios" [ref=e12] [cursor=pointer] [box=769,24,65,28]:
+          - /url: "#beneficios"
+        - link "Oferta" [ref=e13] [cursor=pointer] [box=862,24,40,28]:
+          - /url: "#preco"
+        - link "FAQ" [ref=e14] [cursor=pointer] [box=930,24,25,28]:
+          - /url: "#faq"
+      - link "Começar meus 14 dias grátis" [ref=e16] [cursor=pointer] [box=1020,19,268,38]:
+        - /url: https://wa.me/5511914480869?text=Ol%C3%A1!%20Quero%20come%C3%A7ar%20meus%2014%20dias%20gr%C3%A1tis%20no%20Quando%20Trocar%20para%20minha%20oficina.%0AOrigem%3A%20landing_nav
+  - main [ref=e21] [box=0,77,1440,7112]:
+    - generic [ref=e25] [box=120,77,1200,816]:
+      - generic [ref=e26] [box=152,157,549,680]:
+        - generic [ref=e27] [box=152,157,269,31]: 14 dias grátis para oficinas
+        - heading "Seu cliente não esquece da troca. Ele esquece de voltar pra você." [level=1] [ref=e29] [box=152,212,549,372]: Seu cliente não esquece da troca.Ele esquece de voltar pra você.
+        - paragraph [ref=e30] [box=152,608,520,93]: Registre o serviço pelo WhatsApp. O Quando Trocar calcula a próxima data e lembra o cliente na hora certa — com o nome da sua oficina.
+        - generic [ref=e31] [box=152,733,549,56]:
+          - link "Começar meus 14 dias grátis" [ref=e32] [cursor=pointer] [box=152,733,298,56]:
+            - /url: https://wa.me/5511914480869?text=Ol%C3%A1!%20Quero%20come%C3%A7ar%20meus%2014%20dias%20gr%C3%A1tis%20no%20Quando%20Trocar%20para%20minha%20oficina.%0AOrigem%3A%20landing_hero
+          - link "Ver como funciona" [ref=e35] [cursor=pointer] [box=462,733,191,56]:
+            - /url: "#como"
+        - paragraph [ref=e36] [box=152,813,386,20]: Sem cartão · depois, R$ 59/mês · cancele quando quiser
+      - generic [ref=e39] [box=765,193,523,608]:
+        - generic [ref=e41] [box=857,193,340,608]:
+          - tablist "Trocar perspectiva" [ref=e43] [box=947,261,160,53]
+          - generic [ref=e51] [box=867,211,320,580]
+        - button "Reiniciar demonstração" [ref=e72] [box=950,809,154,36]: Reiniciar conversa
+    - generic [ref=e77] [box=180,926,1080,99]:
+      - paragraph [ref=e78] [box=180,926,820,59]: Estamos começando agora. Por isso, você testa por 14 dias sem pagar e acompanha o funcionamento na prática antes de decidir.
+      - list [ref=e79] [box=180,1005,1080,20]:
+        - listitem [ref=e80] [box=180,1005,261,20]:
+          - generic [ref=e83] [box=206,1005,171,20]: Sem cobrança automática
+        - listitem [ref=e84] [box=453,1005,261,20]:
+          - generic [ref=e88] [box=479,1005,167,20]: Preço claro desde o início
+        - listitem [ref=e89] [box=726,1005,261,20]:
+          - generic [ref=e92] [box=752,1005,202,20]: Sem continuar, o serviço pausa
+        - listitem [ref=e93] [box=999,1005,261,20]:
+          - generic [ref=e96] [box=1025,1005,233,20]: Atendimento próximo no WhatsApp
+    - generic [ref=e99] [box=180,1170,1080,895]:
+      - generic [ref=e100] [box=180,1194,1080,331]:
+        - generic [ref=e101] [box=180,1202,75,17]: a dor
+        - heading "Você não perde o cliente porque ele deixou de confiar. Você perde porque ninguém lembrou na hora certa." [level=2] [ref=e103] [box=180,1235,780,212]: Você não perde o cliente porque ele deixou de confiar.Você perde porque ninguém lembrou na hora certa.
+        - paragraph [ref=e104] [box=180,1467,620,57]: O serviço termina hoje, mas a oportunidade de retorno acontece meses depois.
+      - generic [ref=e105] [box=180,1556,1080,509]:
+        - list [ref=e106] [box=180,1556,524,360]:
+          - listitem [ref=e108] [box=180,1576,524,38]
+          - listitem [ref=e111] [box=180,1626,524,38]
+          - listitem [ref=e114] [box=180,1676,524,38]
+          - listitem [ref=e117] [box=180,1726,524,38]
+          - listitem [ref=e120] [box=180,1776,524,50]
+          - listitem [ref=e123] [box=180,1838,524,42]
+          - listitem [ref=e126] [box=180,1892,524,44]: E você nem sabe que perdeu.
+        - figure [ref=e128] [box=808,1556,476,509]:
+          - generic [ref=e129] [box=849,1597,394,427]
+    - generic [ref=e134] [box=180,2289,1080,680]:
+      - generic [ref=e135] [box=180,2313,1080,225]:
+        - generic [ref=e136] [box=180,2322,144,17]: como funciona
+        - heading "Três passos. Sem complicação." [level=2] [ref=e138] [box=180,2354,780,106]: Três passos.Sem complicação.
+        - paragraph [ref=e139] [box=180,2480,620,57]: Você não muda nada do jeito que trabalha. Só manda a troca pra gente, do jeito que for mais rápido.
+      - generic [ref=e140] [box=180,2569,1080,288]:
+        - article [ref=e141] [box=180,2589,347,288]:
+          - generic [ref=e142] [box=209,2618,289,48]
+          - heading "Você registra" [level=3] [ref=e145] [box=209,2686,289,27]
+          - paragraph [ref=e146] [box=209,2721,289,49]: Pelo WhatsApp. Texto, áudio ou foto da nota. 30 segundos.
+          - generic [ref=e147] [box=209,2790,289,56]: "\"Roberto, Gol 2014, 45 mil km, 20W50. Anota aí.\""
+        - article [ref=e148] [box=547,2589,347,288]:
+          - generic [ref=e149] [box=576,2618,289,48]
+          - heading "A gente agenda" [level=3] [ref=e152] [box=576,2686,289,27]
+          - paragraph [ref=e153] [box=576,2721,289,49]: Calculamos quando o cliente precisa voltar. Você não faz nada.
+          - generic [ref=e154] [box=576,2790,289,58]: "✓ Anotado. Próxima troca: ~set/2026. Monitorando km."
+        - article [ref=e155] [box=913,2589,347,288]:
+          - generic [ref=e156] [box=942,2618,289,48]
+          - heading "Cliente é lembrado" [level=3] [ref=e159] [box=942,2686,289,27]
+          - paragraph [ref=e160] [box=942,2721,289,49]: Na hora certa, o cliente recebe um lembrete com o nome da sua oficina.
+          - generic [ref=e161] [box=942,2790,289,58]: Oi Roberto, tá na hora da troca do Gol. Qui 14h ou sex 9h?
+      - link "Começar meus 14 dias grátis" [ref=e163] [cursor=pointer] [box=180,2937,298,56]:
+        - /url: https://wa.me/5511914480869?text=Ol%C3%A1!%20Quero%20come%C3%A7ar%20meus%2014%20dias%20gr%C3%A1tis%20no%20Quando%20Trocar%20para%20minha%20oficina.%0AOrigem%3A%20landing_como_funciona
+    - generic [ref=e167] [box=180,3193,1080,424]:
+      - generic [ref=e168] [box=180,3217,1080,225]:
+        - generic [ref=e169] [box=180,3226,195,17]: benefícios práticos
+        - heading "Menos coisa pra lembrar. Mais motivo pra voltar." [level=2] [ref=e171] [box=180,3258,780,106]
+        - paragraph [ref=e172] [box=180,3384,620,57]: O Quando Trocar cuida da recorrência sem colocar mais um sistema na rotina da oficina.
+      - list [ref=e173] [box=180,3466,1080,151]:
+        - listitem [ref=e174] [box=180,3486,203,151]:
+          - paragraph [ref=e177] [box=201,3543,161,73]: Registre pelo WhatsApp em poucos segundos.
+        - listitem [ref=e178] [box=399,3486,203,151]:
+          - paragraph [ref=e182] [box=420,3543,161,49]: Não dependa da memória da equipe.
+        - listitem [ref=e183] [box=618,3486,203,151]:
+          - paragraph [ref=e187] [box=639,3543,161,49]: Lembre o cliente no momento adequado.
+        - listitem [ref=e188] [box=838,3486,203,151]:
+          - paragraph [ref=e194] [box=859,3543,161,49]: Mantenha o nome da oficina presente.
+        - listitem [ref=e195] [box=1057,3486,203,151]:
+          - paragraph [ref=e201] [box=1078,3543,161,49]: Pare sem custo se não quiser continuar.
+    - generic [ref=e204] [box=180,3841,1080,1006]:
+      - generic [ref=e205] [box=180,3865,1080,225]:
+        - generic [ref=e206] [box=180,3873,264,17]: oferta clara desde o início
+        - heading "Teste por 14 dias. Depois, R$ 59 por mês." [level=2] [ref=e208] [box=180,3906,780,106]: Teste por 14 dias.Depois, R$ 59 por mês.
+        - paragraph [ref=e209] [box=180,4032,620,57]: Durante o teste, você usa o Quando Trocar sem cartão e sem cobrança. Ao final, o serviço é pausado até você confirmar a assinatura pelo WhatsApp.
+      - generic [ref=e210] [box=461,4136,518,696]:
+        - generic [ref=e211] [box=644,4117,152,35]: teste · 14 dias
+        - generic [ref=e212] [box=461,4136,518,696]:
+          - generic [ref=e213] [box=508,4183,424,106]
+          - generic [ref=e217] [box=508,4288,424,123]
+          - list [ref=e220] [box=508,4412,424,236]
+          - link "Começar meus 14 dias grátis" [ref=e241] [cursor=pointer] [box=508,4678,424,54]:
+            - /url: https://wa.me/5511914480869?text=Ol%C3%A1!%20Quero%20come%C3%A7ar%20meus%2014%20dias%20gr%C3%A1tis%20no%20Quando%20Trocar%20para%20minha%20oficina.%0AOrigem%3A%20landing_oferta
+          - paragraph [ref=e244] [box=508,4747,424,37]: Para continuar depois do teste, confirme R$ 59/mês pelo WhatsApp. Sem confirmação, nada é cobrado e o serviço fica pausado.
+    - generic [ref=e246] [box=180,5070,1080,596]:
+      - generic [ref=e247] [box=180,5094,1080,143]:
+        - generic [ref=e248] [box=180,5103,213,17]: vamos direto ao ponto
+        - heading "“Mas...”" [level=2] [ref=e250] [box=180,5135,780,53]
+        - paragraph [ref=e251] [box=180,5208,620,29]: As dúvidas comerciais que precisam estar claras antes do teste.
+      - generic [ref=e253] [box=180,5261,1080,405]:
+        - generic [ref=e255] [box=180,5281,1080,147]:
+          - heading "“ Não tenho tempo pra ficar mexendo em mais um sistema." [level=3] [ref=e256] [box=181,5282,1078,72]
+          - region "“ Não tenho tempo pra ficar mexendo em mais um sistema." [ref=e263] [box=181,5354,1078,73]
+        - heading "“ Já tenho sistema de gestão na oficina." [level=3] [ref=e267] [box=181,5441,1078,72]:
+          - button "“ Já tenho sistema de gestão na oficina." [ref=e268] [cursor=pointer] [box=181,5441,1078,72]
+        - heading "“ O cliente vai achar que é spam?" [level=3] [ref=e274] [box=181,5527,1078,72]:
+          - button "“ O cliente vai achar que é spam?" [ref=e275] [cursor=pointer] [box=181,5527,1078,72]
+        - heading "“ O que acontece depois dos 14 dias?" [level=3] [ref=e281] [box=181,5613,1078,72]:
+          - button "“ O que acontece depois dos 14 dias?" [ref=e282] [cursor=pointer] [box=181,5613,1078,72]
+    - generic [ref=e287] [box=180,5890,1080,550]:
+      - generic [ref=e288] [box=180,5914,1080,147]:
+        - generic [ref=e289] [box=180,5923,204,17]: perguntas frequentes
+        - heading "Perguntas que a gente sempre ouve." [level=2] [ref=e291] [box=180,5955,780,106]: Perguntas quea gente sempre ouve.
+      - generic [ref=e293] [box=180,6085,820,355]:
+        - heading "01 Preciso instalar algum aplicativo?" [level=3] [ref=e296] [box=181,6106,818,63]:
+          - button "01 Preciso instalar algum aplicativo?" [ref=e297] [cursor=pointer] [box=181,6106,818,63]
+        - heading "02 E se o cliente não responder as mensagens?" [level=3] [ref=e303] [box=181,6179,818,63]:
+          - button "02 E se o cliente não responder as mensagens?" [ref=e304] [cursor=pointer] [box=181,6179,818,63]
+        - heading "03 Quem é o remetente da mensagem que o cliente recebe?" [level=3] [ref=e310] [box=181,6251,818,63]:
+          - button "03 Quem é o remetente da mensagem que o cliente recebe?" [ref=e311] [cursor=pointer] [box=181,6251,818,63]
+        - heading "04 Posso cancelar a qualquer momento?" [level=3] [ref=e317] [box=181,6324,818,63]:
+          - button "04 Posso cancelar a qualquer momento?" [ref=e318] [cursor=pointer] [box=181,6324,818,63]
+        - heading "05 Como faço pra corrigir um cadastro errado?" [level=3] [ref=e324] [box=181,6396,818,63]:
+          - button "05 Como faço pra corrigir um cadastro errado?" [ref=e325] [cursor=pointer] [box=181,6396,818,63]
+    - generic [ref=e330] [box=310,6704,820,382]:
+      - generic [ref=e331] [box=310,6712,195,17]: tá esperando o quê?
+      - heading "Você já tem cliente. Só precisa lembrar ele de voltar." [level=2] [ref=e333] [box=310,6745,780,106]: Você já tem cliente.Só precisa lembrar ele de voltar.
+      - paragraph [ref=e334] [box=310,6871,620,57]: Comece sem cartão e sem cobrança automática. Depois dos 14 dias, continue por R$ 59/mês ou deixe o serviço pausado.
+      - generic [ref=e335] [box=310,6976,820,60]:
+        - link "Começar meus 14 dias grátis" [ref=e336] [cursor=pointer] [box=310,6976,302,60]:
+          - /url: https://wa.me/5511914480869?text=Ol%C3%A1!%20Quero%20come%C3%A7ar%20meus%2014%20dias%20gr%C3%A1tis%20no%20Quando%20Trocar%20para%20minha%20oficina.%0AOrigem%3A%20landing_cta_final
+        - link "Ver como funciona" [ref=e339] [cursor=pointer] [box=624,6976,199,60]:
+          - /url: "#como"
+      - paragraph [ref=e340] [box=310,7068,820,17]: Sem cartão · sem fidelidade · cancele quando quiser
+  - contentinfo [ref=e341] [box=0,7189,1440,183]:
+    - generic [ref=e342] [box=180,7230,1080,102]:
+      - generic [ref=e343] [box=180,7230,1080,36]:
+        - link "Quando Trocar by Perfect Automotive" [ref=e344] [cursor=pointer] [box=180,7230,93,36]:
+          - /url: /
+          - img "Quando Trocar by Perfect Automotive" [ref=e345] [box=180,7230,93,36]
+        - link "contato@quandotrocar.com.br" [ref=e346] [cursor=pointer] [box=1065,7239,195,18]:
+          - /url: mailto:contato@quandotrocar.com.br
+      - generic [ref=e348] [box=180,7315,1080,17]:
+        - generic [ref=e349] [box=180,7315,163,17]: © 2026 Quando Trocar
+        - generic [ref=e350] [box=363,7315,8,17]: /
+        - link "Termos" [ref=e351] [cursor=pointer] [box=391,7315,49,17]:
+          - /url: /termos
+        - generic [ref=e352] [box=460,7315,8,17]: /
+        - link "Privacidade" [ref=e353] [cursor=pointer] [box=489,7315,90,17]:
+          - /url: /privacidade
+        - generic [ref=e354] [box=1138,7315,122,17]: feito no Brasil
+  - button "Open Next.js Dev Tools" [ref=e403] [cursor=pointer] [box=22,946,32,32]
+  - alert [ref=e407] [box=-1,7371,1,1]

@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "Quando Trocar",
-  tagline: "seu cliente volta pra próxima troca",
+  tagline: "lembre seu cliente da próxima troca",
   whatsappNumber:
     process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "5511999999999",
   contactEmail:

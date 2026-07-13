@@ -6,6 +6,7 @@ import {
 } from "./ui/accordion";
 import { Eyebrow, Section, SectionLead, SectionTitle } from "./section";
 import { Reveal, RevealStagger, RevealItem } from "./reveal";
+import { LANDING_OFFER } from "@/lib/landing-offer";
 
 const items = [
   {
@@ -14,8 +15,7 @@ const items = [
       <>
         <b className="text-ink">É um WhatsApp de 30 segundos.</b> Você já tá no
         WhatsApp o dia inteiro. Manda a troca do jeito que for mais rápido —
-        texto, áudio, foto da nota — e pronto. Se você gastar mais que 1 minuto
-        por dia com a gente, pode cancelar.
+        texto, áudio ou foto da nota — e pronto.
       </>
     ),
   },
@@ -24,38 +24,27 @@ const items = [
     a: (
       <>
         <b className="text-ink">Isso aqui não substitui.</b> Seu sistema
-        continua do jeito que tá. A gente só faz o cliente voltar — o que
-        sistema de gestão não faz. São coisas diferentes.
+        continua do jeito que tá. O Quando Trocar cuida do lembrete de retorno;
+        são funções diferentes.
       </>
     ),
   },
   {
-    q: "Cliente não gosta de receber mensagem de oficina.",
+    q: "O cliente vai achar que é spam?",
     a: (
       <>
         <b className="text-ink">Cliente não gosta de spam.</b> Lembrete na hora
         certa ele agradece. A mensagem é assinada como a sua oficina, não como
-        robô. E a gente nunca manda fora de hora.
+        robô. O contato acontece quando existe contexto de manutenção.
       </>
     ),
   },
   {
-    q: "Vai cobrar caro depois dos 30 dias?",
+    q: `O que acontece depois dos ${LANDING_OFFER.trialDays} dias?`,
     a: (
       <>
-        <b className="text-ink">Só se funcionar.</b> Se cliente voltar durante
-        o teste, a gente combina o preço. Se não voltar, você não paga nada.
-        Sem cartão de entrada, sem contrato, sem pegadinha.
-      </>
-    ),
-  },
-  {
-    q: "Como vocês sabem a hora certa?",
-    a: (
-      <>
-        O bot pergunta a <b className="text-ink">quilometragem</b> pro cliente
-        de vez em quando. Com isso a gente calcula quando a próxima troca chega
-        — pelo ritmo real de uso, não por chute.
+        <b className="text-ink">O serviço é pausado, sem cobrança automática.</b>{" "}
+        Para continuar, você confirma a assinatura de R$ {LANDING_OFFER.monthlyPrice} por mês pelo WhatsApp.
       </>
     ),
   },
@@ -71,7 +60,7 @@ export function Objecoes() {
           <span className="text-ink">...”</span>
         </SectionTitle>
         <SectionLead>
-          As dúvidas mais comuns dos donos que já conversaram com a gente.
+          As dúvidas comerciais que precisam estar claras antes do teste.
         </SectionLead>
       </Reveal>
 

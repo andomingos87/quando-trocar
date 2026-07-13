@@ -1,6 +1,5 @@
 import { Eyebrow, Section, SectionLead, SectionTitle } from "./section";
 import { Reveal, RevealStagger, RevealItem } from "./reveal";
-import { CountUp } from "./count-up";
 
 const timeline = [
   { month: "mar", text: "Cliente troca óleo com você.", active: true },
@@ -17,13 +16,12 @@ export function Dor() {
         <Reveal>
           <Eyebrow tone="white">a dor</Eyebrow>
           <SectionTitle className="text-white">
-            Seja honesto:
+            Você não perde o cliente porque ele deixou de confiar.
             <br />
-            quantos clientes você{" "}
-            <span className="text-brand">perde por mês?</span>
+            <span className="text-brand">Você perde porque ninguém lembrou na hora certa.</span>
           </SectionTitle>
           <SectionLead className="text-white/60">
-            Não é falta de cliente. É falta de lembrar ele na hora certa.
+            O serviço termina hoje, mas a oportunidade de retorno acontece meses depois.
           </SectionLead>
         </Reveal>
 
@@ -81,27 +79,22 @@ export function Dor() {
           </RevealStagger>
 
           <Reveal direction="left" delay={0.15}>
-            <figure className="glow-border relative overflow-hidden rounded-2xl p-8 md:p-10">
+            <figure className="relative overflow-hidden rounded-2xl border border-white/15 bg-ink-soft p-8 md:p-10">
               {/* diagonal stripes texture */}
               <div className="bg-stripes-soft pointer-events-none absolute inset-0" />
               {/* soft brand glow in corner */}
-              <div className="animate-glow-pulse pointer-events-none absolute -left-16 -top-16 size-56 rounded-full bg-[radial-gradient(circle,rgba(225,157,78,0.22),transparent_65%)]" />
+              <div className="animate-glow-pulse pointer-events-none absolute -left-16 -top-16 size-56 rounded-full bg-[radial-gradient(circle,color-mix(in_srgb,var(--color-brand)_22%,transparent),transparent_65%)]" />
 
               <div className="relative">
-                <div className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/40">
-                  Estimativa do setor
+                <div className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/50">
+                  o ponto cego da recorrência
                 </div>
-                <div className="font-display mt-4 text-[clamp(5rem,10vw,9rem)] font-bold leading-[0.85] tracking-tighter text-brand">
-                  <CountUp to={62} suffix="%" />
+                <div className="font-display mt-5 text-[clamp(2.5rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-tighter text-brand">
+                  A próxima troca não acontece hoje.
                 </div>
                 <figcaption className="mt-5 max-w-[280px] text-[15px] leading-relaxed text-white/70">
-                  dos clientes{" "}
-                  <span className="font-semibold text-white">
-                    não voltam sozinhos
-                  </span>
-                  . Cada um vale cerca de{" "}
-                  <span className="font-mono font-semibold text-red">R$220</span> em
-                  serviço.
+                  Sem um lembrete no momento certo, a oficina depende da memória
+                  da equipe e do cliente. O Quando Trocar fecha esse intervalo.
                 </figcaption>
               </div>
             </figure>

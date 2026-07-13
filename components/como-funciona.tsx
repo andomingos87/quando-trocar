@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
-import { Button } from "./ui/button";
+import { LandingCta } from "./landing-cta";
+import { LANDING_OFFER } from "@/lib/landing-offer";
 import { Eyebrow, Section, SectionLead, SectionTitle } from "./section";
 import { Reveal, RevealStagger, RevealItem } from "./reveal";
 
@@ -24,8 +25,8 @@ const steps = [
   },
   {
     n: "03",
-    title: "Cliente volta",
-    body: "Na hora certa, o bot convida o cliente. Ele agenda. Volta pra você.",
+    title: "Cliente é lembrado",
+    body: "Na hora certa, o cliente recebe um lembrete com o nome da sua oficina.",
     demo: {
       text: "Oi Roberto, tá na hora da troca do Gol. Qui 14h ou sex 9h?",
       side: "them" as const,
@@ -54,7 +55,7 @@ export function ComoFunciona() {
           <RevealItem
             as="article"
             key={step.n}
-            className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-white p-7 transition-all duration-300 hover:-translate-y-1 hover:border-ink/20 hover:shadow-[0_24px_40px_-24px_rgba(0,0,0,0.15)]"
+            className="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-white p-7 transition-all duration-300 hover:-translate-y-1 hover:border-ink/20 hover:shadow-xl"
           >
             <div className="flex items-start justify-between">
               <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted">
@@ -73,8 +74,8 @@ export function ComoFunciona() {
             <div
               className={
                 step.demo.side === "me"
-                  ? "mt-5 rounded-[12px] rounded-tr-[2px] bg-wa-me px-3.5 py-2.5 text-[13px] leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
-                  : "mt-5 rounded-[12px] rounded-tl-[2px] border border-line bg-white px-3.5 py-2.5 text-[13px] leading-snug shadow-[0_1px_1px_rgba(0,0,0,0.08)]"
+                  ? "mt-5 rounded-[12px] rounded-tr-[2px] bg-wa-me px-3.5 py-2.5 text-[13px] leading-snug shadow-sm"
+                  : "mt-5 rounded-[12px] rounded-tl-[2px] border border-line bg-white px-3.5 py-2.5 text-[13px] leading-snug shadow-sm"
               }
             >
               {step.demo.text}
@@ -83,11 +84,11 @@ export function ComoFunciona() {
         ))}
       </RevealStagger>
 
-      <Reveal delay={0.1} className="mt-14 text-center">
-        <Button href="#cta-final" className="group">
-          Quero colocar pra rodar
+      <Reveal delay={0.1} className="mt-14">
+        <LandingCta source="landing_como_funciona" className="group">
+          {LANDING_OFFER.ctaLabel}
           <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-1" />
-        </Button>
+        </LandingCta>
       </Reveal>
     </Section>
   );

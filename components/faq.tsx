@@ -14,7 +14,7 @@ const items = [
   },
   {
     q: "E se o cliente não responder as mensagens?",
-    a: "O bot não insiste. Ele estima sozinho pelo ritmo conhecido e segue monitorando. Nunca vira chato com o cliente.",
+    a: "O lembrete não depende de insistência. O contato segue a previsão do serviço e respeita a resposta do cliente.",
   },
   {
     q: "Quem é o remetente da mensagem que o cliente recebe?",
@@ -22,19 +22,11 @@ const items = [
   },
   {
     q: "Posso cancelar a qualquer momento?",
-    a: 'Sim. Sem multa, sem contrato. Manda "cancelar" no WhatsApp e acabou.',
-  },
-  {
-    q: "Funciona só pra troca de óleo?",
-    a: "No teste, a gente foca em troca de óleo — é o serviço com recorrência mais clara. Revisão, alinhamento e afins entram nas próximas versões.",
+    a: 'Sim. A assinatura é mensal, sem fidelidade e sem multa. Basta solicitar pelo WhatsApp.',
   },
   {
     q: "Como faço pra corrigir um cadastro errado?",
     a: 'Manda no chat: "corrigi a placa do Roberto, é F no final". O bot entende em português, sem formulário nenhum.',
-  },
-  {
-    q: "Meus dados são compartilhados?",
-    a: "Não. Seus clientes são seus. A gente só usa os dados pra mandar as mensagens que você autorizou — e o cliente final dá consentimento explícito no primeiro contato.",
   },
 ];
 

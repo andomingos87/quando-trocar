@@ -276,12 +276,13 @@ export default function TermosPage() {
           <Section title="8. Mensalidade, pagamento e cancelamento">
             <ul className="list-disc space-y-2 pl-5">
               <li>
-                O valor da mensalidade é o vigente na data da contratação,
-                informado no momento do cadastro ou em proposta comercial.
+                Após o período de teste, o plano padrão custa R$ 59 por mês,
+                salvo condição específica informada e aceita pela Oficina.
               </li>
               <li>
-                A cobrança é mensal e recorrente, salvo plano específico
-                contratado.
+                A cobrança é mensal e só começa após a Oficina confirmar que
+                deseja continuar depois do teste. Não há cobrança automática
+                pela simples conclusão do período gratuito.
               </li>
               <li>
                 Atraso superior a 7 dias pode acarretar suspensão do envio
@@ -290,7 +291,7 @@ export default function TermosPage() {
               </li>
               <li>
                 A Oficina pode cancelar o serviço a qualquer momento,
-                solicitando pelo e-mail{" "}
+                solicitando pelos canais oficiais de atendimento ou pelo e-mail{" "}
                 <a
                   href={`mailto:${siteConfig.contactEmail}`}
                   className="font-medium text-ink underline underline-offset-4 hover:text-brand"
@@ -310,10 +311,11 @@ export default function TermosPage() {
 
           <Section title="9. Período de teste">
             <p>
-              Quando ofertado, o período de teste gratuito tem prazo
-              determinado e regras específicas comunicadas na contratação.
-              Ao fim do período de teste, caso a Oficina não cancele, a
-              cobrança da mensalidade contratada é iniciada automaticamente.
+              O período de teste gratuito padrão dura 14 dias, sem cartão e
+              sem cobrança. Ao fim desse prazo, o serviço é pausado. Para
+              continuar, a Oficina deve confirmar a assinatura mensal de
+              R$ 59 pelos canais oficiais. Sem confirmação, nenhuma mensalidade
+              é iniciada automaticamente.
             </p>
           </Section>
 

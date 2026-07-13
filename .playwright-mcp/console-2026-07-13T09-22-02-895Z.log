@@ -1,0 +1,21 @@
+[     301ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:14537
+[   68689ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js:14537
+[   68731ms] [WARNING] You have Reduced Motion enabled on your device. Animations may not appear as expected. @ http://127.0.0.1:3001/_next/static/chunks/node_modules_70dee288._.js:5423
+[  114872ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  114953ms] [LOG] [Fast Refresh] done in 148ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  115057ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  115099ms] [LOG] [Fast Refresh] done in 143ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  144630ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  144799ms] [LOG] [Fast Refresh] done in 77ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  144821ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  144856ms] [LOG] [Fast Refresh] done in 22ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  144957ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  144982ms] [LOG] [Fast Refresh] done in 124ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  145123ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  145198ms] [LOG] [Fast Refresh] done in 175ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  145327ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  145370ms] [LOG] [Fast Refresh] done in 142ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  145499ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  145513ms] [LOG] [Fast Refresh] done in 114ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809
+[  180184ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5949
+[  180268ms] [LOG] [Fast Refresh] done in 164ms @ http://127.0.0.1:3001/_next/static/chunks/node_modules_next_dist_client_cf1d9188._.js:5809

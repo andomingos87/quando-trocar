@@ -1,13 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
+import { LandingCta } from "@/components/landing-cta";
+import { LANDING_OFFER } from "@/lib/landing-offer";
 
 const links = [
   { href: "#como", label: "Como funciona" },
-  { href: "#objecoes", label: "Objeções" },
-  { href: "#preco", label: "Preço" },
+  { href: "#beneficios", label: "Benefícios" },
+  { href: "#preco", label: "Oferta" },
   { href: "#faq", label: "FAQ" },
-  { href: "/demo", label: "Demo" },
 ];
 
 export function Nav() {
@@ -60,13 +61,14 @@ export function Nav() {
           ))}
         </div>
         <div className="mx-4 hidden h-5 w-px bg-line lg:block" />
-        <Link
-          href="#cta-final"
-          className="group inline-flex items-center gap-1.5 bg-brand px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-brand-dark"
+        <LandingCta
+          source="landing_nav"
+          className="group rounded-xl px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] shadow-none hover:shadow-none sm:px-5 sm:text-[12px]"
         >
-          Testar grátis
+          <span className="hidden sm:inline">{LANDING_OFFER.ctaLabel}</span>
+          <span className="sm:hidden">{LANDING_OFFER.trialDays} dias grátis</span>
           <ArrowUpRight className="size-3.5 transition-transform group-hover:-translate-y-px group-hover:translate-x-px" />
-        </Link>
+        </LandingCta>
       </div>
     </nav>
   );

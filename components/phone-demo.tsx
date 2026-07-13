@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
-import { Mic, MoreVertical, Phone as PhoneIcon, Play } from "lucide-react";
+import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "motion/react";
+import { CarFront, Mic, MoreVertical, Phone as PhoneIcon, Play, RotateCcw, Wrench } from "lucide-react";
 import {
   type ChatCard,
   type ChatPerspective,
   type ChatStep,
   contacts,
   scripts,
+  getStaticChatSteps,
 } from "@/lib/chat-scripts";
 import { cn } from "@/lib/utils";
 
@@ -30,11 +31,17 @@ function scheduleSequence(
   onDone: () => void,
 ) {
   const script = scripts[perspective];
-  const items: RenderItem[] = [];
+  const firstStep = script[0];
+  const items: RenderItem[] = firstStep
+    ? [{ kind: "msg", step: firstStep, key: `${perspective}-msg-0` }]
+    : [];
   const timers: ReturnType<typeof setTimeout>[] = [];
   let clock = 0;
 
-  script.forEach((step, i) => {
+  onUpdate([...items]);
+
+  script.slice(1).forEach((step, index) => {
+    const i = index + 1;
     const pause = step.pauseBefore ?? (step.who === "me" ? 1800 : 900);
     clock += pause;
 
@@ -75,22 +82,21 @@ function scheduleSequence(
 
 export function PhoneDemo() {
   const [perspective, setPerspective] = useState<ChatPerspective>("dono");
-  const [items, setItems] = useState<RenderItem[]>([]);
+  const [items, setItems] = useState<RenderItem[]>(() => [
+    { kind: "msg", step: scripts.dono[0], key: "dono-msg-0" },
+  ]);
   const [autoAlternate, setAutoAlternate] = useState(true);
+  const [replayKey, setReplayKey] = useState(0);
+  const reduceMotion = useReducedMotion();
   const autoRef = useRef(autoAlternate);
   autoRef.current = autoAlternate;
 
   const contact = contacts[perspective];
 
   useEffect(() => {
-    setItems([]);
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      const script = scripts[perspective];
+    if (reduceMotion) {
       setItems(
-        script.map((step, i) => ({
+        getStaticChatSteps(perspective).map((step, i) => ({
           kind: "msg",
           step,
           key: `${perspective}-msg-${i}`,
@@ -108,7 +114,7 @@ export function PhoneDemo() {
       },
     );
     return cleanup;
-  }, [perspective]);
+  }, [perspective, reduceMotion, replayKey]);
 
   const handleTabClick = useCallback(
     (v: ChatPerspective) => {
@@ -121,8 +127,8 @@ export function PhoneDemo() {
 
   const tabs = useMemo(
     () => [
-      { v: "dono" as const, emoji: "🔧", label: "dono" },
-      { v: "cliente" as const, emoji: "🚗", label: "cliente" },
+      { v: "dono" as const, icon: Wrench, label: "oficina" },
+      { v: "cliente" as const, icon: CarFront, label: "cliente" },
     ],
     [],
   );
@@ -153,7 +159,7 @@ export function PhoneDemo() {
                   : "bg-transparent text-muted hover:text-ink",
               )}
             >
-              <span className="mr-1">{t.emoji}</span>
+              <t.icon className="mr-1 inline size-3.5" aria-hidden="true" />
               {t.label}
             </button>
           ))}
@@ -174,13 +180,13 @@ export function PhoneDemo() {
             </div>
           </div>
 
-          <div className="chat-dots flex flex-1 flex-col justify-end gap-1.5 overflow-hidden px-2.5 pb-3 pt-3">
+          <div className="chat-dots flex flex-1 flex-col justify-end gap-1.5 overflow-hidden px-2.5 pb-3 pt-3" aria-live="polite">
             <AnimatePresence initial={false}>
               {items.map((item) =>
                 item.kind === "typing" ? (
                   <TypingBubble key={item.key} />
                 ) : (
-                  <ChatBubble key={item.key} step={item.step} />
+                  <ChatBubble key={item.key} step={item.step} instant={Boolean(reduceMotion)} />
                 ),
               )}
             </AnimatePresence>
@@ -196,6 +202,18 @@ export function PhoneDemo() {
           </div>
         </div>
       </div>
+      <button
+        type="button"
+        onClick={() => {
+          setAutoAlternate(false);
+          setReplayKey((value) => value + 1);
+        }}
+        className="absolute -bottom-11 inline-flex min-h-9 items-center gap-2 rounded-full border border-line bg-paper px-3 py-2 text-xs font-semibold text-ink shadow-sm transition-colors hover:border-ink/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        aria-label="Reiniciar demonstração"
+      >
+        <RotateCcw className="size-3.5" aria-hidden="true" />
+        Reiniciar conversa
+      </button>
     </div>
     </LazyMotion>
   );
@@ -225,7 +243,7 @@ function TypingBubble() {
   );
 }
 
-function ChatBubble({ step }: { step: ChatStep }) {
+function ChatBubble({ step, instant = false }: { step: ChatStep; instant?: boolean }) {
   const isMe = step.who === "me";
   const hasCard = "card" in step && step.card;
 
@@ -239,11 +257,11 @@ function ChatBubble({ step }: { step: ChatStep }) {
   return (
     <m.div
       layout
-      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+      initial={instant ? false : { opacity: 0, y: 8, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{
-        duration: 0.5,
+        duration: instant ? 0 : 0.5,
         ease: [0.22, 1, 0.36, 1],
       }}
       className={

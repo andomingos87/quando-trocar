@@ -24,10 +24,21 @@ cobranca (modulo [[billing]]), schema (modulo [[database]]).
 - Conteudo de copy/design de referencia fica fora do deploy (ver `.gitignore`:
   `docs/product/copy.md`, `docs/product/design-system.md`).
 - Manter server-only fora de client components; seguir os padroes existentes de `components/ui`.
+- A landing segue a ordem comercial: hero, transparencia, dor, como funciona, beneficios,
+  objecoes, oferta, FAQ e CTA final. Nao usar prova social, estatistica, escassez ou promessa
+  de resultado sem evidencia publicavel.
+- A oferta publica e centralizada em `lib/landing-offer.ts`: 14 dias gratis, sem cartao nem
+  cobranca automatica; depois R$ 59/mes, sem fidelidade. Sem confirmacao de continuidade, o
+  servico fica pausado.
+- Todo CTA primario da landing abre o WhatsApp em nova aba com origem valida (`landing_nav`,
+  `landing_hero`, `landing_como_funciona`, `landing_oferta`, `landing_floating_mobile` ou
+  `landing_cta_final`). A origem e telemetria textual de MVP, nao uma plataforma de analytics.
+- A configuracao publica descreve a oferta; ela nao executa expiracao, pagamento ou transicao
+  de `agent_mode`. Essas automacoes pertencem aos modulos de bot e billing.
 
 ## Testes
-- Sem suite dedicada atualmente (modulo majoritariamente de apresentacao). Rodar `npm run build`
-  ao mexer em rotas/boundary server-client.
+- `tests/landing-offer.test.ts` cobre contrato comercial, origens, links, fallback da demo e
+  regra do CTA flutuante. Rodar tambem `npm run build` ao mexer em rotas/boundary server-client.
 
 ## Referencias
 - Prototipo de validacao: `docs/product/PRD-landing-prototype.md`

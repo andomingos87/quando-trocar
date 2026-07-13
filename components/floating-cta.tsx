@@ -2,61 +2,61 @@
 
 import { useEffect, useState } from "react";
 import { WhatsappIcon } from "./ui/whatsapp-icon";
-import { whatsappLink } from "@/lib/config";
 import { cn } from "@/lib/utils";
+import {
+  LANDING_OFFER,
+  buildLandingWhatsappLink,
+  shouldShowFloatingCta,
+} from "@/lib/landing-offer";
 
 export function FloatingCta() {
-  const [visible, setVisible] = useState(false);
+  const [visibility, setVisibility] = useState({
+    heroCtaVisible: true,
+    offerCtaVisible: false,
+    finalCtaVisible: false,
+  });
 
   useEffect(() => {
-    const hero = document.querySelector("[data-section='hero']");
-    const final = document.getElementById("cta-final");
-    if (!hero) return;
-
-    const heroObs = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => setVisible(!e.isIntersecting));
-      },
-      { threshold: 0 },
-    );
-    heroObs.observe(hero);
-
-    let finalObs: IntersectionObserver | null = null;
-    if (final) {
-      finalObs = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((e) => {
-            if (e.isIntersecting) setVisible(false);
-          });
-        },
-        { threshold: 0.3 },
+    const targets = [
+      ["landing_hero", "heroCtaVisible"],
+      ["landing_oferta", "offerCtaVisible"],
+      ["landing_cta_final", "finalCtaVisible"],
+    ] as const;
+    const observers = targets.flatMap(([source, key]) => {
+      const element = document.querySelector(`[data-landing-cta='${source}']`);
+      if (!element) return [];
+      const observer = new IntersectionObserver(
+        ([entry]) => setVisibility((current) => ({ ...current, [key]: entry.isIntersecting })),
+        { threshold: 0.25 },
       );
-      finalObs.observe(final);
-    }
+      observer.observe(element);
+      return [observer];
+    });
 
     return () => {
-      heroObs.disconnect();
-      finalObs?.disconnect();
+      observers.forEach((observer) => observer.disconnect());
     };
   }, []);
 
+  const visible = shouldShowFloatingCta(visibility);
+
   return (
     <a
-      href={whatsappLink("Oi, quero testar o Quando Trocar")}
+      href={buildLandingWhatsappLink("landing_floating_mobile")}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Testar grátis no WhatsApp"
+      aria-label={`${LANDING_OFFER.ctaLabel} no WhatsApp`}
+      data-landing-cta="landing_floating_mobile"
       className={cn(
-        "group fixed bottom-5 right-5 z-40 inline-flex items-center gap-2.5 rounded-full bg-[#25d366] py-3.5 pl-4 pr-5 text-[14px] font-semibold text-white transition-all duration-300",
-        "shadow-[0_12px_30px_-8px_rgba(37,211,102,0.55),_0_4px_12px_-2px_rgba(0,0,0,0.15)]",
-        "hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-8px_rgba(37,211,102,0.65),_0_6px_16px_-2px_rgba(0,0,0,0.2)]",
+        "group fixed inset-x-3 z-40 flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-brand px-5 py-3 text-[14px] font-semibold text-white shadow-xl transition-all duration-300 md:hidden",
+        "bottom-[max(0.75rem,env(safe-area-inset-bottom))] hover:bg-brand-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
         visible
           ? "translate-y-0 opacity-100"
           : "pointer-events-none translate-y-5 opacity-0",
       )}
     >
       <WhatsappIcon className="size-5" />
-      Testar grátis
+      {LANDING_OFFER.ctaLabel}
     </a>
   );
 }

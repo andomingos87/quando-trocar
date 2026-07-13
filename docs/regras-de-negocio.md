@@ -593,6 +593,18 @@ Mudar copy de um template = nova versão + aprovação Meta (horas a dias).
 
 ## 9. Preço, planos e billing
 
+### 9.0 Oferta pública de entrada
+- A oferta padrão publicada para novas oficinas é **14 dias grátis** e, depois, **R$ 59 por mês**.
+- O teste não exige cartão e não gera cobrança automática no encerramento.
+- Ao final dos 14 dias, sem confirmação de continuidade e pagamento, o serviço deve ficar
+  pausado e a conversa comercial deve voltar ao modo `vendas`.
+- A assinatura é mensal, sem fidelidade, com cancelamento a qualquer momento.
+- A landing apenas comunica esta regra. A automação de expiração, pausa e retorno para `vendas`
+  não é alterada pelo ciclo P0 + P1 da landing e deve permanecer determinística no backend.
+- Fonte: decisão comercial registrada em
+  [`docs/superpowers/specs/2026-07-12-landing-p0-p1-design.md`](./superpowers/specs/2026-07-12-landing-p0-p1-design.md)
+  e contrato de apresentação em `lib/landing-offer.ts`.
+
 ### 9.1 Plano único, preço variável por oficina
 - Tabela `planos`: plano único no MVP ("Quando Trocar Mensal"), com `preco_base`.
 - `oficinas.plano_id` referencia o plano.

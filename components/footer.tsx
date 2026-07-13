@@ -5,7 +5,7 @@ import { siteConfig } from "@/lib/config";
 export function Footer() {
   return (
     <footer
-      className="border-t border-white/5 px-5 py-10 text-[13px] text-white/60 sm:px-8"
+      className="border-t border-white/5 px-5 pb-28 pt-10 text-[13px] text-white/60 sm:px-8 md:py-10"
       style={{ background: "var(--color-dark)" }}
     >
       <div className="mx-auto max-w-[1080px]">
@@ -50,7 +50,7 @@ export function Footer() {
           >
             Privacidade
           </Link>
-          <span className="ml-auto text-white/30">feito com 🔧 no Brasil</span>
+          <span className="ml-auto text-white/30">feito no Brasil</span>
         </div>
       </div>
     </footer>

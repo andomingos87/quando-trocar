@@ -43,14 +43,14 @@ export const scripts: Record<ChatPerspective, ChatStep[]> = {
       who: "them",
       text: "Opa chefe! Manda a troca aí — texto, áudio ou foto da nota. Do jeito que for mais rápido.",
       t: "14:02",
-      pauseBefore: 800,
-      typing: 2400,
+      pauseBefore: 150,
+      typing: 500,
     },
     {
       who: "me",
       audio: "0:14",
       t: "14:03",
-      pauseBefore: 2200,
+      pauseBefore: 900,
     },
     {
       who: "them",
@@ -80,10 +80,10 @@ export const scripts: Record<ChatPerspective, ChatStep[]> = {
     },
     {
       who: "them",
-      text: "Beleza ✓ Vou monitorando a km do Roberto e te aviso quando chegar perto. Pode seguir.",
+      text: "Cadastro concluído ✓ Próxima troca prevista para set/2026. O lembrete ficou agendado.",
       t: "14:04",
       pauseBefore: 600,
-      typing: 2100,
+      typing: 700,
     },
   ],
   cliente: [
@@ -91,8 +91,8 @@ export const scripts: Record<ChatPerspective, ChatStep[]> = {
       who: "them",
       text: "Oi Roberto 👋 Aqui é do Auto Center do Tião.",
       t: "09:15",
-      pauseBefore: 800,
-      typing: 1900,
+      pauseBefore: 150,
+      typing: 500,
     },
     {
       who: "them",
@@ -128,10 +128,14 @@ export const scripts: Record<ChatPerspective, ChatStep[]> = {
     },
     {
       who: "them",
-      text: "Fechou! Te espero lá quinta às 14h. Qualquer coisa, é só chamar.",
+      text: "Agendamento confirmado ✓ Auto Center do Tião, quinta às 14h.",
       t: "09:20",
       pauseBefore: 700,
-      typing: 2000,
+      typing: 700,
     },
   ],
 };
+
+export function getStaticChatSteps(perspective: ChatPerspective): ChatStep[] {
+  return scripts[perspective];
+}

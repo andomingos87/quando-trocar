@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     template: `%s — ${siteConfig.name}`,
   },
   description:
-    "Você manda uma mensagem. A gente cuida do resto. Quando chegar a hora da próxima troca, o cliente volta — sem você precisar lembrar de nada.",
+    "Registre o serviço pelo WhatsApp. O Quando Trocar calcula a próxima data e lembra o cliente na hora certa — com o nome da sua oficina.",
   keywords: [
     "oficina mecânica",
     "troca de óleo",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     siteName: siteConfig.name,
     title: `${siteConfig.name} — ${siteConfig.tagline}`,
     description:
-      "Seu cliente esquece de voltar pra você. A gente resolve — pelo WhatsApp, sem instalar nada.",
+      "Registre o serviço pelo WhatsApp e lembre o cliente da próxima troca com o nome da sua oficina.",
     images: [
       {
         url: "/og.png",
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `${siteConfig.name} — ${siteConfig.tagline}`,
     description:
-      "Seu cliente esquece de voltar pra você. A gente resolve — pelo WhatsApp, sem instalar nada.",
+      "Registre o serviço pelo WhatsApp e lembre o cliente da próxima troca com o nome da sua oficina.",
     images: ["/og.png"],
   },
   icons: { icon: "/logo_qt_byperfect.png", apple: "/logo_qt_byperfect.png" },
