@@ -582,33 +582,180 @@ function mergeDraftCorrection(base: ServiceDraft, update: ServiceDraft): Service
   return merged;
 }
 
-function neutralReply(message: string): OnboardingAgentReply {
+// --- Respostas neutras / conversacionais (não são cadastro) -----------------
+// A oficina manda saudação, small-talk ("tudo bem?"), pergunta como funciona ou
+// só um "ok". Antes isto caía em duas frases fixas repetidas ad nauseam (efeito
+// "disco riscado", às 22h ainda dizia "Bom dia"). Agora classificamos a intenção
+// social, cumprimentamos pelo horário e rotacionamos entre variações. Tudo
+// determinístico — a camada CV1 (ADR-0020) só põe polimento por cima quando
+// ligada (e só nestas respostas: as transacionais seguem enlatadas).
+
+type NeutralKind =
+  | "como_funciona"
+  | "small_talk"
+  | "saudacao"
+  | "agradecimento"
+  | "generico";
+
+const COMO_FUNCIONA_PATTERN =
+  /\b(como funciona|como que funciona|como (eu )?faco|como (eu )?uso|como usa|o que e isso|pra que serve|nao entendi|nao intendi|me ajuda|como assim|manual|tutorial)\b/;
+// Frases claramente sociais (multi-token): não confundem com cadastro nem ack.
+const SMALL_TALK_PATTERN =
+  /\b(tudo bem|tudo bom|td bem|td bom|tudo tranquilo|como vai|como voce esta|como voce ta|como ce ta|como tu ta|como estao|como anda|de boa|na paz)\b/;
+// Tokens ambíguos: sociais só quando vêm em pergunta ("beleza?"); sem "?" são ack.
+const AMBIGUOUS_SOCIAL_PATTERN = /\b(beleza|blz|suave|firmeza|tranquilo|bao)\b/;
+const SAUDACAO_PATTERN =
+  /\b(oi|ola|opa|eai|e ai|fala|salve|bom dia|boa tarde|boa noite|boas)\b/;
+const AGRADECIMENTO_PATTERN =
+  /\b(obrigad|obg|valeu|vlw|agradeco|show|otimo|perfeito|ok|okay|okey|certo|entendi|joia|massa|top|combinado|fechado)\b/;
+
+function classifyNeutral(message: string): NeutralKind {
   const normalized = normalizeText(message);
-  const isGreeting =
-    /\b(oi|ola|olá|bom dia|boa tarde|boa noite)\b/.test(normalized) ||
-    /\bcomo eu faco\b/.test(normalized) ||
-    /\bcomo faco\b/.test(normalized);
+  const question = isQuestionLike(message);
+
+  if (COMO_FUNCIONA_PATTERN.test(normalized)) return "como_funciona";
+  if (SMALL_TALK_PATTERN.test(normalized)) return "small_talk";
+  if (question && AMBIGUOUS_SOCIAL_PATTERN.test(normalized)) return "small_talk";
+  if (SAUDACAO_PATTERN.test(normalized)) return "saudacao";
+  if (AGRADECIMENTO_PATTERN.test(normalized)) return "agradecimento";
+  return "generico";
+}
+
+function saudacaoTemporal(hour: number | undefined): string {
+  if (hour === undefined || Number.isNaN(hour)) return "Ola";
+  if (hour < 12) return "Bom dia";
+  if (hour < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function pickVariation<T>(pool: ReadonlyArray<T>, index: number): T {
+  return pool[index % pool.length];
+}
+
+// Saudação de primeiro contato: cumprimento temporal + orientação + exemplo.
+const SAUDACAO_INICIAL: ReadonlyArray<(saud: string) => string> = [
+  (s) =>
+    [
+      `${s}. Posso registrar a troca por aqui.`,
+      "Me envie em uma mensagem: nome do cliente, carro, servico, data e WhatsApp.",
+      registrationExample(),
+    ].join("\n"),
+  (s) =>
+    [
+      `${s}, tudo bem? Pode registrar a troca comigo.`,
+      "E so mandar: nome do cliente, carro, servico, data e WhatsApp do cliente.",
+      registrationExample(),
+    ].join("\n"),
+  (s) =>
+    [
+      `${s}. Por aqui voce registra a troca rapidinho.`,
+      "Manda em uma linha: nome, carro, servico, data e WhatsApp.",
+      registrationExample(),
+    ].join("\n"),
+];
+
+// Saudação subsequente (já cumprimentou antes): curta, sem repetir o exemplo.
+const SAUDACAO_SUBSEQUENTE: ReadonlyArray<(saud: string) => string> = [
+  (s) => `${s}. Quando tiver uma troca pra registrar, e so mandar os dados do cliente.`,
+  (s) => `${s} de novo. Estou por aqui, manda a proxima troca quando quiser.`,
+  (s) => `${s}. Seguimos: e so me passar nome, carro, servico, data e WhatsApp.`,
+];
+
+const SMALL_TALK: ReadonlyArray<string> = [
+  "Tudo otimo por aqui. Quando tiver uma troca, e so mandar os dados do cliente.",
+  "Tudo certo. Bora registrar? Me manda nome, carro, servico, data e WhatsApp.",
+  "Tudo bem, obrigado! Quando quiser, e so me passar os dados da proxima troca.",
+  "Tudo tranquilo. Estou aqui pra registrar as trocas, manda quando precisar.",
+];
+
+const COMO_FUNCIONA: ReadonlyArray<string> = [
+  [
+    "Funciona assim: voce me manda os dados da troca, eu registro e ainda lembro o cliente na proxima.",
+    "Manda em uma mensagem: nome do cliente, carro, servico, data e WhatsApp.",
+    registrationExample(),
+  ].join("\n"),
+  [
+    "Simples: cada troca que voce registra aqui vira um lembrete automatico pro cliente voltar.",
+    "E so mandar: nome, carro, servico, data e WhatsApp do cliente.",
+    registrationExample(),
+  ].join("\n"),
+];
+
+const AGRADECIMENTO: ReadonlyArray<string> = [
+  "Disponha. Quando tiver uma troca, e so mandar.",
+  "Estou por aqui. Manda a proxima troca quando quiser.",
+  "Combinado. Qualquer troca nova, e so me passar os dados.",
+];
+
+const GENERICO: ReadonlyArray<string> = [
+  [
+    "Posso registrar por aqui.",
+    "Me envie nome do cliente, carro, servico, data e WhatsApp.",
+    registrationExample(),
+  ].join("\n"),
+  [
+    "Pra registrar e rapidinho, manda em uma mensagem so:",
+    "nome, carro, servico, data e WhatsApp do cliente.",
+    registrationExample(),
+  ].join("\n"),
+  [
+    "Nao peguei bem. Se for registrar uma troca, me manda:",
+    "nome do cliente, carro, servico, data e WhatsApp.",
+    registrationExample(),
+  ].join("\n"),
+];
+
+function neutralReply(
+  message: string,
+  context: ConversationContext,
+  hour: number | undefined,
+): OnboardingAgentReply {
+  const kind = classifyNeutral(message);
+  const turn = context.neutral_turn ?? 0;
+  const saud = saudacaoTemporal(hour);
+
+  let body: string;
+  let greeted = context.greeted ?? false;
+
+  switch (kind) {
+    case "saudacao":
+      if (greeted) {
+        body = pickVariation(SAUDACAO_SUBSEQUENTE, turn)(saud);
+      } else {
+        body = pickVariation(SAUDACAO_INICIAL, turn)(saud);
+        greeted = true;
+      }
+      break;
+    case "small_talk":
+      body = pickVariation(SMALL_TALK, turn);
+      break;
+    case "como_funciona":
+      body = pickVariation(COMO_FUNCIONA, turn);
+      // Já explicou o produto: a próxima saudação pode ser a curta.
+      greeted = true;
+      break;
+    case "agradecimento":
+      body = pickVariation(AGRADECIMENTO, turn);
+      break;
+    default:
+      body = pickVariation(GENERICO, turn);
+  }
 
   return {
-    body: isGreeting
-      ? [
-          "Bom dia. Posso registrar a troca por aqui.",
-          "Me envie em uma mensagem: nome do cliente, carro, servico, data e WhatsApp.",
-          registrationExample(),
-        ].join("\n")
-      : [
-          "Posso registrar por aqui.",
-          "Me envie nome do cliente, carro, servico, data e WhatsApp.",
-          registrationExample(),
-        ].join("\n"),
-    context: {},
+    body,
+    // Persiste rotação + flag de saudação para não repetir a mesma frase no
+    // próximo turno. Este ramo só roda sem draft/missing_field, então o contexto
+    // conversacional não colide com estado de cadastro.
+    context: { neutral_turn: turn + 1, greeted },
     registerServiceInput: null,
     nextAgentMode: null,
+    // Texto de conversa livre: a camada CV1 pode reescrever o tom (ADR-0020).
+    allowConversationalGeneration: true,
     toolCalls: [
       {
         toolName: "ignored_operational_message",
         input: { message },
-        output: { reason: "no_registration_signal" },
+        output: { reason: "no_registration_signal", neutral_kind: kind },
       },
     ],
   };
@@ -648,6 +795,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     mode: Extract<ConversationAgentMode, "onboarding" | "operacao">;
     context: ConversationContext;
     today: string;
+    hourSaoPaulo?: number;
   }): Promise<OnboardingAgentReply> {
     if (isPromptInjectionAttempt(input.message)) {
       return blockedPromptInjectionReply(input.message);
@@ -660,7 +808,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     }
 
     if (!input.context.missing_field && !hasRegistrationSignal(input.message)) {
-      return neutralReply(input.message);
+      return neutralReply(input.message, input.context, input.hourSaoPaulo);
     }
 
     const draft =

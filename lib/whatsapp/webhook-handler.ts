@@ -230,6 +230,19 @@ function localDateSaoPaulo() {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
+// Hora local (0-23) no fuso America/Sao_Paulo — usada pela saudação temporal do
+// agente de operação (bom dia / boa tarde / boa noite).
+function localHourSaoPaulo() {
+  const hour = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const value = hour.find((item) => item.type === "hour")?.value;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? undefined : parsed % 24;
+}
+
 function isOperationalMode(
   mode: ConversationAgentMode,
 ): mode is Extract<ConversationAgentMode, "onboarding" | "operacao"> {
@@ -1078,6 +1091,13 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
 
         try {
           let replyBody: string;
+          // Blindagem CV1 (ADR-0020): só respostas de conversa livre podem ser
+          // reescritas pela IA. Respostas transacionais (pergunta de campo,
+          // resumo de confirmação, "cliente cadastrado", captura de nome da
+          // oficina) permanecem determinísticas — preserva a rede de segurança
+          // da ADR-0017 (a oficina confere o dado exato antes de gravar). Vendas
+          // e demais agentes conversacionais seguem elegíveis (default true).
+          let allowGeneration = true;
           const normalizedBody = inbound.body.trim().toLowerCase();
 
           if (
@@ -1201,6 +1221,8 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           ) {
             // Backfill: oficina convertida sem nome ("Oficina sem nome").
             // Pergunta o nome real e grava no banco antes de retomar o fluxo.
+            // Transacional: não reescrever pela IA.
+            allowGeneration = false;
             if (!resolved.context.awaiting_workshop_name) {
               if (deps.repository.updateConversationModeAndContext) {
                 await deps.repository.updateConversationModeAndContext({
@@ -1243,6 +1265,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               mode: effectiveAgentMode,
               context: resolved.context,
               today: localDateSaoPaulo(),
+              hourSaoPaulo: localHourSaoPaulo(),
             });
 
             for (const toolCall of onboardingReply.toolCalls) {
@@ -1312,6 +1335,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             } else {
               replyBody = onboardingReply.body;
             }
+            // Só conversa livre (saudação, small-talk, "como funciona") pode ser
+            // reescrita; cadastro/confirmação/campo faltante ficam determinísticos.
+            allowGeneration = onboardingReply.allowConversationalGeneration === true;
           } else if (
             effectiveAgentMode === "cliente_final_lembrete" &&
             !resolved.context.lastReminderId
@@ -1531,7 +1557,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           // Camada de geracao conversacional (ADR-0020). Nesse ponto replyBody
           // ja e a resposta deterministica ("enlatada") de qualquer modo. O
           // gerador so naturaliza o tom; nunca muda estado. Modo off => no-op.
-          const geracaoModo = salesConfig?.geracaoLlmModo ?? "off";
+          const geracaoModo = allowGeneration
+            ? salesConfig?.geracaoLlmModo ?? "off"
+            : "off";
           let recentHistory: RecentMessage[] = [];
           if (geracaoModo !== "off" && deps.repository.listRecentMessages) {
             try {

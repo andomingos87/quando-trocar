@@ -177,6 +177,17 @@ export type ConversationContext = {
    * antes de retomar o fluxo de onboarding/operação (backfill).
    */
   awaiting_workshop_name?: boolean;
+  /**
+   * Rotação das respostas neutras/conversacionais do agente de operação
+   * (saudação, small-talk, "como funciona", genérico): índice incrementado a
+   * cada turno para não repetir a mesma frase — o efeito "disco riscado".
+   */
+  neutral_turn?: number;
+  /**
+   * A oficina já recebeu a saudação completa (com exemplo copiável): a próxima
+   * saudação é mais curta, sem repetir o explicador inteiro.
+   */
+  greeted?: boolean;
 };
 
 export type RegisterServiceInput = {
@@ -590,6 +601,11 @@ export type OnboardingAgent = {
     mode: Extract<ConversationAgentMode, "onboarding" | "operacao">;
     context: ConversationContext;
     today: string;
+    /**
+     * Hora local (0-23) no fuso America/Sao_Paulo, usada para a saudação
+     * temporal (bom dia / boa tarde / boa noite). Ausente → saudação neutra.
+     */
+    hourSaoPaulo?: number;
   }): Promise<OnboardingAgentReply>;
 };
 
@@ -599,6 +615,14 @@ export type OnboardingAgentReply = {
   registerServiceInput: Omit<RegisterServiceInput, "oficinaId"> | null;
   nextAgentMode: Extract<ConversationAgentMode, "onboarding" | "operacao"> | null;
   toolCalls: ToolCallRecord[];
+  /**
+   * `true` só quando `body` é conversa livre (saudação, small-talk, "como
+   * funciona") e pode ser reescrito com naturalidade pela camada CV1 (ADR-0020).
+   * Respostas transacionais (pergunta de campo, resumo de confirmação, "cliente
+   * cadastrado") deixam isto `false`/ausente para permanecerem determinísticas
+   * — preserva a rede de segurança da ADR-0017 (a oficina confere o dado exato).
+   */
+  allowConversationalGeneration?: boolean;
 };
 
 export type ReminderIntent =

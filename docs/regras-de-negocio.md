@@ -320,7 +320,13 @@ Bot **não** inicia cadastro nem preenche campo quando:
 - mensagem é uma pergunta (começa com `qual`, `como`, contém `?`);
 - mensagem tem padrão de prompt injection (`ignore`, `instrucoes`, `drop table`, etc.) — registra `blocked_prompt_injection` em `agent_tool_calls`.
 
-- Fonte: `lib/whatsapp/onboarding-agent.ts`.
+**Resposta conversacional a mensagem neutra (`neutralReply`):** em vez de repetir duas frases fixas (efeito "disco riscado" observado em produção — três respostas idênticas seguidas, "Bom dia" às 22h), o bot classifica a intenção social — `saudacao | small_talk | como_funciona | agradecimento | generico` — e responde de forma variada e **determinística** (sem OpenAI):
+- **Saudação sensível ao horário** (`America/Sao_Paulo`): "Bom dia" (< 12h), "Boa tarde" (< 18h), "Boa noite" (senão); nunca hard-codada.
+- **Sem repetição:** cada categoria tem um pool de variações que rotaciona por `context.neutral_turn` (incrementado a cada turno). `context.greeted` marca que a saudação completa (com exemplo) já foi dada — a próxima é curta.
+- Small-talk ("tudo bem?") e agradecimento ("valeu") respondem curto e convidam a registrar; não despejam o formulário inteiro. Saudação inicial e "como funciona" trazem o exemplo copiável.
+- Registra `ignored_operational_message` em `agent_tool_calls` com `neutral_kind` (a categoria classificada).
+
+- Fonte: `lib/whatsapp/onboarding-agent.ts` (`neutralReply`, `classifyNeutral`, `saudacaoTemporal`), `lib/whatsapp/webhook-handler.ts` (`localHourSaoPaulo`).
 
 ### 3.4 Confirmação obrigatória antes de registrar (ADR-0017)
 Quando todos os campos obrigatórios estão preenchidos, o bot **não grava direto**. Primeiro devolve um resumo dos dados captados e marca `conversas.context.awaiting_confirmation = true` (carregando o draft completo em `service_draft`). É a rede de segurança que o [ADR-0015](./adr/0015-suporte-audio-whisper.md) assumia ("a oficina corrige manualmente") mas que não existia no fluxo — sem ela, uma transcrição errada do Whisper (ex.: veículo capturado como "Não houve loucura") era gravada e o template irreversível disparava ao cliente frio sem revisão humana.
@@ -815,6 +821,7 @@ O bot pode **gerar** o texto de saída via LLM (`OPENAI_MODEL_RESPONDER`), mas d
 - **Validador de saída** (`lib/whatsapp/reply-validator.ts`): reprova preço ≠ `precoPartida` — numérico (parsing pt-BR distingue milhar de decimal: `R$ 5.9` ≠ `R$ 59`) ou escrito por extenso ("cento e noventa reais") —, promessa de resultado/agenda/prazo, URL fora da allowlist (links são normalizados por NFKC + mapa de confusáveis Unicode antes da checagem: pontos/barras ideográficos e hosts com homóglifo não burlam a allowlist), vazamento cross-tenant e tamanho acima do cap. Em qualquer dúvida, reprova (fail-safe → enlatada).
 - **Fallback**: erro, timeout ou reprovação → envia a resposta enlatada padrão (comportamento pré-ADR-0020). Nunca há regressão pior que o bot determinístico.
 - **Modo** (`configuracoes_vendedor.geracao_llm_modo`): `off` (idêntico ao histórico) · `sombra` (gera+valida+loga, envia enlatada) · `on` (envia gerada aprovada). Kill switch permanente.
+- **Blindagem de respostas transacionais**: mesmo com o modo `on`, só respostas de **conversa livre** passam pelo gerador. Respostas transacionais do fluxo de operação — pergunta de campo faltante, **resumo de confirmação de cadastro**, "cliente cadastrado" e captura do nome da oficina — permanecem **determinísticas** (o webhook força `off` nelas via `allowGeneration`). Reescrever o resumo de confirmação poderia adulterar/omitir um campo e derrubar a rede de segurança da [ADR-0017](./adr/0017-confirmacao-antes-de-registrar-troca.md) (a oficina confere o dado exato antes do template irreversível ao cliente frio). Marcação em `OnboardingAgentReply.allowConversationalGeneration` (só `neutralReply` = `true`).
 - **Auditoria**: cada geração registra versão do prompt, intenção, aprovação/reprovação e uso de fallback em `agent_tool_calls`.
 - **Protocolo "não sei"**: fora do conhecimento fornecido, admite e encaminha; a pergunta vira registro em `perguntas_sem_resposta`.
 

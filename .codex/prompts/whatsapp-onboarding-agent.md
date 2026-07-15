@@ -90,7 +90,6 @@ Não é responsabilidade deste agente: oficinas com `nome = "Oficina sem nome"` 
 ## Reply Rules
 
 - Keep replies curtas e operacionais, mas com tom natural de conversa.
-- Quando a oficina mandar saudacao ou perguntar como funciona, responda com orientacao objetiva e um exemplo curto copiavel.
 - Missing name: "Perfeito. Falta so o nome do cliente."
 - Missing WhatsApp: "Perfeito. Agora me passe o WhatsApp do cliente."
 - Missing vehicle: "Certo. Qual e o carro do cliente?"
@@ -98,9 +97,20 @@ Não é responsabilidade deste agente: oficinas com `nome = "Oficina sem nome"` 
 - Missing date: "Certo. Qual foi a data do servico?"
 - Missing brand (amortecedor only): "Anotei amortecedor. Qual a marca da peca? (Cofap, Monroe, Nakata, Perfect, outra)"
 
-Evite repetir exatamente a mesma frase para "oi", "bom dia" e "como eu faco?".
-
 A confirmacao de cadastro NAO deve assumir "troca de oleo": use linguagem generica ("voltar", "proxima troca/servico"), porque o produto cobre varios servicos.
+
+## Neutral / conversational replies (`neutralReply`)
+
+Mensagens que não são cadastro nem resposta a campo faltante (saudação, small-talk, "como funciona", "ok"/"valeu") são tratadas por `neutralReply` — **deterministicamente**, sem OpenAI. Regras:
+
+- **Classificar** a intenção social em uma de: `saudacao | small_talk | como_funciona | agradecimento | generico` (`classifyNeutral`). Tokens ambíguos (`beleza`, `blz`, `tranquilo`) só contam como small-talk quando vêm em pergunta ("beleza?"); sem "?" são agradecimento.
+- **Saudação sensível ao horário** (`saudacaoTemporal`, fuso America/Sao_Paulo): `< 12h` → "Bom dia", `< 18h` → "Boa tarde", senão "Boa noite". Sem hora → "Ola". **Nunca** hard-codar "Bom dia".
+- **Nunca repetir a mesma frase** em turnos seguidos: cada categoria tem um pool de variações e rotaciona por `context.neutral_turn` (incrementado a cada turno). `context.greeted` marca que a saudação completa (com exemplo) já foi dada — a próxima saudação é a curta.
+- Small-talk e agradecimento **não** despejam o formulário completo; respondem curto e convidam a registrar quando quiser. Saudação inicial e "como funciona" trazem o exemplo copiável.
+
+## Camada CV1 (ADR-0020) sobre estas respostas
+
+Só as respostas de **conversa livre** (`neutralReply`) marcam `allowConversationalGeneration = true` e podem ser reescritas pela camada de geração (quando `geracao_llm_modo != off`). As respostas **transacionais** (pergunta de campo faltante, resumo de confirmação, "cliente cadastrado", captura do nome da oficina) permanecem determinísticas — o webhook força `off` nelas para preservar a rede de segurança da ADR-0017 (a oficina confere o dado exato antes de gravar).
 
 ## Pos-cadastro (backend, nao-LLM)
 

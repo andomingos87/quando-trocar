@@ -390,21 +390,84 @@ describe("WhatsappOnboardingAgent", () => {
 
     expect(openai.responses.create).not.toHaveBeenCalled();
     expect(result.registerServiceInput).toBeNull();
-    expect(result.context).toEqual({});
+    // "ok" é agradecimento: resposta curta, NÃO o formulário completo.
+    expect(result.body).not.toContain("Exemplo:");
+    expect(result.body.length).toBeLessThan(90);
+    // Persiste a rotação anti-repetição e marca como conversa reescrevível.
+    expect(result.context).toEqual({ neutral_turn: 1, greeted: false });
+    expect(result.allowConversationalGeneration).toBe(true);
     expect(result.toolCalls).toEqual([
       {
         toolName: "ignored_operational_message",
         input: { message: "ok" },
-        output: { reason: "no_registration_signal" },
+        output: { reason: "no_registration_signal", neutral_kind: "agradecimento" },
       },
     ]);
-    expect(result.body).toBe(
-      [
-        "Posso registrar por aqui.",
-        "Me envie nome do cliente, carro, servico, data e WhatsApp.",
-        "Exemplo: Joao Silva, Civic 2018, troca de oleo, hoje, 41999990000.",
-      ].join("\n"),
-    );
+  });
+
+  test("greets by time of day and never says 'Bom dia' at night", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const night = await agent.generateReply({
+      message: "oi, bom dia",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+      hourSaoPaulo: 22,
+    });
+    expect(night.body).not.toContain("Bom dia");
+    expect(night.body).toContain("Boa noite");
+    // Primeira saudação traz o exemplo copiável e marca greeted.
+    expect(night.body).toContain("Exemplo:");
+    expect(night.context.greeted).toBe(true);
+
+    const morning = await agent.generateReply({
+      message: "bom dia",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+      hourSaoPaulo: 9,
+    });
+    expect(morning.body).toContain("Bom dia");
+  });
+
+  test("does not repeat the same phrase across consecutive small-talk turns", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const first = await agent.generateReply({
+      message: "tudo bem?",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+    });
+    const second = await agent.generateReply({
+      message: "tudo bem?",
+      mode: "operacao",
+      context: first.context,
+      today: "2026-04-25",
+    });
+
+    // Small-talk é reconhecido como conversa (não devolve o formulário cru)...
+    expect(first.toolCalls[0]?.output).toMatchObject({ neutral_kind: "small_talk" });
+    expect(first.body).not.toContain("Exemplo:");
+    // ...e a rotação garante corpos diferentes em turnos seguidos.
+    expect(second.body).not.toBe(first.body);
+    expect(second.context.neutral_turn).toBe(2);
+  });
+
+  test("explains how it works with a copyable example", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: "como funciona?",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+    });
+
+    expect(result.toolCalls[0]?.output).toMatchObject({ neutral_kind: "como_funciona" });
+    expect(result.body).toContain("Exemplo:");
+    expect(result.allowConversationalGeneration).toBe(true);
   });
 
   test("blocks prompt injection attempts without calling OpenAI or changing context", async () => {
