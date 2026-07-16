@@ -26,6 +26,7 @@ import {
   OpenAiReplyGenerator,
   maybeGenerateConversationalReply,
 } from "./reply-generator";
+import { buildOperationKnowledge } from "./product-knowledge";
 import { siteConfig, whatsappLink } from "../config";
 import {
   extractInboundMessages,
@@ -50,6 +51,7 @@ import type {
   RecentMessage,
   RegisterServiceInput,
   ReminderAgent,
+  ReplyGenerationMode,
   ReplyGenerator,
   SalesAgent,
   SupportAgent,
@@ -1098,6 +1100,10 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           // da ADR-0017 (a oficina confere o dado exato antes de gravar). Vendas
           // e demais agentes conversacionais seguem elegíveis (default true).
           let allowGeneration = true;
+          // Como gerar quando elegível (ADR-0022): rewrite pole a enlatada;
+          // respond responde a pergunta grounded. Só a categoria `pergunta`
+          // da operação seta respond hoje.
+          let generationMode: ReplyGenerationMode = "rewrite";
           const normalizedBody = inbound.body.trim().toLowerCase();
 
           if (
@@ -1266,6 +1272,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               context: resolved.context,
               today: localDateSaoPaulo(),
               hourSaoPaulo: localHourSaoPaulo(),
+              handoffComercial: salesConfig?.whatsappHandoffComercial ?? null,
             });
 
             for (const toolCall of onboardingReply.toolCalls) {
@@ -1338,6 +1345,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             // Só conversa livre (saudação, small-talk, "como funciona") pode ser
             // reescrita; cadastro/confirmação/campo faltante ficam determinísticos.
             allowGeneration = onboardingReply.allowConversationalGeneration === true;
+            generationMode = onboardingReply.conversationalGenerationMode ?? "rewrite";
           } else if (
             effectiveAgentMode === "cliente_final_lembrete" &&
             !resolved.context.lastReminderId
@@ -1588,13 +1596,27 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           const generation = await maybeGenerateConversationalReply({
             deterministicReply: replyBody,
             mode: geracaoModo,
-            intent: null,
+            intent: generationMode === "respond" ? "pergunta" : null,
             agentMode: effectiveAgentMode,
             generator: replyGenerator,
             history: recentHistory,
             salesConfig: salesConfig ?? null,
             allowedLinks,
             allowedNames,
+            generationMode,
+            userMessage: inbound.body,
+            knowledge:
+              generationMode === "respond"
+                ? buildOperationKnowledge({
+                    faqs,
+                    handoffLink: salesConfig?.whatsappHandoffComercial
+                      ? whatsappLink({
+                          phone: salesConfig.whatsappHandoffComercial,
+                        })
+                      : null,
+                    workshopName: resolved.oficinaNome,
+                  })
+                : undefined,
           });
 
           if (generation.audit) {
