@@ -146,9 +146,13 @@ const env = {
 };
 
 function replyGenerationCall(repository: ReturnType<typeof salesRepository>) {
-  return repository.saveAgentToolCall.mock.calls
-    .map((c) => c[0] as { toolName?: string; output?: Record<string, unknown> })
-    .find((c) => c.toolName === "reply_generation");
+  // O mock de saveAgentToolCall não declara parâmetro, então o TS infere
+  // mock.calls como Array<[]> (tuplas vazias) e reclama de indexar c[0]. Como é
+  // só harness de teste, tipamos a leitura dos argumentos aqui (via unknown).
+  const calls = repository.saveAgentToolCall.mock.calls as unknown as Array<
+    [{ toolName?: string; output?: Record<string, unknown> }]
+  >;
+  return calls.map((c) => c[0]).find((c) => c.toolName === "reply_generation");
 }
 
 describe("webhook — camada de geração conversacional (CV1)", () => {
