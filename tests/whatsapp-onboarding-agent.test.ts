@@ -470,6 +470,110 @@ describe("WhatsappOnboardingAgent", () => {
     expect(result.allowConversationalGeneration).toBe(true);
   });
 
+  test("price question becomes handoff with rewrite mode (never respond)", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: "E quanto custa?",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+      handoffComercial: "+5511945207618",
+    });
+
+    expect(result.toolCalls[0]?.output).toMatchObject({ neutral_kind: "pergunta" });
+    expect(result.body).toContain("wa.me/5511945207618");
+    // Não despeja o formulário nem cita preço.
+    expect(result.body).not.toContain("Exemplo:");
+    expect(result.body).not.toMatch(/R\$/);
+    expect(result.allowConversationalGeneration).toBe(true);
+    expect(result.conversationalGenerationMode).toBe("rewrite");
+  });
+
+  test("non-price question becomes handoff enlatada with respond mode", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: "Ja sou cliente?",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+      handoffComercial: "+5511945207618",
+    });
+
+    expect(result.toolCalls[0]?.output).toMatchObject({ neutral_kind: "pergunta" });
+    expect(result.conversationalGenerationMode).toBe("respond");
+    expect(result.body).not.toContain("Exemplo:");
+    expect(result.registerServiceInput).toBeNull();
+  });
+
+  test("question without configured handoff has no link but stays conversational", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: "Voces fazem alinhamento?",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+    });
+
+    expect(result.toolCalls[0]?.output).toMatchObject({ neutral_kind: "pergunta" });
+    expect(result.body).not.toContain("wa.me");
+    expect(result.body).toContain("humano");
+    expect(result.allowConversationalGeneration).toBe(true);
+    expect(result.conversationalGenerationMode).toBe("respond");
+  });
+
+  test("consecutive questions rotate the handoff enlatada", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const first = await agent.generateReply({
+      message: "Voces atendem domingo?",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+      handoffComercial: "+5511945207618",
+    });
+    const second = await agent.generateReply({
+      message: "E feriado, funciona?",
+      mode: "operacao",
+      context: first.context,
+      today: "2026-04-25",
+      handoffComercial: "+5511945207618",
+    });
+
+    expect(second.body).not.toBe(first.body);
+    expect(second.context.neutral_turn).toBe(2);
+  });
+
+  test("question while a field is missing keeps asking the field (guardrail intact)", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const context: ConversationContext = {
+      pending_action: "registrar_primeira_troca",
+      missing_field: "veiculo",
+      service_draft: {
+        nome_cliente: "Joao Silva",
+        whatsapp_cliente: "+5541999990000",
+        valor: null,
+        consentimento_whatsapp: true,
+      },
+    };
+
+    const result = await agent.generateReply({
+      message: "Voces fazem alinhamento?",
+      mode: "operacao",
+      context,
+      today: "2026-04-25",
+      handoffComercial: "+5511945207618",
+    });
+
+    // A pergunta não vira veículo nem desvia o fluxo: repergunta o campo.
+    expect(result.context.service_draft?.veiculo).toBeUndefined();
+    expect(result.body).toContain("carro");
+    expect(result.allowConversationalGeneration).not.toBe(true);
+  });
+
   test("blocks prompt injection attempts without calling OpenAI or changing context", async () => {
     const openai = {
       responses: {

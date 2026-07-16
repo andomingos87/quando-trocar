@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 
+import { whatsappLink } from "../config";
 import { parseBrazilianDate } from "./date-parse";
 import { normalizeText, normalizeWhatsappPhone } from "./sales-agent";
 import type {
@@ -9,6 +10,7 @@ import type {
   OnboardingAgent,
   OnboardingAgentReply,
   RegisterServiceInput,
+  ReplyGenerationMode,
   ServiceDraft,
   TipoServico,
 } from "./types";
@@ -595,6 +597,7 @@ type NeutralKind =
   | "small_talk"
   | "saudacao"
   | "agradecimento"
+  | "pergunta"
   | "generico";
 
 const COMO_FUNCIONA_PATTERN =
@@ -618,8 +621,19 @@ function classifyNeutral(message: string): NeutralKind {
   if (question && AMBIGUOUS_SOCIAL_PATTERN.test(normalized)) return "small_talk";
   if (SAUDACAO_PATTERN.test(normalized)) return "saudacao";
   if (AGRADECIMENTO_PATTERN.test(normalized)) return "agradecimento";
+  // Pergunta real fora do cadastro ("ja sou cliente?", "voces fazem
+  // alinhamento?"): em vez de despejar o formulario, handoff + respond
+  // grounded (ADR-0022). Checada por ultimo pra nao roubar das categorias
+  // sociais acima.
+  if (question) return "pergunta";
   return "generico";
 }
+
+// Preco/cobranca e trilho critico (ADR-0012): a pergunta recebe handoff
+// deterministico e a geracao fica em rewrite (o LLM so pole o handoff —
+// nunca "responde" preco). Testado sobre o texto normalizado (sem acentos).
+const PRICE_QUESTION_PATTERN =
+  /\b(preco|precos|custa|custo|valor|valores|mensalidade|plano|planos|assinatura|cobranca|pagar|pagamento)\b/;
 
 function saudacaoTemporal(hour: number | undefined): string {
   if (hour === undefined || Number.isNaN(hour)) return "Ola";
@@ -687,6 +701,26 @@ const AGRADECIMENTO: ReadonlyArray<string> = [
   "Combinado. Qualquer troca nova, e so me passar os dados.",
 ];
 
+// Enlatada da categoria `pergunta` (ADR-0022): resposta curta + handoff +
+// convite a registrar. E o fallback obrigatorio quando o respond falha,
+// estoura timeout, devolve dontKnow ou e vetado pelo validador — ou seja,
+// "nao sei" vira encaminhamento pra humano, nunca chute.
+const PERGUNTA_COM_LINK: ReadonlyArray<(link: string) => string> = [
+  (link) =>
+    `Boa pergunta! Essa parte quem resolve rapidinho e o comercial: ${link}. E quando tiver uma troca pra registrar, e so me mandar os dados do cliente.`,
+  (link) =>
+    `Essa eu deixo com o time comercial, chefe: ${link}. Por aqui eu registro suas trocas — manda os dados quando precisar.`,
+  (link) =>
+    `Pra te responder direitinho, melhor falar com o comercial: ${link}. E qualquer troca nova, e so mandar por aqui.`,
+];
+
+// Sem handoff configurado: mesma estrutura, sem link (nunca inventar numero
+// nem usar o proprio numero do bot como "comercial").
+const PERGUNTA_SEM_LINK: ReadonlyArray<string> = [
+  "Boa pergunta! Vou deixar um humano te responder por aqui. Enquanto isso, se tiver uma troca pra registrar, e so mandar os dados do cliente.",
+  "Essa eu passo pra um humano te responder por aqui. Por enquanto, qualquer troca nova e so me mandar os dados.",
+];
+
 const GENERICO: ReadonlyArray<string> = [
   [
     "Posso registrar por aqui.",
@@ -709,6 +743,7 @@ function neutralReply(
   message: string,
   context: ConversationContext,
   hour: number | undefined,
+  handoffComercial: string | null | undefined,
 ): OnboardingAgentReply {
   const kind = classifyNeutral(message);
   const turn = context.neutral_turn ?? 0;
@@ -716,6 +751,9 @@ function neutralReply(
 
   let body: string;
   let greeted = context.greeted ?? false;
+  // Como a camada de geração trata esta resposta (ADR-0022): rewrite só pole a
+  // enlatada; respond responde a pergunta grounded em conhecimento fechado.
+  let generationMode: ReplyGenerationMode = "rewrite";
 
   switch (kind) {
     case "saudacao":
@@ -737,6 +775,18 @@ function neutralReply(
     case "agradecimento":
       body = pickVariation(AGRADECIMENTO, turn);
       break;
+    case "pergunta": {
+      // Preço força rewrite (trilho crítico, ADR-0012); o resto vai a respond.
+      const isPriceQuestion = PRICE_QUESTION_PATTERN.test(normalizeText(message));
+      generationMode = isPriceQuestion ? "rewrite" : "respond";
+      const link = handoffComercial
+        ? whatsappLink({ phone: handoffComercial })
+        : null;
+      body = link
+        ? pickVariation(PERGUNTA_COM_LINK, turn)(link)
+        : pickVariation(PERGUNTA_SEM_LINK, turn);
+      break;
+    }
     default:
       body = pickVariation(GENERICO, turn);
   }
@@ -749,8 +799,9 @@ function neutralReply(
     context: { neutral_turn: turn + 1, greeted },
     registerServiceInput: null,
     nextAgentMode: null,
-    // Texto de conversa livre: a camada CV1 pode reescrever o tom (ADR-0020).
+    // Texto de conversa livre: a camada CV1/CV2 pode gerar (ADR-0020/0022).
     allowConversationalGeneration: true,
+    conversationalGenerationMode: generationMode,
     toolCalls: [
       {
         toolName: "ignored_operational_message",
@@ -796,6 +847,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     context: ConversationContext;
     today: string;
     hourSaoPaulo?: number;
+    handoffComercial?: string | null;
   }): Promise<OnboardingAgentReply> {
     if (isPromptInjectionAttempt(input.message)) {
       return blockedPromptInjectionReply(input.message);
@@ -808,7 +860,12 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     }
 
     if (!input.context.missing_field && !hasRegistrationSignal(input.message)) {
-      return neutralReply(input.message, input.context, input.hourSaoPaulo);
+      return neutralReply(
+        input.message,
+        input.context,
+        input.hourSaoPaulo,
+        input.handoffComercial,
+      );
     }
 
     const draft =
