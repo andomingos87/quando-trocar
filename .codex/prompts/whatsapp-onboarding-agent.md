@@ -101,16 +101,17 @@ A confirmacao de cadastro NAO deve assumir "troca de oleo": use linguagem generi
 
 ## Neutral / conversational replies (`neutralReply`)
 
-Mensagens que não são cadastro nem resposta a campo faltante (saudação, small-talk, "como funciona", "ok"/"valeu") são tratadas por `neutralReply` — **deterministicamente**, sem OpenAI. Regras:
+Mensagens que não são cadastro nem resposta a campo faltante (saudação, small-talk, "como funciona", "ok"/"valeu", perguntas) são tratadas por `neutralReply` — **deterministicamente**, sem OpenAI. Regras:
 
-- **Classificar** a intenção social em uma de: `saudacao | small_talk | como_funciona | agradecimento | generico` (`classifyNeutral`). Tokens ambíguos (`beleza`, `blz`, `tranquilo`) só contam como small-talk quando vêm em pergunta ("beleza?"); sem "?" são agradecimento.
+- **Classificar** a intenção social em uma de: `saudacao | small_talk | como_funciona | agradecimento | pergunta | generico` (`classifyNeutral`). Tokens ambíguos (`beleza`, `blz`, `tranquilo`) só contam como small-talk quando vêm em pergunta ("beleza?"); sem "?" são agradecimento. `pergunta` é checada por último (não rouba das categorias sociais): question-like que não casou com nada acima.
 - **Saudação sensível ao horário** (`saudacaoTemporal`, fuso America/Sao_Paulo): `< 12h` → "Bom dia", `< 18h` → "Boa tarde", senão "Boa noite". Sem hora → "Ola". **Nunca** hard-codar "Bom dia".
 - **Nunca repetir a mesma frase** em turnos seguidos: cada categoria tem um pool de variações e rotaciona por `context.neutral_turn` (incrementado a cada turno). `context.greeted` marca que a saudação completa (com exemplo) já foi dada — a próxima saudação é a curta.
 - Small-talk e agradecimento **não** despejam o formulário completo; respondem curto e convidam a registrar quando quiser. Saudação inicial e "como funciona" trazem o exemplo copiável.
+- **`pergunta` (ADR-0022)**: nunca despeja o formulário. Enlatada = resposta curta + handoff comercial `wa.me` (via `handoffComercial` do input; sem ele, versão sem link "um humano te responde por aqui" — nunca inventar número). **Preço/cobrança** (`PRICE_QUESTION_PATTERN` sobre texto normalizado) força `conversationalGenerationMode = "rewrite"` — o bot não cota preço na operação (ADR-0012); demais perguntas saem `"respond"`.
 
-## Camada CV1 (ADR-0020) sobre estas respostas
+## Camada CV1/CV2 (ADR-0020/0022) sobre estas respostas
 
-Só as respostas de **conversa livre** (`neutralReply`) marcam `allowConversationalGeneration = true` e podem ser reescritas pela camada de geração (quando `geracao_llm_modo != off`). As respostas **transacionais** (pergunta de campo faltante, resumo de confirmação, "cliente cadastrado", captura do nome da oficina) permanecem determinísticas — o webhook força `off` nelas para preservar a rede de segurança da ADR-0017 (a oficina confere o dado exato antes de gravar).
+Só as respostas de **conversa livre** (`neutralReply`) marcam `allowConversationalGeneration = true` e passam pela camada de geração (quando `geracao_llm_modo != off`): categorias sociais em modo **rewrite** (naturaliza o tom); categoria `pergunta` não-preço em modo **respond** (responde grounded no conhecimento fechado — ver `.codex/prompts/whatsapp-reply-generator.md`). As respostas **transacionais** (pergunta de campo faltante, resumo de confirmação, "cliente cadastrado", captura do nome da oficina) permanecem determinísticas — o webhook força `off` nelas para preservar a rede de segurança da ADR-0017 (a oficina confere o dado exato antes de gravar).
 
 ## Pos-cadastro (backend, nao-LLM)
 
