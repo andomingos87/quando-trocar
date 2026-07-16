@@ -6,9 +6,11 @@ import {
   REPLY_GENERATOR_PROMPT_VERSION,
   maybeGenerateConversationalReply,
 } from "@/lib/whatsapp/reply-generator";
+import { buildOperationKnowledge } from "@/lib/whatsapp/product-knowledge";
 import type {
   ConfiguracoesVendedor,
   ReplyGenerationInput,
+  ReplyGenerationKnowledge,
   ReplyGenerator,
 } from "@/lib/whatsapp/types";
 
@@ -239,5 +241,194 @@ describe("OpenAiReplyGenerator (sem request real)", () => {
     const promise = gen.generate(input);
     await vi.advanceTimersByTimeAsync(3000);
     expect(await promise).toBeNull();
+  });
+});
+
+// --- Modo respond (ADR-0022) -------------------------------------------------
+
+const HANDOFF_ENLATADA =
+  "Boa pergunta! Essa parte quem resolve e o comercial: https://wa.me/5511945207618. Quando tiver uma troca, e so mandar os dados.";
+
+const knowledge: ReplyGenerationKnowledge = buildOperationKnowledge({
+  faqs: [
+    {
+      id: "faq-1",
+      pergunta: "O lembrete vai automatico?",
+      resposta: "Sim, o bot avisa o cliente quando chega a hora de voltar.",
+      palavras_chave: [],
+      ordem: 1,
+    },
+    {
+      id: "faq-2",
+      pergunta: "Quanto custa o plano?",
+      resposta: "A partir de R$ 59 por mes.",
+      palavras_chave: [],
+      ordem: 2,
+    },
+  ],
+  handoffLink: "https://wa.me/5511945207618",
+  workshopName: "Oficina do Ze",
+});
+
+function respondArgs(overrides: Record<string, unknown> = {}) {
+  return baseArgs({
+    deterministicReply: HANDOFF_ENLATADA,
+    intent: "pergunta",
+    agentMode: "operacao",
+    generationMode: "respond",
+    userMessage: "Voces fazem alinhamento?",
+    knowledge,
+    ...overrides,
+  });
+}
+
+describe("maybeGenerateConversationalReply — modo respond (ADR-0022)", () => {
+  it("on aprovado: envia a gerada e audita generationMode=respond + userMessage", async () => {
+    const generatedOk =
+      "O foco aqui e registrar as trocas e lembrar seu cliente de voltar, chefe. Alinhamento voce registra tambem!";
+    const { generator } = makeGenerator(generatedOk);
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs(),
+      mode: "on",
+      generator,
+    });
+    expect(result.finalBody).toBe(generatedOk);
+    expect(result.audit?.input.generationMode).toBe("respond");
+    expect(result.audit?.input.userMessage).toBe("Voces fazem alinhamento?");
+    expect(result.audit?.output.approved).toBe(true);
+  });
+
+  it("sombra: audita a gerada respond mas envia a enlatada de handoff", async () => {
+    const { generator } = makeGenerator("Registra alinhamento tambem, chefe!");
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs(),
+      mode: "sombra",
+      generator,
+    });
+    expect(result.finalBody).toBe(HANDOFF_ENLATADA);
+    expect(result.audit?.input.generationMode).toBe("respond");
+    expect(result.audit?.output.usedFallback).toBe(true);
+  });
+
+  it("gerador null (dontKnow/timeout) => enlatada de handoff, audit respond", async () => {
+    const { generator } = makeGenerator(null);
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs(),
+      mode: "on",
+      generator,
+    });
+    expect(result.finalBody).toBe(HANDOFF_ENLATADA);
+    expect(result.audit?.input.generationMode).toBe("respond");
+    expect(result.audit?.output.rejectionReason).toBe("generation_failed_or_null");
+  });
+
+  it("reprovado pelo validador (link fora da allowlist) => enlatada", async () => {
+    const { generator } = makeGenerator("Chefe, olha esse site: https://golpe.com");
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs(),
+      mode: "on",
+      generator,
+    });
+    expect(result.finalBody).toBe(HANDOFF_ENLATADA);
+    expect(result.audit?.output.approved).toBe(false);
+    expect(result.audit?.output.rejectionReason).toBe("link_nao_permitido");
+  });
+
+  it("retrocompat: chamada sem generationMode audita rewrite", async () => {
+    const { generator } = makeGenerator("Fala chefe!");
+    const result = await maybeGenerateConversationalReply({
+      ...baseArgs(),
+      mode: "on",
+      generator,
+    });
+    expect(result.audit?.input.generationMode).toBe("rewrite");
+    expect(result.audit?.input.userMessage).toBeNull();
+  });
+
+  it("respond sem userMessage degrada para rewrite no audit", async () => {
+    const { generator } = makeGenerator("Fala chefe!");
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs({ userMessage: undefined }),
+      mode: "on",
+      generator,
+    });
+    expect(result.audit?.input.generationMode).toBe("rewrite");
+  });
+});
+
+describe("OpenAiReplyGenerator — prompts do modo respond", () => {
+  function capturingOpenai() {
+    const create = vi.fn().mockResolvedValue({
+      output_text: JSON.stringify({ reply: "Fala chefe!", dontKnow: false }),
+    });
+    return { openai: { responses: { create } } as unknown as OpenAI, create };
+  }
+
+  function promptsFromCall(create: ReturnType<typeof vi.fn>) {
+    const params = create.mock.calls[0][0] as {
+      input: Array<{ role: string; content: string }>;
+    };
+    const system = params.input.find((m) => m.role === "system")?.content ?? "";
+    const user = params.input.find((m) => m.role === "user")?.content ?? "";
+    return { system, user };
+  }
+
+  it("respond: system proíbe preço e user traz conhecimento + pergunta (FAQ de preço filtrada)", async () => {
+    const { openai, create } = capturingOpenai();
+    const gen = new OpenAiReplyGenerator({ openai, model: "test-model" });
+    await gen.generate({
+      deterministicReply: HANDOFF_ENLATADA,
+      intent: "pergunta",
+      agentMode: "operacao",
+      history: [{ direction: "inbound", body: "oi", sentAt: null }],
+      salesConfig,
+      generationMode: "respond",
+      userMessage: "Voces fazem alinhamento?",
+      knowledge,
+    });
+
+    const { system, user } = promptsFromCall(create);
+    expect(system).toContain("NUNCA cite preco");
+    expect(system).toContain("dontKnow=true");
+    expect(user).toContain("CONHECIMENTO");
+    expect(user).toContain("Oficina do Ze");
+    expect(user).toContain("Voces fazem alinhamento?");
+    expect(user).toContain("O lembrete vai automatico?");
+    // FAQ com preço foi filtrada do conhecimento (buildOperationKnowledge).
+    expect(user).not.toContain("R$ 59 por mes");
+  });
+
+  it("respond sem userMessage => usa o prompt de rewrite", async () => {
+    const { openai, create } = capturingOpenai();
+    const gen = new OpenAiReplyGenerator({ openai, model: "test-model" });
+    await gen.generate({
+      deterministicReply: ENLATADA,
+      intent: null,
+      agentMode: "operacao",
+      history: [],
+      salesConfig,
+      generationMode: "respond",
+      knowledge,
+    });
+    const { user } = promptsFromCall(create);
+    expect(user).toContain("reescreva o tom, preserve o conteudo");
+    expect(user).not.toContain("CONHECIMENTO");
+  });
+
+  it("respond em vendas degrada para rewrite (vendas fora de escopo)", async () => {
+    const { openai, create } = capturingOpenai();
+    const gen = new OpenAiReplyGenerator({ openai, model: "test-model" });
+    await gen.generate({
+      deterministicReply: ENLATADA,
+      intent: "pergunta_preco",
+      agentMode: "vendas",
+      history: [],
+      salesConfig,
+      generationMode: "respond",
+      userMessage: "quanto custa?",
+      knowledge,
+    });
+    const { user } = promptsFromCall(create);
+    expect(user).toContain("reescreva o tom, preserve o conteudo");
   });
 });

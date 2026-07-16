@@ -118,14 +118,33 @@ export type RecentMessage = {
 // Resultado do validador deterministico de saida (ADR-0020, poder de veto).
 export type ReplyValidationResult = { ok: true } | { ok: false; reason: string };
 
+// Como o gerador conversacional deve trabalhar (ADR-0022):
+// - rewrite (CV1): reescreve o tom da enlatada, proibido de inventar conteudo.
+// - respond (CV2): responde a pergunta do usuario, grounded APENAS no bloco de
+//   conhecimento fornecido; "nao sei" -> dontKnow -> caller envia a enlatada.
+export type ReplyGenerationMode = "rewrite" | "respond";
+
+// Fatos permitidos ao modo respond. O LLM nao pode afirmar nada fora daqui.
+export type ReplyGenerationKnowledge = {
+  productFacts: string;
+  faqs: ReadonlyArray<{ pergunta: string; resposta: string }>;
+  workshopName: string | null;
+  handoffLink: string | null;
+};
+
 // Entrada do gerador conversacional. `deterministicReply` e o "esqueleto de
 // fatos + CTA" que o LLM deve apenas reescrever (naturalizar), sem inventar.
+// Campos opcionais (ADR-0022): no modo respond, `userMessage` e a pergunta a
+// responder e `knowledge` traz os unicos fatos permitidos; ausentes => rewrite.
 export type ReplyGenerationInput = {
   deterministicReply: string;
   intent: string | null;
   agentMode: string;
   history: RecentMessage[];
   salesConfig: ConfiguracoesVendedor | null;
+  generationMode?: ReplyGenerationMode;
+  userMessage?: string;
+  knowledge?: ReplyGenerationKnowledge;
 };
 
 // Contrato do gerador. `generate` devolve a string reescrita ou `null` quando
@@ -606,6 +625,11 @@ export type OnboardingAgent = {
      * temporal (bom dia / boa tarde / boa noite). Ausente → saudação neutra.
      */
     hourSaoPaulo?: number;
+    /**
+     * WhatsApp do handoff comercial (configuracoes_vendedor). Usado na enlatada
+     * da categoria `pergunta` (ADR-0022). Ausente/null → enlatada sem link.
+     */
+    handoffComercial?: string | null;
   }): Promise<OnboardingAgentReply>;
 };
 
@@ -623,6 +647,13 @@ export type OnboardingAgentReply = {
    * — preserva a rede de segurança da ADR-0017 (a oficina confere o dado exato).
    */
   allowConversationalGeneration?: boolean;
+  /**
+   * Quando `allowConversationalGeneration = true`, indica COMO gerar (ADR-0022):
+   * "rewrite" (default, CV1) reescreve a enlatada; "respond" (CV2) responde a
+   * pergunta original grounded em conhecimento fechado. Só a categoria neutra
+   * `pergunta` usa "respond" hoje — e pergunta de preço força "rewrite".
+   */
+  conversationalGenerationMode?: ReplyGenerationMode;
 };
 
 export type ReminderIntent =

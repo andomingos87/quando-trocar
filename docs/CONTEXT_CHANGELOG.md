@@ -19,6 +19,15 @@ Não registrar:
 
 ---
 
+## 2026-07-16 — Modo "respond" grounded na camada de geração conversacional
+
+### Adicionado
+
+- **[ADR-0022](./adr/0022-modo-respond-grounded.md)** — complementa a [ADR-0020](./adr/0020-camada-geracao-conversacional.md): a camada de geração ganha o modo **respond** (CV2): o LLM responde a pergunta do usuário grounded num bloco de conhecimento fechado (`lib/whatsapp/product-knowledge.ts` + FAQ filtrada + contexto da oficina), em vez de só reescrever a enlatada (rewrite/CV1). Protocolo "não sei" → `dontKnow` → fallback enlatado. Validador com veto e máquina off/sombra/on inalterados; prompt-version bump `cv2-1`; audit ganha `generationMode`.
+- **Categoria `pergunta` no agente de operação** — pergunta fora do cadastro ("já sou cliente?", "vocês fazem alinhamento?") deixa de despejar o formulário; enlatada = resposta curta + handoff comercial + convite a registrar, com geração respond. **Preço na operação é trilho crítico** (ADR-0012): regex determinística força rewrite sobre o handoff — o respond nunca responde preço.
+
+---
+
 ## 2026-07-12 — Gateway de pagamento pluggável (ASAAS + Mercado Pago)
 
 ### Adicionado
