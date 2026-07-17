@@ -10,7 +10,7 @@ representantes e auditoria. Uso interno da equipe (nao e o produto do cliente fi
 - `app/admin/` — UI (entrar/OTP e area autenticada `(autenticado)`).
 - `app/api/admin/**` — APIs do painel.
 - `lib/admin/` — logica de dominio + dados do admin, **exceto** os arquivos de cobranca
-  (`billing.ts`, `pagamentos.ts`, `comissoes.ts`, `configuracoes-vendedor.ts`) que sao do modulo [[billing]].
+  (`billing.ts`, `pagamentos.ts`, `comissoes.ts`, `configuracoes-vendedor.ts`, `configuracoes-pagamento.ts`) que sao do modulo [[billing]].
 - `components/admin/` (inclui `components/admin/ui`).
 
 **NAO pertence:** bot conversacional (modulo [[whatsapp-bot]]), cobranca/comissao (modulo

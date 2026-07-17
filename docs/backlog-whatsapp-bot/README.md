@@ -21,6 +21,7 @@ Arquivos por fase:
 5. [Fase 5 - Audio](./fase-5-audio.md)
 6. [Fase Representantes - Atribuicao e comissao](./fase-representantes-comissao.md)
 7. [Fase Conversacional - Geracao de resposta com validador](./fase-camada-conversacional.md)
+8. [Fase R4 - Portal do Representante (login e visibilidade)](./fase-representante-portal.md)
 
 Resumo consolidado:
 
