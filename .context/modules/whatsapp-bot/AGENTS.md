@@ -24,6 +24,10 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 - `reminder-worker.ts` — consome a fila e dispara lembretes via template.
 - `repository.ts` — toda a persistencia Supabase do bot.
 - `whatsapp-client.ts` — envio pela Cloud API.
+- `reply-generator.ts` / `reply-validator.ts` / `product-knowledge.ts` — camada de geracao
+  conversacional (ADR-0020/0022/0024): rewrite naturaliza a enlatada; respond responde grounded
+  no conhecimento fechado; validador deterministico com veto; `dontKnow` no respond grava
+  `perguntas_sem_resposta` (ADR-0023).
 - `date-parse.ts` — parsing deterministico de datas.
 - `transcription.ts` / `image-vision.ts` / `document-text.ts` — media inbound (audio/imagem/pdf).
 - `payload.ts`, `signature.ts`, `types.ts`, `*-fallbacks.ts` — parsing, assinatura, contratos e fallbacks.
@@ -48,5 +52,5 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 - Arquitetura: `docs/architecture/whatsapp-bot-technical-plan.md`
 - Backlog: `docs/backlog-whatsapp-bot/`
 - Regras de negocio: `docs/regras-de-negocio.md`
-- ADRs relevantes: ADR-0001 (LLM nao muda estado), ADR-0017 (confirmacao da oficina), ADR-0018 (concierge cliente final)
+- ADRs relevantes: ADR-0001 (LLM nao muda estado), ADR-0017 (confirmacao da oficina), ADR-0018 (concierge cliente final), ADR-0020/0022/0024 (camada de geracao conversacional), ADR-0023 (perguntas_sem_resposta)
 - Convencoes: `.context/conventions.md`

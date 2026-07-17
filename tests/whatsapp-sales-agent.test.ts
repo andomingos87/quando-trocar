@@ -760,6 +760,67 @@ describe("whatsapp sales agent — Ciclo 4 (greeting subsequente + contador + va
     expect(reply.updatedContext?.sales?.consecutive_fallback).toBe(0);
   });
 
+  test("ADR-0024: caso geral do fora_escopo marca respond; contador segue incrementando", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "voces atendem moto tambem?",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 1 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.conversationalGenerationMode).toBe("respond");
+    // Invariante: o sinal de geracao nunca mexe no estado (off/sombra/on so
+    // diferem no texto enviado) — o contador incrementa normalmente.
+    expect(reply.updatedContext?.sales?.consecutive_fallback).toBe(2);
+  });
+
+  test("ADR-0024: sub-caminhos do fora_escopo seguem deterministicos (sem respond)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+
+    // Saudacao subsequente
+    const saudacao = await agent.generateReply({
+      message: "bom dia",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 0 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(saudacao.conversationalGenerationMode).toBeUndefined();
+
+    // Primeira aparicao (explainer)
+    const primeira = await agent.generateReply({
+      message: "hmm",
+      leadStatus: "em_conversa",
+      context: { sales: {} },
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(primeira.conversationalGenerationMode).toBeUndefined();
+
+    // Lead ja interessado
+    const interessado = await agent.generateReply({
+      message: "frase aleatoria",
+      leadStatus: "interessado",
+      context: { sales: { greeted: true, funcionamento_explained: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(interessado.conversationalGenerationMode).toBeUndefined();
+
+    // Handoff automatico em >= 7
+    const handoff = await agent.generateReply({
+      message: "frase aleatoria sem sentido",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 6 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(handoff.handoffRequired).toBe(true);
+    expect(handoff.conversationalGenerationMode).toBeUndefined();
+  });
+
   test("Fix 3: pool de 5 variacoes do fallback gera respostas diferentes", async () => {
     const agent = new WhatsappSalesAgent({ openai: null });
     const bodies = new Set<string>();

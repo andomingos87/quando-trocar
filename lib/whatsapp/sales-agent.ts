@@ -839,11 +839,17 @@ function buildReply(
     memory.funcionamento_explained = true;
   }
 
+  // ADR-0024: so o caso geral do fora_escopo vira faixa livre — o gerador
+  // responde grounded (respond) e esta enlatada e o fallback. Os sub-caminhos
+  // acima (saudacoes, lead interessado, handoff em >= 7) ficam deterministicos.
+  // O contador consecutive_fallback continua incrementando mesmo com geracao
+  // boa: off/sombra/on so podem diferir no texto enviado, nunca no estado.
   return {
     status: statusForIntent(classification.intent),
     body: wrappedPain.body,
     toolCalls: [],
     updatedContext: { sales: memory },
+    conversationalGenerationMode: "respond",
   };
 }
 

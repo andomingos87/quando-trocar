@@ -444,6 +444,149 @@ describe("webhook — modo respond na operação (ADR-0022)", () => {
   });
 });
 
+// --- Respond em vendas (ADR-0024) ---------------------------------------------
+// O caso geral do fora_escopo do agente de vendas pede respond: o gerador
+// recebe a pergunta + conhecimento de vendas e a enlatada vira fallback.
+
+describe("webhook — respond em vendas (ADR-0024)", () => {
+  const FORA_ESCOPO_ENLATADA =
+    "Pode reformular chefe? Ou se preferir, eu te explico de novo o produto, te passo o preco, ou ja ativo o teste.";
+
+  function respondSalesAgent() {
+    return {
+      generateReply: vi.fn(async () => ({
+        body: FORA_ESCOPO_ENLATADA,
+        status: "em_conversa" as const,
+        toolCalls: [],
+        conversationalGenerationMode: "respond" as const,
+      })),
+    };
+  }
+
+  test("on aprovado: envia a gerada; gerador recebe knowledge de vendas; audit fora_escopo", async () => {
+    const repository = salesRepository("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const gerada =
+      "Atende sim, chefe: qualquer servico com retorno previsivel entra. Bora ativar o teste?";
+    const { generator, inputs } = capturingGenerator(gerada);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: respondSalesAgent(),
+      replyGenerator: generator,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("Voces atendem moto tambem?"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: gerada,
+    });
+
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]).toMatchObject({
+      generationMode: "respond",
+      userMessage: "Voces atendem moto tambem?",
+      agentMode: "vendas",
+    });
+    const knowledge = inputs[0].knowledge as {
+      productFacts: string;
+      workshopName: string | null;
+      handoffLink: string | null;
+    };
+    // Conhecimento de vendas: fatos de vendas presentes, sem oficina.
+    expect(knowledge.productFacts).toContain("14 dias");
+    expect(knowledge.workshopName).toBeNull();
+    expect(knowledge.handoffLink).toBe("https://wa.me/5511945207618");
+
+    const audit = replyGenerationCall(repository);
+    expect(audit?.input).toMatchObject({
+      generationMode: "respond",
+      intent: "fora_escopo",
+      agentMode: "vendas",
+    });
+    expect(audit?.output).toMatchObject({ approved: true, usedFallback: false });
+  });
+
+  test("dont_know: envia a enlatada de fora_escopo e grava perguntas_sem_resposta", async () => {
+    const repository = Object.assign(salesRepository("on"), {
+      savePerguntaSemResposta: vi.fn(async () => undefined),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const { generator } = capturingGenerator(null, "dont_know");
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: respondSalesAgent(),
+      replyGenerator: generator,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("Voces integram com meu sistema de gestao?"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: FORA_ESCOPO_ENLATADA,
+    });
+    expect(repository.savePerguntaSemResposta).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentMode: "vendas",
+        geracaoModo: "on",
+        motivo: "dont_know",
+        pergunta: "Voces integram com meu sistema de gestao?",
+        respostaEnviada: FORA_ESCOPO_ENLATADA,
+      }),
+    );
+  });
+
+  test("agente de vendas sem o campo (rewrite): gerador roda em rewrite, sem knowledge", async () => {
+    const repository = salesRepository("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const gerada = "Fala chefe! Da pra testar 14 dias de graca. Topa?";
+    const { generator, inputs } = capturingGenerator(gerada);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: salesAgent(),
+      replyGenerator: generator,
+    });
+
+    await handlers.POST(
+      signedRequest(inboundPayload("quanto custa"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(inputs[0]).toMatchObject({ generationMode: "rewrite" });
+    expect(inputs[0].knowledge).toBeUndefined();
+    expect(replyGenerationCall(repository)?.input).toMatchObject({
+      generationMode: "rewrite",
+      intent: null,
+    });
+  });
+});
+
 // --- Volante de aprendizado (ADR-0023) ----------------------------------------
 // respond + dontKnow grava em perguntas_sem_resposta (best-effort); rewrite e
 // erro nao gravam; repositorio sem o metodo opcional nao quebra nada.
@@ -502,7 +645,7 @@ describe("webhook — perguntas_sem_resposta (ADR-0023)", () => {
       respostaEnviada: HANDOFF_ENLATADA,
       motivo: "dont_know",
       geracaoModo: "on",
-      promptVersion: expect.any(String),
+      promptVersion: "cv2-2",
     });
     expect(replyGenerationCall(repository)?.output).toMatchObject({
       rejectionReason: "generation_dont_know",

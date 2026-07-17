@@ -1,14 +1,18 @@
 # WhatsApp Reply Generator Prompt (camada conversacional)
 
 Prompt versionado da camada de geração de resposta por LLM (ADR-0020 fase CV1 +
-ADR-0022 fase CV2). Espelho legível de `SYSTEM_PROMPT` (rewrite) e
-`SYSTEM_PROMPT_RESPOND` (respond) em `lib/whatsapp/reply-generator.ts`. Ao mudar
-o comportamento, atualize os dois E faça bump de `REPLY_GENERATOR_PROMPT_VERSION`.
+ADR-0022/0024 fase CV2). Espelho legível de `SYSTEM_PROMPT` (rewrite) e
+`buildRespondSystemPrompt` (respond) em `lib/whatsapp/reply-generator.ts`. Ao
+mudar o comportamento, atualize os dois E faça bump de
+`REPLY_GENERATOR_PROMPT_VERSION`.
 
-- Versão atual: `cv2-1` (única para os dois modos; o audit desambigua por `generationMode`)
+- Versão atual: `cv2-2` (única para os dois modos; o audit desambigua por `generationMode`)
 - Modelo: `process.env.OPENAI_MODEL_RESPONDER`
 - Structured Output: `{ reply: string, dontKnow: boolean }`
-- Timeout: 3s (erro/timeout → `null` → o webhook envia a resposta enlatada)
+- Timeout: 3s. O gerador devolve `{reply} | {reply: null, reason: "dont_know" | "error"}`
+  (ADR-0023) — qualquer `reply: null` faz o webhook enviar a enlatada; no modo
+  respond, `dont_know` também grava a pergunta em `perguntas_sem_resposta`
+  (volante de aprendizado: vira FAQ no admin, sem deploy).
 
 ## Modo rewrite (CV1): naturalizador
 
@@ -16,28 +20,36 @@ O sistema já decidiu **o que** dizer (fatos + ação + CTA — o `deterministic
 O LLM decide **como** dizer: reescreve o mesmo conteúdo com tom mais humano e
 continuidade de conversa. **Não** é um agente que responde livre — é um reescritor.
 
-## Modo respond (CV2, ADR-0022): responder grounded
+## Modo respond (CV2, ADR-0022/0024): responder grounded
 
-Acionado hoje só pela categoria `pergunta` do agente de operação (pergunta real
-fora do cadastro). O LLM **responde a pergunta do usuário** (`userMessage`), mas
-grounded exclusivamente no bloco CONHECIMENTO do prompt:
+Acionado pela categoria `pergunta` do agente de operação (pergunta real fora do
+cadastro) e pelo **caso geral do `fora_escopo` de vendas** (ADR-0024). O LLM
+**responde a pergunta do usuário** (`userMessage`), mas grounded exclusivamente
+no bloco CONHECIMENTO do prompt, que varia por `agentMode`:
 
-- `PRODUCT_FACTS` de `lib/whatsapp/product-knowledge.ts` (fatos do produto, sem preço);
-- FAQ do banco (`faq_vendas`) **filtrada** — itens com preço/condição comercial não entram;
-- nome da oficina e link de handoff comercial (`wa.me`).
+- **Operação** (`buildOperationKnowledge`): `PRODUCT_FACTS` (fatos do produto,
+  sem preço — inclui cadências de fábrica do lembrete e correção de cadastro) +
+  FAQ filtrada + nome da oficina + link de handoff comercial (`wa.me`).
+- **Vendas** (`buildSalesKnowledge`): `PRODUCT_FACTS` + `SALES_FACTS` (teste
+  grátis 14 dias, ativação pela conversa, onboarding guiado) + FAQ filtrada +
+  handoff; **sem** nome de oficina (o interlocutor é lead). `SALES_FACTS` nunca
+  entra na operação (oferecer teste grátis a quem já paga é bug de conversa).
+- FAQ do banco (`faq_vendas`) **sempre filtrada** — itens com preço/condição
+  comercial não entram em nenhum modo.
 
 Regras específicas do respond (além das invioláveis abaixo):
 
 - Os únicos fatos afirmáveis estão no CONHECIMENTO; fora dele → `dontKnow=true`
-  (o caller envia a enlatada, que na `pergunta` é handoff para humano — "não sei"
-  vira encaminhamento, nunca chute).
+  (o caller envia a enlatada — na `pergunta` da operação é handoff para humano;
+  em vendas é o pool de fora_escopo — e grava `perguntas_sem_resposta`).
 - **Nunca** citar preço/valor/mensalidade/condição comercial — apontar o contato
-  comercial do CONHECIMENTO (pergunta de preço nem chega aqui: o agente de
-  operação a força para rewrite via `PRICE_QUESTION_PATTERN`).
-- Objetivo do momento (`operacao`/`onboarding`): ajudar na dúvida e trazer a
-  conversa de volta para registrar trocas.
-- Até ~3 frases; `respond` sem `userMessage` ou com `agentMode="vendas"` degrada
-  defensivamente para rewrite (vendas segue 100% rewrite).
+  comercial do CONHECIMENTO (pergunta de preço nem chega aqui: na operação o
+  `PRICE_QUESTION_PATTERN` força rewrite; em vendas o intent `pergunta_preco` é
+  trilho determinístico próprio).
+- Objetivo do momento por `agentMode`: `operacao`/`onboarding` → ajudar na
+  dúvida e trazer a conversa de volta para registrar trocas; `vendas` → ajudar
+  o lead e direcionar para ativar o teste grátis de 14 dias.
+- Até ~3 frases; `respond` sem `userMessage` degrada defensivamente para rewrite.
 
 ## Voz / tom
 
@@ -72,8 +84,9 @@ cenário desta camada é o comportamento determinístico atual.
 
 - `lib/whatsapp/reply-generator.ts`
 - `lib/whatsapp/reply-validator.ts`
-- `lib/whatsapp/product-knowledge.ts` (fatos do produto + filtro de FAQ do respond)
-- `lib/whatsapp/webhook-handler.ts` (ponto de injeção único)
+- `lib/whatsapp/product-knowledge.ts` (fatos do produto/vendas + filtro de FAQ do respond)
+- `lib/whatsapp/webhook-handler.ts` (ponto de injeção único + gravação de `perguntas_sem_resposta`)
 - `lib/whatsapp/types.ts`
 - `docs/adr/0020-camada-geracao-conversacional.md`, `docs/adr/0022-modo-respond-grounded.md`
+- `docs/adr/0023-perguntas-sem-resposta.md`, `docs/adr/0024-respond-em-vendas.md`
 - `docs/adr/0009-confirmacao-vs-pre-agendamento.md`, `docs/adr/0012-politica-de-preco.md`

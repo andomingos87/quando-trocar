@@ -103,6 +103,13 @@ Second gate inside `WhatsappSalesAgent.generateReply`: if OpenAI returns `sem_in
 - The 5-item pool `FALLBACK_VARIATIONS` rotates based on that counter (avoids repeating the same copy twice in a row).
 - When the counter reaches **7**, the next fallback triggers an **automatic handoff** to the commercial WhatsApp with `handoffReason = "fallback_loop"`.
 
+## Fora_escopo general case is a free lane (CV2, ADR-0024)
+
+- Only the **general case** of `fora_escopo` (the `FALLBACK_VARIATIONS` rotation) returns `conversationalGenerationMode: "respond"` in the `AgentReply`: the generation layer answers the lead's message grounded in `buildSalesKnowledge` (PRODUCT_FACTS + SALES_FACTS + filtered FAQ + handoff link) and the pool copy is the fallback (`dontKnow`/error/veto → pool copy; `dontKnow` also records `perguntas_sem_resposta`).
+- Sub-paths stay deterministic (no `respond`): subsequent greeting, first appearance (explainer), lead already `interessado`, and the automatic handoff at >= 7.
+- **The counter never reacts to generation** — it increments even when the generated answer was good. `off`/`sombra`/`on` may only differ in the text sent, never in state (kill-switch reversibility). Never reset it from an LLM signal.
+- Price never enters this lane: `pergunta_preco` is its own deterministic intent (0.92) and price FAQs are filtered from the knowledge.
+
 ## Subsequent greeting (ciclo 4)
 
 When `memory.greeted === true` and the lead sends another greeting ("bom dia", "tudo bem?"), the bot replies with one of **5 social variations** (pool `GREETING_AFTER_GREETED`), not the explainer again. Does NOT count as fallback.

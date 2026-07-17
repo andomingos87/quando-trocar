@@ -19,6 +19,20 @@ Não registrar:
 
 ---
 
+## 2026-07-16 — Volante de aprendizado e respond em vendas (CV2 completo)
+
+### Adicionado
+
+- **[ADR-0023](./adr/0023-perguntas-sem-resposta.md)** — tabela **`perguntas_sem_resposta`** (migration `20260716120000`): quando o modo respond devolve `dontKnow`, a pergunta vira registro triável (`agent_mode`, pergunta, enlatada enviada, `geracao_modo`, `prompt_version`, `status`) que o admin converte em FAQ **sem deploy**. Grava em `sombra` e `on`, best-effort; rewrite+`dontKnow` não grava. Contrato do gerador mudou: `ReplyGenerator.generate` devolve `{reply} | {reply: null, reason: "dont_know" | "error"}`.
+- **[ADR-0024](./adr/0024-respond-em-vendas.md)** — emenda o invariante 6 da ADR-0022: o **caso geral do `fora_escopo` de vendas** roda em respond, grounded em `buildSalesKnowledge` (`PRODUCT_FACTS` + novo `SALES_FACTS` + FAQ filtrada + handoff). Sub-caminhos (saudações, lead interessado, handoff ≥7) seguem determinísticos; `consecutive_fallback` nunca reage à geração. Objetivo do prompt por `agent_mode`; bump `cv2-2`.
+- **`PRODUCT_FACTS` expandido** — cadências de fábrica do lembrete (óleo ~90d, revisão/outros ~180d, amortecedor ~2 anos; seed `tipos_servico_default`, ajustável no painel), correção antes vs depois de confirmar, pós-confirmação.
+
+### Alterado
+
+- No audit de `agent_tool_calls`, `dontKnow` sai do bucket `generation_failed_or_null` e vira **`generation_dont_know`** — consultas/monitoração sobre a string antiga verão o número "cair" sem ser melhora.
+
+---
+
 ## 2026-07-16 — Modo "respond" grounded na camada de geração conversacional
 
 ### Adicionado

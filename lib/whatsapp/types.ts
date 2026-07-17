@@ -70,6 +70,12 @@ export type AgentReply = {
   updatedContext?: ConversationContext;
   handoffRequired?: boolean;
   handoffReason?: string;
+  /**
+   * Como a camada de geração deve tratar esta resposta (ADR-0024): "respond"
+   * só no caso geral do fora_escopo (a IA responde grounded; o body é o
+   * fallback). Ausente = rewrite (CV1).
+   */
+  conversationalGenerationMode?: ReplyGenerationMode;
 };
 
 export type SalesConversationMemory = {

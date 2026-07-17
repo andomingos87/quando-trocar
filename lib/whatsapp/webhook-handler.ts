@@ -27,7 +27,10 @@ import {
   REPLY_GENERATOR_PROMPT_VERSION,
   maybeGenerateConversationalReply,
 } from "./reply-generator";
-import { buildOperationKnowledge } from "./product-knowledge";
+import {
+  buildOperationKnowledge,
+  buildSalesKnowledge,
+} from "./product-knowledge";
 import { siteConfig, whatsappLink } from "../config";
 import {
   extractInboundMessages,
@@ -1207,6 +1210,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               }
 
               replyBody = reply.body;
+              // ADR-0024: o caso geral do fora_escopo pede respond (a IA
+              // responde grounded; a enlatada vira fallback).
+              generationMode = reply.conversationalGenerationMode ?? "rewrite";
             }
 
             for (const toolCall of reply.toolCalls) {
@@ -1594,10 +1600,20 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             (name): name is string => Boolean(name),
           );
 
+          const handoffComercialLink = salesConfig?.whatsappHandoffComercial
+            ? whatsappLink({ phone: salesConfig.whatsappHandoffComercial })
+            : null;
           const generation = await maybeGenerateConversationalReply({
             deterministicReply: replyBody,
             mode: geracaoModo,
-            intent: generationMode === "respond" ? "pergunta" : null,
+            // Rotulo do audit: respond em vendas vem do fora_escopo (ADR-0024);
+            // na operacao, da categoria `pergunta` (ADR-0022).
+            intent:
+              generationMode === "respond"
+                ? effectiveAgentMode === "vendas"
+                  ? "fora_escopo"
+                  : "pergunta"
+                : null,
             agentMode: effectiveAgentMode,
             generator: replyGenerator,
             history: recentHistory,
@@ -1608,15 +1624,16 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             userMessage: inbound.body,
             knowledge:
               generationMode === "respond"
-                ? buildOperationKnowledge({
-                    faqs,
-                    handoffLink: salesConfig?.whatsappHandoffComercial
-                      ? whatsappLink({
-                          phone: salesConfig.whatsappHandoffComercial,
-                        })
-                      : null,
-                    workshopName: resolved.oficinaNome,
-                  })
+                ? effectiveAgentMode === "vendas"
+                  ? buildSalesKnowledge({
+                      faqs,
+                      handoffLink: handoffComercialLink,
+                    })
+                  : buildOperationKnowledge({
+                      faqs,
+                      handoffLink: handoffComercialLink,
+                      workshopName: resolved.oficinaNome,
+                    })
                 : undefined,
           });
 

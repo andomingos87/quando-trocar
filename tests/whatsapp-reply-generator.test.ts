@@ -507,20 +507,45 @@ describe("OpenAiReplyGenerator — prompts do modo respond", () => {
     expect(user).not.toContain("CONHECIMENTO");
   });
 
-  it("respond em vendas degrada para rewrite (vendas fora de escopo)", async () => {
+  it("respond em vendas usa objetivo do teste gratis no system prompt (ADR-0024)", async () => {
     const { openai, create } = capturingOpenai();
     const gen = new OpenAiReplyGenerator({ openai, model: "test-model" });
     await gen.generate({
       deterministicReply: ENLATADA,
-      intent: "pergunta_preco",
+      intent: "fora_escopo",
       agentMode: "vendas",
       history: [],
       salesConfig,
       generationMode: "respond",
-      userMessage: "quanto custa?",
+      userMessage: "voces atendem moto?",
+      knowledge: buildSalesKnowledge({
+        faqs: [],
+        handoffLink: "https://wa.me/5511945207618",
+      }),
+    });
+    const { system, user } = promptsFromCall(create);
+    expect(system).toContain("teste gratis de 14 dias");
+    expect(system).toContain("NUNCA cite preco");
+    expect(user).toContain("CONHECIMENTO");
+    // Sem oficina no conhecimento de vendas, a linha "Oficina:" some do prompt.
+    expect(user).not.toContain("Oficina:");
+  });
+
+  it("respond na operacao mantem objetivo de registrar trocas (sem teste gratis)", async () => {
+    const { openai, create } = capturingOpenai();
+    const gen = new OpenAiReplyGenerator({ openai, model: "test-model" });
+    await gen.generate({
+      deterministicReply: HANDOFF_ENLATADA,
+      intent: "pergunta",
+      agentMode: "operacao",
+      history: [],
+      salesConfig,
+      generationMode: "respond",
+      userMessage: "Voces fazem alinhamento?",
       knowledge,
     });
-    const { user } = promptsFromCall(create);
-    expect(user).toContain("reescreva o tom, preserve o conteudo");
+    const { system } = promptsFromCall(create);
+    expect(system).toContain("registrar trocas/servicos");
+    expect(system).not.toContain("teste gratis");
   });
 });
