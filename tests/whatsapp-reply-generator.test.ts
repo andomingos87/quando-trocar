@@ -27,7 +27,10 @@ const salesConfig: ConfiguracoesVendedor = {
 const allowedLinks = ["https://wa.me/5511945207618", "https://quandotrocar.com.br"];
 const allowedNames = ["Oficina do Ze"];
 
-function makeGenerator(reply: string | null): {
+function makeGenerator(
+  reply: string | null,
+  nullReason: "dont_know" | "error" = "error",
+): {
   generator: ReplyGenerator;
   state: { calls: number };
 } {
@@ -35,7 +38,7 @@ function makeGenerator(reply: string | null): {
   const generator: ReplyGenerator = {
     async generate() {
       state.calls += 1;
-      return reply;
+      return reply === null ? { reply: null, reason: nullReason } : { reply };
     },
   };
   return { generator, state };
@@ -182,12 +185,12 @@ describe("OpenAiReplyGenerator (sem request real)", () => {
     vi.useRealTimers();
   });
 
-  it("retorna null quando não há modelo configurado", async () => {
+  it("retorna erro quando não há modelo configurado", async () => {
     const fakeOpenai = {
       responses: { create: vi.fn() },
     } as unknown as OpenAI;
     const gen = new OpenAiReplyGenerator({ openai: fakeOpenai, model: undefined });
-    expect(await gen.generate(input)).toBeNull();
+    expect(await gen.generate(input)).toEqual({ reply: null, reason: "error" });
     expect((fakeOpenai.responses.create as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 
@@ -200,10 +203,10 @@ describe("OpenAiReplyGenerator (sem request real)", () => {
       },
     } as unknown as OpenAI;
     const gen = new OpenAiReplyGenerator({ openai: fakeOpenai, model: "test-model" });
-    expect(await gen.generate(input)).toBe("Fala chefe!");
+    expect(await gen.generate(input)).toEqual({ reply: "Fala chefe!" });
   });
 
-  it("dontKnow=true => null", async () => {
+  it("dontKnow=true => reply null com motivo dont_know", async () => {
     const fakeOpenai = {
       responses: {
         create: vi.fn().mockResolvedValue({
@@ -212,15 +215,15 @@ describe("OpenAiReplyGenerator (sem request real)", () => {
       },
     } as unknown as OpenAI;
     const gen = new OpenAiReplyGenerator({ openai: fakeOpenai, model: "test-model" });
-    expect(await gen.generate(input)).toBeNull();
+    expect(await gen.generate(input)).toEqual({ reply: null, reason: "dont_know" });
   });
 
-  it("erro na chamada => null", async () => {
+  it("erro na chamada => reply null com motivo error", async () => {
     const fakeOpenai = {
       responses: { create: vi.fn().mockRejectedValue(new Error("network")) },
     } as unknown as OpenAI;
     const gen = new OpenAiReplyGenerator({ openai: fakeOpenai, model: "test-model" });
-    expect(await gen.generate(input)).toBeNull();
+    expect(await gen.generate(input)).toEqual({ reply: null, reason: "error" });
   });
 
   it("timeout (abort após 3s) => null", async () => {
@@ -240,7 +243,7 @@ describe("OpenAiReplyGenerator (sem request real)", () => {
     const gen = new OpenAiReplyGenerator({ openai: fakeOpenai, model: "test-model" });
     const promise = gen.generate(input);
     await vi.advanceTimersByTimeAsync(3000);
-    expect(await promise).toBeNull();
+    expect(await promise).toEqual({ reply: null, reason: "error" });
   });
 });
 
@@ -310,7 +313,7 @@ describe("maybeGenerateConversationalReply — modo respond (ADR-0022)", () => {
     expect(result.audit?.output.usedFallback).toBe(true);
   });
 
-  it("gerador null (dontKnow/timeout) => enlatada de handoff, audit respond", async () => {
+  it("gerador com erro/timeout => enlatada de handoff, audit respond, sem unansweredQuestion", async () => {
     const { generator } = makeGenerator(null);
     const result = await maybeGenerateConversationalReply({
       ...respondArgs(),
@@ -320,6 +323,42 @@ describe("maybeGenerateConversationalReply — modo respond (ADR-0022)", () => {
     expect(result.finalBody).toBe(HANDOFF_ENLATADA);
     expect(result.audit?.input.generationMode).toBe("respond");
     expect(result.audit?.output.rejectionReason).toBe("generation_failed_or_null");
+    expect(result.unansweredQuestion).toBe(false);
+  });
+
+  it("respond + dont_know => enlatada, rejectionReason proprio e unansweredQuestion (ADR-0023)", async () => {
+    const { generator } = makeGenerator(null, "dont_know");
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs(),
+      mode: "on",
+      generator,
+    });
+    expect(result.finalBody).toBe(HANDOFF_ENLATADA);
+    expect(result.audit?.output.rejectionReason).toBe("generation_dont_know");
+    expect(result.unansweredQuestion).toBe(true);
+  });
+
+  it("respond + dont_know em sombra tambem marca unansweredQuestion (sombra alimenta o volante)", async () => {
+    const { generator } = makeGenerator(null, "dont_know");
+    const result = await maybeGenerateConversationalReply({
+      ...respondArgs(),
+      mode: "sombra",
+      generator,
+    });
+    expect(result.finalBody).toBe(HANDOFF_ENLATADA);
+    expect(result.unansweredQuestion).toBe(true);
+  });
+
+  it("rewrite + dont_know NAO marca unansweredQuestion (nao e pergunta sem resposta)", async () => {
+    const { generator } = makeGenerator(null, "dont_know");
+    const result = await maybeGenerateConversationalReply({
+      ...baseArgs(),
+      mode: "on",
+      generator,
+    });
+    expect(result.audit?.input.generationMode).toBe("rewrite");
+    expect(result.audit?.output.rejectionReason).toBe("generation_dont_know");
+    expect(result.unansweredQuestion).toBe(false);
   });
 
   it("reprovado pelo validador (link fora da allowlist) => enlatada", async () => {
@@ -332,6 +371,7 @@ describe("maybeGenerateConversationalReply — modo respond (ADR-0022)", () => {
     expect(result.finalBody).toBe(HANDOFF_ENLATADA);
     expect(result.audit?.output.approved).toBe(false);
     expect(result.audit?.output.rejectionReason).toBe("link_nao_permitido");
+    expect(result.unansweredQuestion).toBe(false);
   });
 
   it("retrocompat: chamada sem generationMode audita rewrite", async () => {

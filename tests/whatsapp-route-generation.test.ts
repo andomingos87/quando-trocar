@@ -117,12 +117,15 @@ function salesRepository(modo: GeracaoLlmModo, overrides: Record<string, unknown
   };
 }
 
-function makeGenerator(reply: string | null) {
+function makeGenerator(
+  reply: string | null,
+  nullReason: "dont_know" | "error" = "error",
+) {
   const state = { calls: 0 };
   const generator: ReplyGenerator = {
     async generate() {
       state.calls += 1;
-      return reply;
+      return reply === null ? { reply: null, reason: nullReason } : { reply };
     },
   };
   return { generator, state };
@@ -334,12 +337,15 @@ function respondOnboardingAgent() {
   };
 }
 
-function capturingGenerator(reply: string | null) {
+function capturingGenerator(
+  reply: string | null,
+  nullReason: "dont_know" | "error" = "error",
+) {
   const inputs: Array<Record<string, unknown>> = [];
   const generator: ReplyGenerator = {
     async generate(input) {
       inputs.push(input as unknown as Record<string, unknown>);
-      return reply;
+      return reply === null ? { reply: null, reason: nullReason } : { reply };
     },
   };
   return { generator, inputs };

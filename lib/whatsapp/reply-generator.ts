@@ -7,6 +7,7 @@ import type {
   ReplyGenerationInput,
   ReplyGenerationKnowledge,
   ReplyGenerationMode,
+  ReplyGenerationResult,
   ReplyGenerator,
 } from "./types";
 
@@ -175,10 +176,10 @@ export class OpenAiReplyGenerator implements ReplyGenerator {
     this.model = input?.model ?? process.env.OPENAI_MODEL_RESPONDER;
   }
 
-  async generate(input: ReplyGenerationInput): Promise<string | null> {
+  async generate(input: ReplyGenerationInput): Promise<ReplyGenerationResult> {
     // Sem modelo configurado ou sem client -> nao gera (usa enlatada).
     if (!this.openai || !this.model) {
-      return null;
+      return { reply: null, reason: "error" };
     }
 
     const mode = resolveGenerationMode(input);
@@ -220,15 +221,15 @@ export class OpenAiReplyGenerator implements ReplyGenerator {
       );
 
       const parsed = parseGeneratedReply(response.output_text);
-      if (!parsed) return null;
-      // "Nao sei" ou reply vazio -> null (caller cai na enlatada, mantendo o
-      // protocolo "nao sei" da ADR-0020).
-      if (parsed.dontKnow) return null;
+      if (!parsed) return { reply: null, reason: "error" };
+      // Protocolo "nao sei" (ADR-0020/0022): o caller cai na enlatada; o motivo
+      // distinto alimenta `perguntas_sem_resposta` no respond (ADR-0023).
+      if (parsed.dontKnow) return { reply: null, reason: "dont_know" };
       const reply = parsed.reply.trim();
-      return reply.length > 0 ? reply : null;
+      return reply.length > 0 ? { reply } : { reply: null, reason: "error" };
     } catch {
-      // Erro de rede, timeout (abort) ou JSON invalido -> null.
-      return null;
+      // Erro de rede, timeout (abort) ou JSON invalido.
+      return { reply: null, reason: "error" };
     } finally {
       clearTimeout(timeout);
     }
@@ -277,6 +278,13 @@ export type ReplyGenerationAudit = {
 export type MaybeGenerateResult = {
   finalBody: string;
   audit: ReplyGenerationAudit | null;
+  /**
+   * true somente quando o modo RESOLVIDO foi "respond" e o gerador devolveu
+   * dont_know (ADR-0023) — sinal para gravar em `perguntas_sem_resposta`.
+   * No rewrite, dontKnow significa "nao consegui reescrever", nao "pergunta
+   * sem resposta", e nunca marca este campo.
+   */
+  unansweredQuestion: boolean;
 };
 
 // Encapsula toda a logica off/sombra/on + validacao, para o webhook-handler
@@ -312,12 +320,12 @@ export async function maybeGenerateConversationalReply(input: {
 
   // off: nao chama o gerador, nao audita — byte-identico ao comportamento atual.
   if (mode === "off" || !input.generator) {
-    return { finalBody: deterministicReply, audit: null };
+    return { finalBody: deterministicReply, audit: null, unansweredQuestion: false };
   }
 
-  let generated: string | null = null;
+  let result: ReplyGenerationResult;
   try {
-    generated = await input.generator.generate({
+    result = await input.generator.generate({
       deterministicReply,
       intent: input.intent,
       agentMode: input.agentMode,
@@ -328,11 +336,14 @@ export async function maybeGenerateConversationalReply(input: {
       knowledge: input.knowledge,
     });
   } catch {
-    generated = null;
+    result = { reply: null, reason: "error" };
   }
 
-  // Gerador falhou / timeout / dontKnow / null -> fallback enlatado.
-  if (generated === null) {
+  // Gerador falhou / timeout / dontKnow -> fallback enlatado. dont_know ganha
+  // rejectionReason proprio (ADR-0023); generation_failed_or_null permanece
+  // para erro (retrocompat de consultas sobre agent_tool_calls).
+  if (result.reply === null) {
+    const dontKnow = result.reason === "dont_know";
     return {
       finalBody: deterministicReply,
       audit: buildAudit({
@@ -344,11 +355,14 @@ export async function maybeGenerateConversationalReply(input: {
         userMessage: input.userMessage ?? null,
         generated: null,
         approved: false,
-        rejectionReason: "generation_failed_or_null",
+        rejectionReason: dontKnow ? "generation_dont_know" : "generation_failed_or_null",
         usedFallback: true,
       }),
+      unansweredQuestion: dontKnow && generationMode === "respond",
     };
   }
+
+  const generated = result.reply;
 
   const precoPartida = input.salesConfig?.precoPartida ?? 59;
   const validation = validateGeneratedReply({
@@ -381,6 +395,7 @@ export async function maybeGenerateConversationalReply(input: {
       rejectionReason,
       usedFallback,
     }),
+    unansweredQuestion: false,
   };
 }
 

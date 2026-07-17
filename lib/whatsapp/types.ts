@@ -147,10 +147,16 @@ export type ReplyGenerationInput = {
   knowledge?: ReplyGenerationKnowledge;
 };
 
-// Contrato do gerador. `generate` devolve a string reescrita ou `null` quando
-// nao pode/nao deve gerar (sem key, erro, timeout) — o caller usa a enlatada.
+// Resultado do gerador (ADR-0023). `reply: null` sempre leva o caller a enviar
+// a enlatada; o `reason` distingue o protocolo "nao sei" do respond (dont_know,
+// que alimenta `perguntas_sem_resposta`) de falha operacional (error: sem key,
+// timeout, JSON invalido, reply vazio).
+export type ReplyGenerationResult =
+  | { reply: string }
+  | { reply: null; reason: "dont_know" | "error" };
+
 export interface ReplyGenerator {
-  generate(input: ReplyGenerationInput): Promise<string | null>;
+  generate(input: ReplyGenerationInput): Promise<ReplyGenerationResult>;
 }
 
 export type TipoServico = "troca_oleo" | "amortecedor" | "revisao" | "outro";
