@@ -6,7 +6,12 @@ import {
   REPLY_GENERATOR_PROMPT_VERSION,
   maybeGenerateConversationalReply,
 } from "@/lib/whatsapp/reply-generator";
-import { buildOperationKnowledge } from "@/lib/whatsapp/product-knowledge";
+import {
+  PRODUCT_FACTS,
+  SALES_FACTS,
+  buildOperationKnowledge,
+  buildSalesKnowledge,
+} from "@/lib/whatsapp/product-knowledge";
 import type {
   ConfiguracoesVendedor,
   ReplyGenerationInput,
@@ -393,6 +398,53 @@ describe("maybeGenerateConversationalReply — modo respond (ADR-0022)", () => {
       generator,
     });
     expect(result.audit?.input.generationMode).toBe("rewrite");
+  });
+});
+
+describe("product-knowledge — fatos e builders", () => {
+  const faqs = [
+    {
+      id: "faq-1",
+      pergunta: "O lembrete vai automatico?",
+      resposta: "Sim, o bot avisa o cliente.",
+      palavras_chave: [],
+      ordem: 1,
+    },
+    {
+      id: "faq-2",
+      pergunta: "Quanto custa o plano?",
+      resposta: "A partir de R$ 59 por mes.",
+      palavras_chave: [],
+      ordem: 2,
+    },
+  ];
+
+  it("PRODUCT_FACTS traz cadencia de fabrica e correcao pos-confirmacao, sem preco nem teste gratis", () => {
+    expect(PRODUCT_FACTS).toContain("90 dias");
+    expect(PRODUCT_FACTS).toContain("2 anos");
+    expect(PRODUCT_FACTS).toContain("/suporte");
+    expect(PRODUCT_FACTS).not.toMatch(/r\$|pre[cç]o|mensalidade/i);
+    expect(PRODUCT_FACTS).not.toContain("14 dias");
+  });
+
+  it("buildSalesKnowledge inclui SALES_FACTS, filtra FAQ de preco e nao tem oficina", () => {
+    const k = buildSalesKnowledge({ faqs, handoffLink: "https://wa.me/5511945207618" });
+    expect(k.productFacts).toContain(SALES_FACTS);
+    expect(k.productFacts).toContain("14 dias");
+    expect(k.workshopName).toBeNull();
+    expect(k.faqs).toEqual([
+      { pergunta: "O lembrete vai automatico?", resposta: "Sim, o bot avisa o cliente." },
+    ]);
+  });
+
+  it("buildOperationKnowledge nao contem fatos de vendas (teste gratis)", () => {
+    const k = buildOperationKnowledge({
+      faqs,
+      handoffLink: null,
+      workshopName: "Oficina do Ze",
+    });
+    expect(k.productFacts).not.toContain("14 dias");
+    expect(k.faqs).toHaveLength(1);
   });
 });
 
