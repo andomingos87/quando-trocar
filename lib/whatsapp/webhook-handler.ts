@@ -24,6 +24,7 @@ import { WhatsappClienteFinalConciergeAgent } from "./cliente-final-concierge";
 import { WhatsappSupportAgent } from "./support-agent";
 import {
   OpenAiReplyGenerator,
+  REPLY_GENERATOR_PROMPT_VERSION,
   maybeGenerateConversationalReply,
 } from "./reply-generator";
 import { buildOperationKnowledge } from "./product-knowledge";
@@ -1629,6 +1630,31 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               input: generation.audit.input,
               output: generation.audit.output,
             });
+          }
+
+          // Volante de aprendizado (ADR-0023): respond + dontKnow vira registro
+          // que o admin converte em FAQ (sem deploy). Best-effort: falha de
+          // gravacao nunca derruba a resposta ao usuario.
+          if (
+            generation.unansweredQuestion &&
+            geracaoModo !== "off" &&
+            deps.repository.savePerguntaSemResposta
+          ) {
+            try {
+              await deps.repository.savePerguntaSemResposta({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                oficinaId: resolved.oficinaId,
+                agentMode: effectiveAgentMode,
+                pergunta: inbound.body.slice(0, 500),
+                respostaEnviada: generation.finalBody,
+                motivo: "dont_know",
+                geracaoModo,
+                promptVersion: REPLY_GENERATOR_PROMPT_VERSION,
+              });
+            } catch {
+              // best-effort
+            }
           }
 
           replyBody = generation.finalBody;

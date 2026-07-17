@@ -975,6 +975,32 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     throwIfError(result);
   }
 
+  async savePerguntaSemResposta(input: {
+    conversationId: string;
+    leadId: string | null;
+    oficinaId?: string | null;
+    agentMode: string;
+    pergunta: string;
+    respostaEnviada: string;
+    motivo: "dont_know";
+    geracaoModo: "sombra" | "on";
+    promptVersion: string;
+  }) {
+    const result = (await this.supabase.from("perguntas_sem_resposta").insert({
+      conversa_id: input.conversationId,
+      lead_id: input.leadId,
+      oficina_id: input.oficinaId ?? null,
+      agent_mode: input.agentMode,
+      pergunta: input.pergunta,
+      resposta_enviada: input.respostaEnviada,
+      motivo: input.motivo,
+      geracao_modo: input.geracaoModo,
+      prompt_version: input.promptVersion,
+    })) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
   async markWhatsappEventProcessed(input: { eventId: string }) {
     const result = (await this.supabase
       .from("whatsapp_events")

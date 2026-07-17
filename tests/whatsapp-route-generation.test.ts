@@ -443,3 +443,146 @@ describe("webhook — modo respond na operação (ADR-0022)", () => {
     });
   });
 });
+
+// --- Volante de aprendizado (ADR-0023) ----------------------------------------
+// respond + dontKnow grava em perguntas_sem_resposta (best-effort); rewrite e
+// erro nao gravam; repositorio sem o metodo opcional nao quebra nada.
+
+describe("webhook — perguntas_sem_resposta (ADR-0023)", () => {
+  function withSavePergunta(
+    repository: ReturnType<typeof salesRepository>,
+    impl?: () => Promise<void>,
+  ) {
+    const savePerguntaSemResposta = vi.fn(impl ?? (async () => undefined));
+    return Object.assign(repository, { savePerguntaSemResposta });
+  }
+
+  async function postPergunta(deps: {
+    repository: ReturnType<typeof salesRepository>;
+    generator: ReplyGenerator;
+    onboardingAgent?: ReturnType<typeof respondOnboardingAgent>;
+  }) {
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository: deps.repository,
+      whatsapp,
+      agent: salesAgent(),
+      onboardingAgent: deps.onboardingAgent ?? respondOnboardingAgent(),
+      replyGenerator: deps.generator,
+    });
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("Voces atendem moto tambem?"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+    return { response, whatsapp };
+  }
+
+  test("respond + dont_know (on): grava pergunta, enlatada ainda e enviada", async () => {
+    const repository = withSavePergunta(oficinaRepository("on"));
+    const { generator } = capturingGenerator(null, "dont_know");
+
+    const { response, whatsapp } = await postPergunta({ repository, generator });
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: HANDOFF_ENLATADA,
+    });
+    expect(repository.savePerguntaSemResposta).toHaveBeenCalledWith({
+      conversationId: "conversation-id",
+      leadId: null,
+      oficinaId: "oficina-id",
+      agentMode: "operacao",
+      pergunta: "Voces atendem moto tambem?",
+      respostaEnviada: HANDOFF_ENLATADA,
+      motivo: "dont_know",
+      geracaoModo: "on",
+      promptVersion: expect.any(String),
+    });
+    expect(replyGenerationCall(repository)?.output).toMatchObject({
+      rejectionReason: "generation_dont_know",
+    });
+  });
+
+  test("respond + dont_know em sombra tambem grava (sombra alimenta o volante)", async () => {
+    const repository = withSavePergunta(oficinaRepository("sombra"));
+    const { generator } = capturingGenerator(null, "dont_know");
+
+    const { response } = await postPergunta({ repository, generator });
+
+    expect(response.status).toBe(200);
+    expect(repository.savePerguntaSemResposta).toHaveBeenCalledWith(
+      expect.objectContaining({ geracaoModo: "sombra", motivo: "dont_know" }),
+    );
+  });
+
+  test("erro do gerador NAO grava (so dont_know alimenta o volante)", async () => {
+    const repository = withSavePergunta(oficinaRepository("on"));
+    const { generator } = capturingGenerator(null, "error");
+
+    const { response } = await postPergunta({ repository, generator });
+
+    expect(response.status).toBe(200);
+    expect(repository.savePerguntaSemResposta).not.toHaveBeenCalled();
+  });
+
+  test("rewrite + dont_know NAO grava (nao e pergunta sem resposta)", async () => {
+    const repository = withSavePergunta(salesRepository("on"));
+    const { generator } = makeGenerator(null, "dont_know");
+
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: salesAgent(),
+      replyGenerator: generator,
+    });
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("quanto custa"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.savePerguntaSemResposta).not.toHaveBeenCalled();
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: ENLATADA,
+    });
+  });
+
+  test("repositorio sem o metodo opcional: fluxo segue normal", async () => {
+    const repository = oficinaRepository("on");
+    const { generator } = capturingGenerator(null, "dont_know");
+
+    const { response, whatsapp } = await postPergunta({ repository, generator });
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: HANDOFF_ENLATADA,
+    });
+  });
+
+  test("gravacao rejeitando e best-effort: resposta ainda e enviada", async () => {
+    const repository = withSavePergunta(oficinaRepository("on"), async () => {
+      throw new Error("insert failed");
+    });
+    const { generator } = capturingGenerator(null, "dont_know");
+
+    const { response, whatsapp } = await postPergunta({ repository, generator });
+
+    expect(response.status).toBe(200);
+    expect(repository.savePerguntaSemResposta).toHaveBeenCalled();
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: HANDOFF_ENLATADA,
+    });
+  });
+});

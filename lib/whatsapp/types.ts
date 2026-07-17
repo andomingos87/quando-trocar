@@ -456,6 +456,20 @@ export type WhatsappRepository = {
     input: Record<string, unknown>;
     output: Record<string, unknown>;
   }): Promise<void>;
+  // Volante de aprendizado (ADR-0023): pergunta que o modo respond nao soube
+  // responder (dontKnow). Opcional e best-effort — o webhook guarda em
+  // try/catch; falha de gravacao nunca derruba a resposta.
+  savePerguntaSemResposta?(input: {
+    conversationId: string;
+    leadId: string | null;
+    oficinaId?: string | null;
+    agentMode: string;
+    pergunta: string;
+    respostaEnviada: string;
+    motivo: "dont_know";
+    geracaoModo: Exclude<GeracaoLlmModo, "off">;
+    promptVersion: string;
+  }): Promise<void>;
   markWhatsappEventProcessed(input: {
     eventId: string;
   }): Promise<void>;
