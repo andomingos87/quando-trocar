@@ -28,8 +28,9 @@ cadastro) e pelo **caso geral do `fora_escopo` de vendas** (ADR-0024). O LLM
 no bloco CONHECIMENTO do prompt, que varia por `agentMode`:
 
 - **Operação** (`buildOperationKnowledge`): `PRODUCT_FACTS` (fatos do produto,
-  sem preço — inclui cadências de fábrica do lembrete e correção de cadastro) +
-  FAQ filtrada + nome da oficina + link de handoff comercial (`wa.me`).
+  sem preço — inclui identidade do bot, cadências de fábrica do lembrete e
+  correção de cadastro) + FAQ filtrada + nome da oficina + link de handoff
+  comercial (`wa.me`).
 - **Vendas** (`buildSalesKnowledge`): `PRODUCT_FACTS` + `SALES_FACTS` (teste
   grátis 14 dias, ativação pela conversa, onboarding guiado) + FAQ filtrada +
   handoff; **sem** nome de oficina (o interlocutor é lead). `SALES_FACTS` nunca
@@ -39,9 +40,16 @@ no bloco CONHECIMENTO do prompt, que varia por `agentMode`:
 
 Regras específicas do respond (além das invioláveis abaixo):
 
-- Os únicos fatos afirmáveis estão no CONHECIMENTO; fora dele → `dontKnow=true`
-  (o caller envia a enlatada — na `pergunta` da operação é handoff para humano;
-  em vendas é o pool de fora_escopo — e grava `perguntas_sem_resposta`).
+- Os únicos fatos afirmáveis estão no CONHECIMENTO; nunca inventar.
+- **Quando a resposta não está no CONHECIMENTO, decidir pelo tipo da pergunta**
+  (evita mandar papo furado pro comercial e reduz falso-positivo no volante):
+  - **Fora do assunto** (futebol, clima, "que dia é hoje", piada, política,
+    vida pessoal) → **não** usa `dontKnow`. Responde curto e simpático, sem
+    inventar fato, sinaliza de leve que não é sua área e reconecta ao objetivo.
+    Não grava `perguntas_sem_resposta`.
+  - **Produto / conta / comercial** sem resposta no CONHECIMENTO → `dontKnow=true`
+    (o caller envia a enlatada — na `pergunta` da operação é handoff para humano;
+    em vendas é o pool de fora_escopo — e grava `perguntas_sem_resposta`).
 - **Nunca** citar preço/valor/mensalidade/condição comercial — apontar o contato
   comercial do CONHECIMENTO (pergunta de preço nem chega aqui: na operação o
   `PRICE_QUESTION_PATTERN` força rewrite; em vendas o intent `pergunta_preco` é

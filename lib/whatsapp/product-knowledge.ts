@@ -7,6 +7,8 @@ import type { FaqVendasRecord, ReplyGenerationKnowledge } from "./types";
 // NUNCA incluir preco/valor/condicao comercial aqui — preco na operacao e
 // handoff comercial (ADR-0012).
 export const PRODUCT_FACTS = [
+  "Voce e o assistente virtual do Quando Trocar; quando perguntarem seu nome ou",
+  "quem voce e, pode se apresentar como o assistente do Quando Trocar.",
   "O Quando Trocar registra os servicos/trocas que a oficina faz e lembra o",
   "cliente final automaticamente, pelo WhatsApp, quando chega a hora de voltar.",
   // Cadencias: padrao de fabrica do seed `tipos_servico_default` (migration

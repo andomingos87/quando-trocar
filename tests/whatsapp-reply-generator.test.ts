@@ -419,7 +419,9 @@ describe("product-knowledge — fatos e builders", () => {
     },
   ];
 
-  it("PRODUCT_FACTS traz cadencia de fabrica e correcao pos-confirmacao, sem preco nem teste gratis", () => {
+  it("PRODUCT_FACTS traz identidade, cadencia de fabrica e correcao pos-confirmacao, sem preco nem teste gratis", () => {
+    // Identidade: perguntar o nome do bot nao pode virar dontKnow/handoff.
+    expect(PRODUCT_FACTS).toContain("assistente do Quando Trocar");
     expect(PRODUCT_FACTS).toContain("90 dias");
     expect(PRODUCT_FACTS).toContain("2 anos");
     expect(PRODUCT_FACTS).toContain("/suporte");
@@ -488,6 +490,28 @@ describe("OpenAiReplyGenerator — prompts do modo respond", () => {
     expect(user).toContain("O lembrete vai automatico?");
     // FAQ com preço foi filtrada do conhecimento (buildOperationKnowledge).
     expect(user).not.toContain("R$ 59 por mes");
+  });
+
+  it("respond: system distingue off-topic (deflete sem dontKnow) de produto/conta (dontKnow)", async () => {
+    const { openai, create } = capturingOpenai();
+    const gen = new OpenAiReplyGenerator({ openai, model: "test-model" });
+    await gen.generate({
+      deterministicReply: HANDOFF_ENLATADA,
+      intent: "pergunta",
+      agentMode: "operacao",
+      history: [],
+      salesConfig,
+      generationMode: "respond",
+      userMessage: "que time voce torce?",
+      knowledge,
+    });
+    const { system } = promptsFromCall(create);
+    // Off-topic (futebol/data/clima) nao vira handoff: deflete no proprio modelo.
+    expect(system).toContain("FORA DO ASSUNTO");
+    expect(system).toContain("NAO use dontKnow");
+    // dontKnow fica reservado a pergunta de PRODUTO/CONTA/COMERCIAL sem resposta.
+    expect(system).toContain("PRODUTO");
+    expect(system).toContain("dontKnow=true");
   });
 
   it("respond sem userMessage => usa o prompt de rewrite", async () => {
