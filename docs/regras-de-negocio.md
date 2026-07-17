@@ -269,6 +269,13 @@ Regras:
 - Auditoria: uma entrada `oficina.soft_delete`.
 - Fonte: `softDeleteOficina` em `lib/admin/oficinas.ts`, `OficinaFormModal` (zona de perigo) em `components/admin/oficina-form-modal.tsx`, rota `DELETE /api/admin/oficinas/[id]`, migration `20260602000000_oficinas_soft_delete.sql`.
 
+**Exclusão em massa (checkbox na listagem):** a listagem (`/admin/oficinas`) tem seleção por checkbox — um por linha e um "selecionar todas" no cabeçalho, restrito à **página atual** (paginar/filtrar/ordenar zera a seleção). Com uma ou mais selecionadas aparece a barra de ações com **Excluir selecionadas**, que abre um modal de confirmação listando os nomes e exigindo digitar **`EXCLUIR`** (confirmação deliberada; não pede o nome exato de cada oficina, ao contrário do delete individual). Confirmando, chama `DELETE /api/admin/oficinas` com `{ ids, confirm: true }`.
+- Mesma semântica de soft delete do delete individual (grava `deleted_at`, oculta de todas as telas, preserva no banco). Cada oficina excluída gera uma entrada `oficina.soft_delete` (com `bulk: true` no payload).
+- Ids inexistentes ou já excluídos são **ignorados** (não contam em `deleted`); a resposta traz `{ requested, deleted }`.
+- Teto de **100 oficinas por chamada** (`BULK_SOFT_DELETE_MAX`); lista vazia, acima do teto ou sem `confirm: true` bloqueia (400).
+- Por enquanto a única ação em massa é exclusão.
+- Fonte: `bulkSoftDeleteOficinas` em `lib/admin/oficinas.ts`, `OficinasBulkDeleteModal` em `components/admin/oficinas-bulk-delete-modal.tsx`, seleção em `components/admin/oficinas-client.tsx`, rota `DELETE /api/admin/oficinas`.
+
 ### 2.7 Backfill do nome da oficina ("Oficina sem nome")
 Oficinas convertidas antes da captura obrigatória (ou cujo lead não respondeu o nome) ficam com `nome = "Oficina sem nome"`. Na **próxima interação** dessa oficina (modo `onboarding`/`operacao`), o webhook intercepta antes do agente de onboarding:
 - 1ª mensagem com o placeholder → pergunta "Antes de continuar, qual o nome da sua oficina? E pra deixar seu cadastro certinho." e marca `conversas.context.awaiting_workshop_name = true`. O cadastro de troca **não** é processado nesse turno.

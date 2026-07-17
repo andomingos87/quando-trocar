@@ -1124,3 +1124,81 @@ export async function softDeleteOficina(
     },
   );
 }
+
+/** Teto de itens por chamada de exclusão em massa (protege contra payload gigante). */
+export const BULK_SOFT_DELETE_MAX = 100;
+
+export type BulkSoftDeleteOficinasResult = {
+  ok: true;
+  /** Ids únicos recebidos (após dedupe). */
+  requested: number;
+  /** Quantas oficinas foram efetivamente marcadas como excluídas. */
+  deleted: number;
+};
+
+/**
+ * Soft delete em massa: marca `deleted_at` de várias oficinas de uma vez.
+ * Mesma semântica do {@link softDeleteOficina} — oculta de todas as telas do
+ * admin, preserva no banco e é irreversível por esta tela. Ids inexistentes ou
+ * já excluídos são ignorados (não contam em `deleted`). Cada oficina realmente
+ * excluída gera uma entrada de auditoria `oficina.soft_delete` (com `bulk: true`).
+ *
+ * A confirmação deliberada acontece na UI (digitar "EXCLUIR"); diferente do
+ * delete individual, não exige o nome exato de cada oficina.
+ */
+export async function bulkSoftDeleteOficinas(
+  supabase: SupabaseClient,
+  ids: string[],
+  ctx: { adminId: string; ip: string | null },
+): Promise<BulkSoftDeleteOficinasResult> {
+  const uniqueIds = Array.from(
+    new Set((ids ?? []).map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)),
+  );
+
+  if (uniqueIds.length === 0) {
+    const err = new Error("Selecione ao menos uma oficina.");
+    Object.assign(err, { status: 400 });
+    throw err;
+  }
+  if (uniqueIds.length > BULK_SOFT_DELETE_MAX) {
+    const err = new Error(`Selecione no máximo ${BULK_SOFT_DELETE_MAX} oficinas por vez.`);
+    Object.assign(err, { status: 400 });
+    throw err;
+  }
+
+  // Só apaga (e audita) o que ainda está vivo; guarda o `before` de cada uma.
+  const { data: rows, error: fetchError } = await supabase
+    .from("oficinas")
+    .select("*")
+    .in("id", uniqueIds)
+    .is("deleted_at", null);
+  if (fetchError) throw new Error(`bulk_soft_delete_fetch_failed: ${fetchError.message}`);
+
+  const alive = (rows ?? []) as Array<Record<string, unknown> & { id: string }>;
+  if (alive.length === 0) {
+    return { ok: true, requested: uniqueIds.length, deleted: 0 };
+  }
+
+  const aliveIds = alive.map((r) => r.id);
+  const now = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("oficinas")
+    .update({ deleted_at: now, updated_at: now })
+    .in("id", aliveIds)
+    .is("deleted_at", null);
+  if (updateError) throw new Error(`bulk_soft_delete_failed: ${updateError.message}`);
+
+  // Auditoria: uma entrada por oficina (espelha a ação do delete individual).
+  const auditRows = alive.map((before) => ({
+    admin_id: ctx.adminId,
+    acao: "oficina.soft_delete",
+    entidade: "oficinas",
+    entidade_id: before.id,
+    payload: { before, bulk: true },
+    ip: ctx.ip,
+  }));
+  const { error: auditError } = await supabase.from("admin_audit_log").insert(auditRows);
+  if (auditError) throw new Error(`admin_audit_insert_failed: ${auditError.message}`);
+
+  return { ok: true, requested: uniqueIds.length, deleted: aliveIds.length };
+}

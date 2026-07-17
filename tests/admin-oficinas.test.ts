@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  BULK_SOFT_DELETE_MAX,
+  bulkSoftDeleteOficinas,
   patchOficina,
   softDeleteOficina,
   validateOficinaCreate,
@@ -265,5 +267,104 @@ describe("softDeleteOficina", () => {
     const update = (supabase as unknown as { _update: { mock: { calls: unknown[][] } } })._update;
     expect(update.mock.calls.length).toBe(1);
     expect(update.mock.calls[0][0]).toHaveProperty("deleted_at");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// bulkSoftDeleteOficinas — exclusão em massa
+// ---------------------------------------------------------------------------
+
+function makeBulkSupabase(aliveRows: Array<{ id: string; nome: string }>) {
+  const update = vi.fn(() => updateChain);
+  const updateChain: Record<string, unknown> = {
+    eq: vi.fn(() => updateChain),
+    in: vi.fn(() => updateChain),
+    is: vi.fn(() => updateChain),
+    then: (resolve: (v: { error: null }) => unknown) => resolve({ error: null }),
+  };
+
+  const auditInsert = vi.fn(async () => ({ error: null }));
+
+  const selectChain: Record<string, unknown> = {
+    select: vi.fn(() => selectChain),
+    in: vi.fn(() => selectChain),
+    is: vi.fn(() => selectChain),
+    then: (resolve: (v: { data: unknown; error: null }) => unknown) =>
+      resolve({ data: aliveRows, error: null }),
+  };
+
+  return {
+    _update: update,
+    _auditInsert: auditInsert,
+    from: vi.fn((table: string) => {
+      if (table === "oficinas") return { ...selectChain, update };
+      if (table === "admin_audit_log") return { insert: auditInsert };
+      throw new Error(`unexpected table ${table}`);
+    }),
+  } as never;
+}
+
+const ID_A = "11111111-1111-1111-1111-111111111111";
+const ID_B = "22222222-2222-2222-2222-222222222222";
+
+describe("bulkSoftDeleteOficinas", () => {
+  it("rejeita lista vazia (400)", async () => {
+    const supabase = makeBulkSupabase([]);
+    await expect(
+      bulkSoftDeleteOficinas(supabase, [], { adminId: "a", ip: null }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejeita acima do teto (400)", async () => {
+    const supabase = makeBulkSupabase([]);
+    const tooMany = Array.from({ length: BULK_SOFT_DELETE_MAX + 1 }, (_, i) =>
+      `${i}`.padStart(4, "0"),
+    );
+    await expect(
+      bulkSoftDeleteOficinas(supabase, tooMany, { adminId: "a", ip: null }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("nao atualiza quando nenhuma oficina viva bate (deleted: 0)", async () => {
+    const supabase = makeBulkSupabase([]);
+    const result = await bulkSoftDeleteOficinas(supabase, [ID_A, ID_B], {
+      adminId: "a",
+      ip: null,
+    });
+    expect(result).toMatchObject({ ok: true, requested: 2, deleted: 0 });
+    expect((supabase as unknown as { _update: { mock: { calls: unknown[] } } })._update.mock.calls.length).toBe(0);
+  });
+
+  it("dedupe de ids e conta apenas as vivas", async () => {
+    const supabase = makeBulkSupabase([{ id: ID_A, nome: "Oficina A" }]);
+    const result = await bulkSoftDeleteOficinas(supabase, [ID_A, ID_A, ID_B], {
+      adminId: "a",
+      ip: null,
+    });
+    expect(result).toMatchObject({ ok: true, requested: 2, deleted: 1 });
+  });
+
+  it("grava deleted_at e audita uma entrada por oficina", async () => {
+    const supabase = makeBulkSupabase([
+      { id: ID_A, nome: "Oficina A" },
+      { id: ID_B, nome: "Oficina B" },
+    ]);
+    const result = await bulkSoftDeleteOficinas(supabase, [ID_A, ID_B], {
+      adminId: "a",
+      ip: null,
+    });
+    expect(result).toMatchObject({ ok: true, requested: 2, deleted: 2 });
+
+    const update = (supabase as unknown as { _update: { mock: { calls: unknown[][] } } })._update;
+    expect(update.mock.calls.length).toBe(1);
+    expect(update.mock.calls[0][0]).toHaveProperty("deleted_at");
+
+    const auditInsert = (supabase as unknown as { _auditInsert: { mock: { calls: unknown[][] } } })._auditInsert;
+    expect(auditInsert.mock.calls.length).toBe(1);
+    const auditRows = auditInsert.mock.calls[0][0] as Array<{ acao: string; entidade_id: string; payload: { bulk: boolean } }>;
+    expect(auditRows).toHaveLength(2);
+    expect(auditRows.every((r) => r.acao === "oficina.soft_delete")).toBe(true);
+    expect(auditRows.every((r) => r.payload.bulk === true)).toBe(true);
+    expect(auditRows.map((r) => r.entidade_id).sort()).toEqual([ID_A, ID_B]);
   });
 });

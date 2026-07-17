@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import type {
   OficinaListFilters,
@@ -13,6 +13,7 @@ import { formatBRL, formatDate, formatRelative } from "@/lib/admin/format";
 import { Button, StatusBadge } from "@/components/admin/ui";
 import { OficinaStatusBadge } from "@/components/admin/oficina-status-badge";
 import { OficinaFormModal } from "./oficina-form-modal";
+import { OficinasBulkDeleteModal } from "./oficinas-bulk-delete-modal";
 
 const SORT_LABEL: Record<OficinaSortKey, string> = {
   nome: "Nome",
@@ -39,6 +40,49 @@ export function OficinasClient({
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<OficinaListResult["rows"][number] | null>(null);
   const [search, setSearch] = useState(filters.busca ?? "");
+
+  // Seleção em massa — restrita à página atual (os ids visíveis).
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+
+  const rowIds = initial.rows.map((r) => r.id);
+  const rowIdsKey = rowIds.join(",");
+
+  // Ao paginar/filtrar/ordenar as linhas mudam — zera a seleção para não
+  // carregar ids que saíram da tela.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [rowIdsKey]);
+
+  const allSelected = rowIds.length > 0 && rowIds.every((id) => selected.has(id));
+  const someSelected = rowIds.some((id) => selected.has(id));
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = someSelected && !allSelected;
+    }
+  }, [someSelected, allSelected]);
+
+  const toggleRow = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) rowIds.forEach((id) => next.delete(id));
+      else rowIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const selectedRows = initial.rows.filter((r) => selected.has(r.id));
 
   const pushParams = (mutate: (p: URLSearchParams) => void) => {
     const params = new URLSearchParams(sp.toString());
@@ -179,6 +223,26 @@ export function OficinasClient({
         </div>
       </div>
 
+      {selected.size > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-paper-soft px-4 py-2.5">
+          <span className="text-sm font-medium text-ink">
+            {selected.size} {selected.size === 1 ? "oficina selecionada" : "oficinas selecionadas"}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="text-sm text-muted hover:text-ink"
+            >
+              Limpar selecao
+            </button>
+            <Button variant="danger" size="sm" onClick={() => setBulkDeleteOpen(true)}>
+              Excluir selecionadas
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div
         className={`overflow-x-auto rounded-2xl border border-line bg-white transition-opacity ${
           isPending ? "opacity-60" : ""
@@ -187,6 +251,17 @@ export function OficinasClient({
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line bg-paper-soft text-xs uppercase tracking-wide text-muted">
             <tr>
+              <th className="w-10 px-4 py-3">
+                <input
+                  ref={headerCheckboxRef}
+                  type="checkbox"
+                  aria-label="Selecionar todas as oficinas da pagina"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={rowIds.length === 0}
+                  className="h-4 w-4 accent-brand"
+                />
+              </th>
               <SortHeader k="nome" />
               <th className="px-4 py-3 font-medium">WhatsApp</th>
               <SortHeader k="cidade" />
@@ -202,7 +277,7 @@ export function OficinasClient({
           <tbody className="divide-y divide-line-soft">
             {initial.rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-16 text-center">
+                <td colSpan={11} className="px-4 py-16 text-center">
                   <p className="text-sm font-medium text-ink">Nenhuma oficina encontrada</p>
                   <p className="mt-1 text-sm text-muted">
                     Ajuste os filtros ou cadastre uma nova oficina.
@@ -214,7 +289,19 @@ export function OficinasClient({
               </tr>
             ) : null}
             {initial.rows.map((row) => (
-              <tr key={row.id} className="hover:bg-paper-soft">
+              <tr
+                key={row.id}
+                className={`hover:bg-paper-soft ${selected.has(row.id) ? "bg-brand-soft/40" : ""}`}
+              >
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Selecionar ${row.nome}`}
+                    checked={selected.has(row.id)}
+                    onChange={() => toggleRow(row.id)}
+                    className="h-4 w-4 accent-brand"
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <Link
                     href={`/admin/oficinas/${row.id}`}
@@ -319,6 +406,18 @@ export function OficinasClient({
           onClose={() => setEditRow(null)}
           onSaved={() => {
             setEditRow(null);
+            startTransition(() => router.refresh());
+          }}
+        />
+      ) : null}
+
+      {bulkDeleteOpen && selectedRows.length > 0 ? (
+        <OficinasBulkDeleteModal
+          oficinas={selectedRows.map((r) => ({ id: r.id, nome: r.nome }))}
+          onClose={() => setBulkDeleteOpen(false)}
+          onDeleted={() => {
+            setBulkDeleteOpen(false);
+            setSelected(new Set());
             startTransition(() => router.refresh());
           }}
         />
