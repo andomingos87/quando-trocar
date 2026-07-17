@@ -30,6 +30,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0020](./0020-camada-geracao-conversacional.md) | Camada de geração conversacional com validador determinístico | accepted | 2026-07-11 |
 | [0021](./0021-gateway-pagamento-multiplo-asaas.md) | Gateway de pagamento pluggável (ASAAS + Mercado Pago), gerenciado no painel admin | accepted | 2026-07-12 |
 | [0022](./0022-modo-respond-grounded.md) | Modo "respond" grounded na camada de geração conversacional | accepted | 2026-07-16 |
+| [0023](./0023-perguntas-sem-resposta.md) | Tabela `perguntas_sem_resposta` como volante de aprendizado | accepted | 2026-07-16 |
 
 ### Em aberto (drafts)
 
