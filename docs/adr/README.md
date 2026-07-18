@@ -32,6 +32,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0022](./0022-modo-respond-grounded.md) | Modo "respond" grounded na camada de geração conversacional | accepted | 2026-07-16 |
 | [0023](./0023-perguntas-sem-resposta.md) | Tabela `perguntas_sem_resposta` como volante de aprendizado | accepted | 2026-07-16 |
 | [0024](./0024-respond-em-vendas.md) | Fallback conversacional em vendas (respond no `fora_escopo`) | accepted | 2026-07-16 |
+| [0025](./0025-portal-do-representante.md) | Portal do representante (login OTP, read-only escopado, sem PII) | accepted | 2026-07-18 |
 
 ### Em aberto (drafts)
 

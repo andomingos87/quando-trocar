@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { withAdminAudit } from "@/lib/admin/audit";
-import { hasAttemptsLeft, hashOtpCode, isOtpExpired } from "@/lib/admin/otp";
 import { normalizePhoneToE164 } from "@/lib/admin/phone";
-import { getRequestIp } from "@/lib/admin/request-ip";
-import { setAdminSessionCookie, signAdminSession } from "@/lib/admin/session";
+import { hasAttemptsLeft, hashRepOtpCode, isOtpExpired } from "@/lib/representante/otp";
+import { getActiveRepresentanteByWhatsapp } from "@/lib/representante/representante";
+import {
+  setRepresentanteSessionCookie,
+  signRepresentanteSession,
+} from "@/lib/representante/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -13,8 +15,8 @@ export const dynamic = "force-dynamic";
 const INVALID_MESSAGE = "Codigo invalido ou expirado.";
 
 export async function POST(request: Request) {
-  if (!process.env.ADMIN_SESSION_SECRET) {
-    console.error("admin/verify-otp missing ADMIN_SESSION_SECRET");
+  if (!process.env.REP_SESSION_SECRET) {
+    console.error("representante/verify-otp missing REP_SESSION_SECRET");
     return NextResponse.json(
       { ok: false, message: "Erro interno. Tente novamente." },
       { status: 500 },
@@ -54,17 +56,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const ip = getRequestIp(request);
   const supabase = createSupabaseAdminClient();
 
-  const { data: admin } = await supabase
-    .from("admin_users")
-    .select("id, whatsapp, ativo")
-    .eq("whatsapp", normalized.e164)
-    .eq("ativo", true)
-    .maybeSingle();
-
-  if (!admin) {
+  const representante = await getActiveRepresentanteByWhatsapp(supabase, normalized.e164);
+  if (!representante) {
     return NextResponse.json(
       { ok: false, message: INVALID_MESSAGE },
       { status: 400 },
@@ -74,8 +69,8 @@ export async function POST(request: Request) {
   const { data: otp } = await supabase
     .from("auth_otps")
     .select("id, code_hash, attempts, used_at, expires_at")
-    .eq("target", "admin")
-    .eq("target_id", admin.id)
+    .eq("target", "representante")
+    .eq("target_id", representante.id)
     .is("used_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -102,7 +97,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const expectedHash = hashOtpCode(code);
+  const expectedHash = hashRepOtpCode(code);
   if (expectedHash !== otp.code_hash) {
     await supabase
       .from("auth_otps")
@@ -119,8 +114,7 @@ export async function POST(request: Request) {
   // Consumo ATOMICO: so avanca o request que efetivamente vira used_at de null
   // para agora. `.select().maybeSingle()` devolve a linha so quando o UPDATE
   // condicional acertou uma linha — se outro request simultaneo ja consumiu o
-  // OTP, `consumed` vem null e barramos a segunda emissao de sessao de admin.
-  // Feito ANTES do audit para nao registrar login de quem perdeu a corrida.
+  // OTP, `consumed` vem null e barramos a segunda emissao de sessao.
   const { data: consumed, error: otpError } = await supabase
     .from("auth_otps")
     .update({ used_at: nowIso, attempts: otp.attempts + 1 })
@@ -129,7 +123,7 @@ export async function POST(request: Request) {
     .select("id")
     .maybeSingle();
   if (otpError) {
-    console.error("admin/verify-otp otp update failed", otpError);
+    console.error("representante/verify-otp otp update failed", otpError);
     return NextResponse.json(
       { ok: false, message: "Erro interno. Tente novamente." },
       { status: 500 },
@@ -142,32 +136,19 @@ export async function POST(request: Request) {
     );
   }
 
-  await withAdminAudit(
-    supabase,
-    {
-      adminId: admin.id,
-      acao: "admin.login",
-      entidade: "admin_users",
-      entidadeId: admin.id,
-      payload: { ip },
-      ip,
-    },
-    async () => {
-      const { error: adminUpdateError } = await supabase
-        .from("admin_users")
-        .update({ ultimo_acesso_em: nowIso })
-        .eq("id", admin.id);
-      if (adminUpdateError) {
-        throw new Error(`admin_update_failed: ${adminUpdateError.message}`);
-      }
-    },
-  );
+  // Trilha de login do rep (analogo a admin_users.ultimo_acesso_em). Auditoria
+  // dedicada do rep fica para R4.5; nao poluimos admin_audit_log.
+  await supabase
+    .from("representantes")
+    .update({ ultimo_acesso_em: nowIso })
+    .eq("id", representante.id);
 
-  const token = await signAdminSession({
-    adminId: admin.id,
-    whatsapp: admin.whatsapp,
+  const token = await signRepresentanteSession({
+    representanteId: representante.id,
+    whatsapp: representante.whatsapp,
+    codigo: representante.codigo,
   });
-  await setAdminSessionCookie(token);
+  await setRepresentanteSessionCookie(token);
 
   return NextResponse.json({ ok: true });
 }

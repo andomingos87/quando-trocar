@@ -19,6 +19,22 @@ Não registrar:
 
 ---
 
+## 2026-07-18 — Portal do representante (Fase R4)
+
+### Adicionado
+
+- **[ADR-0025](./adr/0025-portal-do-representante.md)** (estende a [ADR-0019](./adr/0019-representantes-e-comissao.md)) — **portal próprio do representante** (`app/representante`), read-only, com login OTP-no-WhatsApp contra a tabela `representantes` (sem `rep_users`). Sessão isolada do admin (cookie `qt_rep_session`, `REP_SESSION_SECRET`, claim `isRepresentante`, TTL 14 d). Escopo por `representante_id` **imposto no código** (não há RLS por tenant — ADR-0003 estado real); guard re-checa `ativo`/`deleted_at` a cada request. **Sem PII de cliente final** (LGPD): carteira mostra a oficina + agregados. Playbook e novidades são conteúdo estático no código. Responde à decisão em aberto do [PRD §24](./product/PRD-whatsapp-bot.md).
+- **Novo módulo `portal-representante`** (`.context/modules/portal-representante/AGENTS.md`) — fronteira de segurança distinta do `painel-admin`.
+- **Migration `20260718120000_portal_representante.sql`** — `auth_otps.target` passa a aceitar `'representante'`; `representantes.ultimo_acesso_em timestamptz`.
+- **Nova subseção `regras-de-negocio.md §18.7`**; runbook `docs/runbooks/publicar-novidade-representante.md`.
+- Novo secret `REP_SESSION_SECRET` (≥32 chars) em `.env.local.example` e runbooks de env. Reaproveita o template Meta de OTP existente (`WHATSAPP_TEMPLATE_OTP_NAME`) — sem template novo na Meta.
+
+### Encerrado
+
+- Fase R4 de `docs/backlog-whatsapp-bot/fase-representantes-comissao.md` deixa de ser "futuro" — executada em `fase-representante-portal.md`.
+
+---
+
 ## 2026-07-16 — Volante de aprendizado e respond em vendas (CV2 completo)
 
 ### Adicionado

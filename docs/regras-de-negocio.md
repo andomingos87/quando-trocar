@@ -71,6 +71,7 @@ O usuário decide. Não atualize por conta própria nem ignore por conta própri
 - [16. Inteligência de mercado](#16-inteligência-de-mercado)
 - [17. Áudio e transcrição](#17-áudio-e-transcrição)
 - [18. Representantes e comissão](#18-representantes-e-comissão)
+  - [18.7 Portal do representante](#187-portal-do-representante)
 
 ---
 
@@ -702,6 +703,7 @@ Quando `oficinas.status != 'ativa'`, o scheduler **não enfileira** lembretes de
 - Sessão admin via cookie separado da sessão de oficina.
 - Auth: OTP WhatsApp resolvido contra `admin_users` (não `oficinas`).
 - WhatsApp não cadastrado → não recebe OTP, mensagem genérica.
+- OTP de **uso único**: o consumo marca `used_at` via UPDATE condicional (`used_at is null`) e só emite sessão para o request que efetivamente virou a linha. Duas requisições simultâneas com o mesmo código correto emitem **uma única** sessão; a perdedora recebe a mensagem genérica. Mesma garantia do fluxo do representante.
 
 - Fonte: [ADR-0010](./adr/0010-painel-web-no-mvp.md), [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
 
@@ -1018,6 +1020,17 @@ prevista · paga · cancelada
 - `prevista → cancelada`: estorno/erro, com motivo. Comissão `paga` não pode ser cancelada nem voltar a `prevista`.
 - Extrato em `/admin/comissoes`; card de comissão prevista no mês no dashboard `/admin`.
 - Sem split automático de pagamento no MVP (ADR-0019).
+
+### 18.7 Portal do representante
+Fonte canônica: [ADR-0025](./adr/0025-portal-do-representante.md) (estende a ADR-0019), plano [fase-representante-portal](./backlog-whatsapp-bot/fase-representante-portal.md). Módulo `portal-representante`.
+
+- **Área própria e read-only** em `app/representante`, separada do painel admin. O representante faz login e **apenas consulta**: carteira de oficinas, leads atribuídos, extrato de comissões, playbook de vendas e novidades. Nenhuma ação que muda estado (marcar comissão paga/cancelada continua exclusiva do admin, §18.6).
+- **Login por OTP-no-WhatsApp contra `representantes`** (não há tabela `rep_users`): busca por `whatsapp` + `ativo = true` + `deleted_at is null`. Reaproveita o template Meta de OTP de oficina/admin (`WHATSAPP_TEMPLATE_OTP_NAME`). `auth_otps.target` passa a aceitar `'representante'`; `representantes.ultimo_acesso_em` registra o último login. Herda o hardening do admin: rate-limit, hash HMAC-SHA256, expiração 5 min, máx. 5 tentativas, uso único (consumo atômico), resposta genérica (sem enumeração).
+- **Sessão isolada do admin**: cookie `qt_rep_session`, secret `REP_SESSION_SECRET`, claim `isRepresentante`, TTL 14 dias. Cookie de admin não acessa `/representante` e vice-versa.
+- **Escopo imposto no código** (não há RLS por tenant — ADR-0003 estado real): toda query de `lib/representante/*` recebe `representante_id` **da sessão**, nunca do request. Rep A nunca vê dados de rep B. O guard re-verifica `ativo`/`deleted_at` **a cada request** (rep desativado mid-sessão perde acesso). Comissões reaproveitam `listComissoes` do admin via wrapper que injeta o `representante_id` da sessão.
+- **LGPD — sem PII de cliente final**: as telas de carteira mostram a oficina (contato comercial legítimo do rep: responsável, WhatsApp da oficina, cidade, plano) e **números agregados** (qtd. de clientes finais cadastrados, lembretes enviados/respondidos), nunca nome/WhatsApp de cliente final.
+- **Playbook e novidades são conteúdo estático** no código (`lib/representante/content/*`), curados no repositório; publicar = editar constante + deploy (runbook `docs/runbooks/publicar-novidade-representante.md`). Playbook não traz preço/condição comercial (ADR-0012). A visão geral também mostra o código e o link `wa.me` próprio do rep com botão copiar.
+- Fonte: `lib/representante/{session,otp,api-guard,carteira,leads,comissoes,dashboard}.ts`, `app/representante/**`, migration `20260718120000_portal_representante.sql`.
 
 ---
 

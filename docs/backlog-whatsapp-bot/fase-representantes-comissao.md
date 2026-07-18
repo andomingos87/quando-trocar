@@ -68,7 +68,7 @@ Inclui:
 
 Não inclui (futuro, mas o schema já suporta):
 
-- Dashboard/login próprio do representante (padrão OTP já existe — seria um `rep_users` análogo a `admin_users`; responde a pergunta em aberto do PRD).
+- ~~Dashboard/login próprio do representante~~ → **em execução** na [fase-representante-portal](./fase-representante-portal.md) (Fase R4, [ADR-0025](../adr/0025-portal-do-representante.md)). Optou-se por login OTP contra a própria tabela `representantes` (não `rep_users`).
 - Split automático de pagamento (MP Marketplace).
 - Notificação WhatsApp ao rep quando ganhar comissão.
 - Comissão sobre receita de retorno da oficina (só sobre mensalidade).
@@ -118,9 +118,9 @@ Padrão existente: server component `force-dynamic` → `*-client.tsx` em `compo
 - [x] Card no dashboard `/admin`: comissão prevista no mês corrente, ao lado do MRR.
 - [x] Rotas API: `GET/POST /api/admin/representantes`, `PATCH/DELETE /api/admin/representantes/[id]`, `PATCH /api/admin/configuracoes-comissao`, `POST /api/admin/comissoes/[id]/pagar|cancelar`, `POST /api/admin/comissoes/pagar-lote`.
 
-### Fase R4 — Futuro (fora deste plano)
+### Fase R4 — Portal do representante (em execução)
 
-Dashboard do representante, split automático MP, notificação de comissão via WhatsApp, comissão multinível.
+**Em execução** na [fase-representante-portal.md](./fase-representante-portal.md) ([ADR-0025](../adr/0025-portal-do-representante.md)): login OTP contra `representantes`, área read-only escopada por `representante_id`, sem PII de cliente final, playbook/novidades estáticos. Deixa de ser "futuro". Split automático MP, notificação de comissão via WhatsApp e comissão multinível seguem fora de escopo (R4.5+).
 
 **Estimativa total (R0–R3): ~5–7 dias.**
 

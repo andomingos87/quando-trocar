@@ -24,6 +24,7 @@ Important project docs:
 - Runbooks (env, deploy, Meta setup, Supabase migrations): `docs/runbooks/`.
 - Decision and context history: `docs/CONTEXT_CHANGELOG.md`.
 - Business rules index: `docs/regras-de-negocio.md` (must stay in sync with code — see Development Workflow).
+- Linear workflow (canonical team, projects, labels and status automation): `docs/linear-workflow.md`. For Linear work, use the `aurea-linear` plugin and treat this file as the source of truth for this repo.
 
 ## Context Layer
 

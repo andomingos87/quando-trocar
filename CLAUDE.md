@@ -18,6 +18,7 @@ Read `AGENTS.md` first. It is the canonical, prescriptive guide for any agent (C
 - **Active execution / phase tracking**: `docs/backlog-whatsapp-bot/`
 - **Decision history**: `docs/CONTEXT_CHANGELOG.md`
 - **Business rules index**: `docs/regras-de-negocio.md`
+- **Linear workflow (team, projects, labels, status automation)**: `docs/linear-workflow.md` — canonical source for the `aurea-linear` plugin
 - **Context layer (modules, conventions)**: `.context/` — see `.context/modules/<module>/AGENTS.md` and `.context/conventions.md`
 
 ## Language convention

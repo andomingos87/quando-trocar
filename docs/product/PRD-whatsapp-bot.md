@@ -1121,7 +1121,7 @@ Mitigação:
 - O pagamento será feito dentro do fluxo ou manualmente no MVP?
 - O agente pode confirmar agenda ou apenas pré-agendar?
 - Haverá painel para a oficina na primeira versão ou tudo começa pelo WhatsApp?
-- O representante comercial terá visão própria dos leads?
+- ~~O representante comercial terá visão própria dos leads?~~ **Decidido (2026-07-18, [ADR-0025](../adr/0025-portal-do-representante.md)): sim** — portal próprio do representante (`app/representante`), login OTP contra `representantes`, read-only escopado por `representante_id`, sem PII de cliente final. Ver `docs/regras-de-negocio.md §18.7`.
 - Qual será a política de preço/plano usada pelo agente vendedor?
 
 ---
