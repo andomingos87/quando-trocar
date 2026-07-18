@@ -1,4 +1,7 @@
-import type { WhatsappSender } from "./types";
+import type { SalesButton, WhatsappSender } from "./types";
+
+// Máximo de reply buttons por mensagem interativa (limite da Cloud API).
+const MAX_REPLY_BUTTONS = 3;
 
 export type WhatsappMediaMetadata = {
   url: string;
@@ -154,6 +157,75 @@ export class WhatsAppCloudApiClient implements WhatsappSender, WhatsappMediaDown
 
     if (!response.ok) {
       const error = new Error(body.error?.message ?? "WhatsApp Cloud API template send failed");
+      Object.assign(error, {
+        code: body.error?.code ? String(body.error.code) : null,
+        retryable: response.status >= 500 || response.status === 429,
+        providerMessage: body.error?.message ?? null,
+        response: body,
+      });
+      throw error;
+    }
+
+    const whatsappMessageId = body.messages?.[0]?.id;
+    if (!whatsappMessageId) {
+      throw new Error("WhatsApp Cloud API response did not include message id");
+    }
+
+    return { whatsappMessageId, response: body };
+  }
+
+  async sendInteractiveButtons(input: {
+    to: string;
+    body: string;
+    buttons: ReadonlyArray<SalesButton>;
+  }) {
+    if (!this.input.accessToken || !this.input.phoneNumberId) {
+      throw new Error("Missing WhatsApp Cloud API environment variables");
+    }
+
+    // A Cloud API rejeita a mensagem com 0 ou > 3 botões. Cortamos em 3 por
+    // segurança (a fonte já mantém 3) e falhamos cedo se vier vazio.
+    const buttons = input.buttons.slice(0, MAX_REPLY_BUTTONS);
+    if (buttons.length === 0) {
+      throw new Error("sendInteractiveButtons requires at least one button");
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v20.0/${this.input.phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.input.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: input.to.replace(/^\+/, ""),
+          type: "interactive",
+          interactive: {
+            type: "button",
+            body: { text: input.body },
+            action: {
+              buttons: buttons.map((button) => ({
+                type: "reply",
+                reply: { id: button.id, title: button.title },
+              })),
+            },
+          },
+        }),
+      },
+    );
+
+    const body = (await response.json()) as {
+      messages?: Array<{ id?: string }>;
+      error?: { message?: string; code?: string | number };
+    };
+
+    if (!response.ok) {
+      const error = new Error(
+        body.error?.message ?? "WhatsApp Cloud API interactive send failed",
+      );
       Object.assign(error, {
         code: body.error?.code ? String(body.error.code) : null,
         retryable: response.status >= 500 || response.status === 429,

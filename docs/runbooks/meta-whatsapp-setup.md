@@ -544,6 +544,35 @@ Regras de uso (implementadas na CV4, ver `regras-de-negocio.md §1`):
 
 Depois de aprovados, os nomes exatos entram na configuração/uso do job `app/api/jobs/followup-leads`.
 
+## 12. Template de convite do representante (ADR-0025)
+
+Usado pelo botão **"Convidar pelo WhatsApp"** em `/admin/representantes`: o admin cadastra o representante e, com um clique, dispara este template com o link do portal. Como o representante quase nunca está na janela de 24h da conta, o envio precisa ser por **template aprovado** (texto livre seria rejeitado).
+
+Categoria: **Marketing** (boas-vindas/convite). Selecione a aba **Marketing** no topo do wizard *antes* de salvar — só reescrever o texto não muda a categoria. **Enquadre como aviso/boas-vindas, não como login**: palavras de acesso/verificação (`código`, `acesse`, `entrar`, `login`, `verificar`, `seu número de WhatsApp`, `portal`) fazem o classificador da Meta tratar como template de **Autenticação/OTP** e travar. O código real de login vem pelo template de OTP do portal, não por este. Categoria não afeta o código de envio — só o custo/limite por mensagem, irrelevante neste fluxo manual. Idioma: `pt_BR`. Variáveis **NOMEADAS** (dropdown "Tipo de variável" = **Nome**).
+
+**`convite_representante`**:
+
+```text
+Ola {{nome}}! Que bom ter voce no time de representantes do Quando Trocar.
+
+Preparamos uma area so sua: carteira de oficinas, os leads que chegam pelo seu link, extrato de comissoes e o playbook de vendas, tudo num lugar.
+
+Confira aqui: {{link}}
+```
+
+- `{{nome}}` = primeiro nome do representante. Amostra sugerida: `Carlos`.
+- `{{link}}` = link do portal (`https://<NEXT_PUBLIC_SITE_URL>/representante`). Amostra: `https://quandotrocar.com.br/representante`.
+- Cabeçalho e rodapé: deixe **vazios**. Sem botões (o link vai no corpo).
+- Em "Amostras de variáveis", preencha os exemplos acima (dados genéricos, sem PII de cliente).
+
+Regras de uso (implementadas em `app/api/admin/representantes/[id]/convidar`):
+
+- Só representante **ativo** (`ativo = true`) pode ser convidado — inativo não loga no portal, a rota recusa (409) e o botão fica desabilitado.
+- Ação iniciada por admin humano (ADR-0001), auditada em `admin_audit_log` como `representante.convite_enviado`.
+- Sem template configurado (`WHATSAPP_TEMPLATE_CONVITE_REP_NAME` vazio) a rota responde 503 sem enviar.
+
+Depois de aprovado, coloque o nome exato em `WHATSAPP_TEMPLATE_CONVITE_REP_NAME`.
+
 ## Links oficiais
 
 - Meta Webhooks: https://developers.facebook.com/docs/graph-api/webhooks

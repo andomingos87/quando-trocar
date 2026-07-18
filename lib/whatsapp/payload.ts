@@ -1,4 +1,5 @@
 import { normalizeWhatsappPhone } from "./sales-agent";
+import { resolveSalesButtonReplyId } from "./sales-buttons";
 import type { InboundWhatsappMessage, WhatsappStatusEvent } from "./types";
 
 type MetaMediaAttachment = {
@@ -224,16 +225,23 @@ export function extractInboundMessages(payload: unknown): InboundWhatsappMessage
           }
         }
 
-        // Resposta interativa (button_reply / list_reply). O título escolhido
-        // pelo usuário é o conteúdo — também vira texto.
+        // Resposta interativa (button_reply / list_reply). Quando o `id` do
+        // button_reply é um botão de vendas conhecido (fase CV3), mapeamos o id
+        // DETERMINÍSTICO para a mensagem canônica — o clique vira o intent certo
+        // sem depender do texto do título (evita erro de classificação). Para
+        // ids desconhecidos ou list_reply, o título escolhido vira o conteúdo.
         if (message.type === "interactive") {
-          const interactiveTitle =
+          const canonicalFromButtonId = resolveSalesButtonReplyId(
+            message.interactive?.button_reply?.id,
+          );
+          const interactiveBody =
+            canonicalFromButtonId ||
             message.interactive?.button_reply?.title?.trim() ||
             message.interactive?.list_reply?.title?.trim();
-          if (interactiveTitle) {
+          if (interactiveBody) {
             messages.push({
               ...common,
-              body: interactiveTitle,
+              body: interactiveBody,
               mediaType: "text",
             });
             continue;

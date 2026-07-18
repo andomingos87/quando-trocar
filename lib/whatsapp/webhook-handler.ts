@@ -31,6 +31,11 @@ import {
   buildOperationKnowledge,
   buildSalesKnowledge,
 } from "./product-knowledge";
+import {
+  HANDOFF_SUMMARY_PROMPT_VERSION,
+  OpenAiHandoffSummarizer,
+  type HandoffSummarizer,
+} from "./handoff-summary";
 import { siteConfig, whatsappLink } from "../config";
 import {
   extractInboundMessages,
@@ -58,6 +63,7 @@ import type {
   ReplyGenerationMode,
   ReplyGenerator,
   SalesAgent,
+  SalesButton,
   SupportAgent,
   TranscriptionStatus,
   WhatsappRepository,
@@ -173,6 +179,7 @@ type HandlerDeps = {
   supportAgent?: SupportAgent;
   cobrancaAgent?: CobrancaAgent;
   replyGenerator?: ReplyGenerator;
+  handoffSummarizer?: HandoffSummarizer;
   mediaDownloader?: MediaDownloader;
   audioTranscriber?: AudioTranscriber;
   imageDescriber?: ImageDescriber;
@@ -204,6 +211,53 @@ function errorDetails(error: unknown) {
 
 function errorStack(error: unknown) {
   return error instanceof Error ? error.stack ?? null : null;
+}
+
+// Resumo de handoff de vendas (fase CV3). Gera um resumo curto da conversa e o
+// envia ao WhatsApp comercial para o humano assumir com contexto. É BEST-EFFORT:
+// qualquer falha (geração, envio, timeout) é engolida — nunca bloqueia o handoff
+// nem a resposta ao lead (o link wa.me já saiu). Só roda quando a camada de
+// geração está ativa (mode != off), para honrar "off = comportamento anterior".
+async function sendHandoffSummary(input: {
+  summarizer: HandoffSummarizer | undefined;
+  whatsapp: WhatsappSender;
+  repository: WhatsappRepository;
+  handoffComercial: string;
+  history: RecentMessage[];
+  handoffReason: string;
+  leadName: string | null;
+  conversationId: string;
+  leadId: string | null;
+  oficinaId?: string | null;
+}): Promise<void> {
+  if (!input.summarizer) return;
+  try {
+    const summary = await input.summarizer.summarizeHandoff({
+      history: input.history,
+      handoffReason: input.handoffReason,
+      leadName: input.leadName,
+    });
+    if (!summary) return;
+
+    const sent = await input.whatsapp.sendTextMessage({
+      to: input.handoffComercial,
+      body: `Lead pra assumir (${input.handoffReason}):\n\n${summary}`,
+    });
+
+    await input.repository.saveAgentToolCall({
+      conversationId: input.conversationId,
+      leadId: input.leadId,
+      oficinaId: input.oficinaId,
+      toolName: "handoff_summary",
+      input: {
+        handoffReason: input.handoffReason,
+        promptVersion: HANDOFF_SUMMARY_PROMPT_VERSION,
+      },
+      output: { summary, whatsappMessageId: sent.whatsappMessageId },
+    });
+  } catch {
+    // best-effort: o resumo é conveniência para o humano, nunca um gate.
+  }
 }
 
 function onboardingIntroMessage(nomeOficina?: string | null) {
@@ -691,6 +745,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   const replyGenerator: ReplyGenerator | undefined =
     deps.replyGenerator ??
     (process.env.OPENAI_API_KEY ? new OpenAiReplyGenerator() : undefined);
+  const handoffSummarizer: HandoffSummarizer | undefined =
+    deps.handoffSummarizer ??
+    (process.env.OPENAI_API_KEY ? new OpenAiHandoffSummarizer() : undefined);
   const mediaDownloader: MediaDownloader | null =
     deps.mediaDownloader ??
     (typeof (deps.whatsapp as Partial<MediaDownloader>).getMediaMetadata === "function" &&
@@ -1108,6 +1165,12 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           // respond responde a pergunta grounded. Só a categoria `pergunta`
           // da operação seta respond hoje.
           let generationMode: ReplyGenerationMode = "rewrite";
+          // Fallback nível 2 de vendas (CV3): quando setado, o envio usa botões
+          // interativos em vez de texto. Determinístico — a camada de geração é
+          // pulada (allowGeneration = false abaixo).
+          let interactiveButtons:
+            | { bodyText: string; buttons: ReadonlyArray<SalesButton> }
+            | null = null;
           const normalizedBody = inbound.body.trim().toLowerCase();
 
           if (
@@ -1151,6 +1214,40 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               await deps.repository.markConversationHandoff({
                 conversationId: resolved.conversationId,
                 reason: reply.handoffReason ?? "handoff_vendas",
+              });
+            }
+
+            // CV3: resumo de handoff para o humano assumir com contexto. Só com
+            // a camada de geração ativa (off = comportamento anterior) e número
+            // comercial configurado. Best-effort — não bloqueia o handoff.
+            if (
+              reply.handoffRequired &&
+              salesConfig?.geracaoLlmModo &&
+              salesConfig.geracaoLlmModo !== "off" &&
+              salesConfig.whatsappHandoffComercial
+            ) {
+              let handoffHistory: RecentMessage[] = [];
+              if (deps.repository.listRecentMessages) {
+                try {
+                  handoffHistory = await deps.repository.listRecentMessages({
+                    conversationId: resolved.conversationId,
+                    limit: 12,
+                  });
+                } catch {
+                  handoffHistory = [];
+                }
+              }
+              await sendHandoffSummary({
+                summarizer: handoffSummarizer,
+                whatsapp: deps.whatsapp,
+                repository: deps.repository,
+                handoffComercial: salesConfig.whatsappHandoffComercial,
+                history: handoffHistory,
+                handoffReason: reply.handoffReason ?? "handoff_vendas",
+                leadName: inbound.contactName,
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                oficinaId: resolved.oficinaId,
               });
             }
 
@@ -1213,6 +1310,15 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               // ADR-0024: o caso geral do fora_escopo pede respond (a IA
               // responde grounded; a enlatada vira fallback).
               generationMode = reply.conversationalGenerationMode ?? "rewrite";
+
+              // CV3: fallback nível 2 -> botões interativos. Determinístico:
+              // desliga a geração (o clique já resolve o intent) e sinaliza o
+              // envio de botões abaixo. `replyBody` (texto do menu) fica como
+              // degradação quando o transporte não suporta botões.
+              if (reply.interactiveButtons) {
+                interactiveButtons = reply.interactiveButtons;
+                allowGeneration = false;
+              }
             }
 
             for (const toolCall of reply.toolCalls) {
@@ -1676,19 +1782,34 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
 
           replyBody = generation.finalBody;
 
+          // CV3: envio como botões interativos quando o agente pediu (fallback
+          // nível 2) e o transporte suporta; senão degrada para texto. O corpo
+          // registrado (`sentBody`) é o que o lead de fato vê.
+          const sendAsButtons =
+            interactiveButtons !== null &&
+            typeof deps.whatsapp.sendInteractiveButtons === "function";
+          const sentBody = sendAsButtons ? interactiveButtons!.bodyText : replyBody;
+
           const outbox = await deps.repository.createOutboundMessage({
             conversationId: resolved.conversationId,
             leadId: resolved.leadId,
             oficinaId: resolved.oficinaId,
             to: inbound.normalizedFrom,
-            body: replyBody,
+            body: sentBody,
           });
 
           try {
-            const sent = await deps.whatsapp.sendTextMessage({
-              to: inbound.normalizedFrom,
-              body: replyBody,
-            });
+            const sent =
+              sendAsButtons && deps.whatsapp.sendInteractiveButtons
+                ? await deps.whatsapp.sendInteractiveButtons({
+                    to: inbound.normalizedFrom,
+                    body: interactiveButtons!.bodyText,
+                    buttons: interactiveButtons!.buttons,
+                  })
+                : await deps.whatsapp.sendTextMessage({
+                    to: inbound.normalizedFrom,
+                    body: replyBody,
+                  });
 
             await deps.repository.markOutboundSent({
               outboundMessageId: outbox.id,
@@ -1700,7 +1821,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               leadId: resolved.leadId,
               oficinaId: resolved.oficinaId,
               whatsappMessageId: sent.whatsappMessageId,
-              body: replyBody,
+              body: sentBody,
               rawMessage: sent.response ?? null,
               sentAt: new Date().toISOString(),
             });

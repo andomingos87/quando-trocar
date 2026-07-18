@@ -102,6 +102,7 @@ Second gate inside `WhatsappSalesAgent.generateReply`: if OpenAI returns `sem_in
 - `memory.consecutive_fallback` counts `fora_escopo` + `social_test` in sequence. Any other intent resets to 0.
 - The 5-item pool `FALLBACK_VARIATIONS` rotates based on that counter (avoids repeating the same copy twice in a row).
 - When the counter reaches **7**, the next fallback triggers an **automatic handoff** to the commercial WhatsApp with `handoffReason = "fallback_loop"`.
+- **Level 2 slot → interactive buttons (CV3).** At the menu slot of the rotation (`FALLBACK_VARIATIONS[1]`) the reply carries `interactiveButtons` instead of text: the webhook sends Cloud API reply buttons (max 3: "Como funciona", "Quanto custa", "Quero testar"). The `button_reply.id` maps deterministically to a canonical message (`lib/whatsapp/sales-buttons.ts`) → the right intent, **no LLM**. Deterministic sub-path: it does **not** mark `respond` and does not change the counter. Degrades to the text menu when the transport lacks button support.
 
 ## Fora_escopo general case is a free lane (CV2, ADR-0024)
 
@@ -140,6 +141,8 @@ These set `handoffRequired = true` (marks `conversas.handoff_required`), reply c
 - `pergunta_preco` with `sales.price_mentions >= 1` → reason `preco_insistente`.
 - `detectScaleHandoff` (mensagem cita rede/franquia/matriz/filial) → reason `rede_ou_franquia`.
 - `informa_volume_ticket` with `volume > 300/mês` → reason `volume_alto`.
+
+On any of these (CV3), when `geracao_llm_modo != 'off'`, the backend also generates a 3-line **handoff summary** (internal, LLM) and sends it to the commercial WhatsApp — best-effort, never blocks the handoff. See `lib/whatsapp/handoff-summary.ts` and `regras-de-negocio.md §1.5`.
 
 ## Pain mirroring
 

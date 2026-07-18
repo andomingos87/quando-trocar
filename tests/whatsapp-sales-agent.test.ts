@@ -762,10 +762,12 @@ describe("whatsapp sales agent — Ciclo 4 (greeting subsequente + contador + va
 
   test("ADR-0024: caso geral do fora_escopo marca respond; contador segue incrementando", async () => {
     const agent = new WhatsappSalesAgent({ openai: null });
+    // consecutive_fallback = 2 -> indice 2 (nao e o slot do menu, que a CV3
+    // troca por botoes). Prova que o caso geral segue marcando respond.
     const reply = await agent.generateReply({
       message: "voces atendem moto tambem?",
       leadStatus: "em_conversa",
-      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 1 } },
+      context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 2 } },
       salesConfig: baseConfig,
       faqs,
     });
@@ -773,7 +775,7 @@ describe("whatsapp sales agent — Ciclo 4 (greeting subsequente + contador + va
     expect(reply.conversationalGenerationMode).toBe("respond");
     // Invariante: o sinal de geracao nunca mexe no estado (off/sombra/on so
     // diferem no texto enviado) — o contador incrementa normalmente.
-    expect(reply.updatedContext?.sales?.consecutive_fallback).toBe(2);
+    expect(reply.updatedContext?.sales?.consecutive_fallback).toBe(3);
   });
 
   test("ADR-0024: sub-caminhos do fora_escopo seguem deterministicos (sem respond)", async () => {
@@ -931,5 +933,99 @@ describe("whatsapp sales agent — Ciclo 5 (escopo amplo + zero friction na aber
     expect(reply.body).toMatch(/ticket medio/i);
     // Saida facil
     expect(reply.body.toLowerCase()).toMatch(/sem stress|sem pressao|teste de 14 dias|bora/);
+  });
+});
+
+// --- CV3 (QTR-12) --------------------------------------------------------------
+
+describe("whatsapp sales agent — CV3 botoes no fallback nivel 2", () => {
+  // Memoria que leva o fluxo ao caso geral do fora_escopo com o contador no
+  // indice do menu (1): ja saudou, ja explicou, consecutive_fallback = 1.
+  const nivel2Memory = {
+    greeted: true,
+    funcionamento_explained: true,
+    consecutive_fallback: 1,
+  };
+
+  test("fora_escopo generico no nivel 2 emite botoes interativos (nao texto/respond)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "asdf coisa aleatoria sem sentido nenhum",
+      leadStatus: "em_conversa",
+      context: { sales: nivel2Memory },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.interactiveButtons).toBeDefined();
+    expect(reply.interactiveButtons?.buttons.map((b) => b.id)).toEqual([
+      "sales_fb_funcionamento",
+      "sales_fb_preco",
+      "sales_fb_testar",
+    ]);
+    // Botao e deterministico: nao marca respond.
+    expect(reply.conversationalGenerationMode).toBeUndefined();
+    // Estado incrementa igual ao caminho de texto (ADR-0024).
+    expect(reply.updatedContext?.sales?.consecutive_fallback).toBe(2);
+    // body de degradacao (transporte sem botoes) segue sendo texto de menu.
+    expect(reply.body.toLowerCase()).toContain("como funciona");
+  });
+
+  test("outros niveis do fallback seguem texto + respond (sem botoes)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    // consecutive_fallback = 2 -> indice 2 (nao e o menu).
+    const reply = await agent.generateReply({
+      message: "asdf coisa aleatoria sem sentido nenhum",
+      leadStatus: "em_conversa",
+      context: { sales: { ...nivel2Memory, consecutive_fallback: 2 } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.interactiveButtons).toBeUndefined();
+    expect(reply.conversationalGenerationMode).toBe("respond");
+  });
+});
+
+describe("whatsapp sales agent — CV3 objecoes como FAQ", () => {
+  // Espelha os seeds da migration 20260718130000 (objecoes editaveis no admin).
+  const objecaoFaqs: FaqVendasRecord[] = [
+    {
+      id: "faq-obj-tempo",
+      pergunta: "Nao tenho tempo pra mais um sistema",
+      resposta:
+        "Justamente por isso chefe: voce so registra a troca e o sistema chama sozinho. Bora ativar 14 dias gratis?",
+      palavras_chave: ["nao tenho tempo", "sem tempo", "tempo pra isso"],
+      ordem: 300,
+    },
+    {
+      id: "faq-obj-zap",
+      pergunta: "Meu cliente nao usa WhatsApp",
+      resposta:
+        "A maioria ta no WhatsApp chefe; pra quem nao ta voce segue do seu jeito. Quer testar 14 dias gratis?",
+      palavras_chave: ["nao usa whatsapp", "cliente nao tem whatsapp"],
+      ordem: 310,
+    },
+  ];
+
+  test("objecao 'nao tenho tempo' vira pergunta_faq (nao fora_escopo)", () => {
+    const cls = classifySalesMessage("nao tenho tempo pra isso agora", objecaoFaqs);
+    expect(cls.intent).toBe("pergunta_faq");
+    expect(cls.confidence).toBeGreaterThanOrEqual(0.85);
+  });
+
+  test("objecao responde com CTA de teste, nunca 'pode reformular'", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "meu cliente nao usa whatsapp",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs: objecaoFaqs,
+    });
+
+    expect(reply.body.toLowerCase()).not.toContain("reformular");
+    expect(reply.body.toLowerCase()).toMatch(/14 dias|testar|teste/);
+    expect(reply.interactiveButtons).toBeUndefined();
   });
 });

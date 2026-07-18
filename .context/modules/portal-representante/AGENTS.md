@@ -48,6 +48,16 @@ site publico (modulo [[site-publico]]), migrations (modulo [[database]]).
   `tests/representante-carteira.test.ts`, `tests/representante-comissoes.test.ts`,
   `tests/representante-dashboard.test.ts` (escopo rep A ≠ rep B, ausencia de PII, agregados corretos).
 
+## Dominio Representantes (mapa entre modulos)
+
+O dominio "representantes" cruza tres modulos por fronteira de responsabilidade — nao ha modulo
+unico "representantes" (cada arquivo tem um dono so, regra Aurea). Fio condutor: [[ADR-0019]]
+(atribuicao + comissao), [[ADR-0025]] (portal) e `regras-de-negocio.md §18`.
+
+- **Cadastro/CRUD do rep** → [[painel-admin]] (`lib/admin/representantes.ts`, `/admin/representantes`).
+- **Motor de comissao** (geracao no webhook, config, payout) → [[billing]] (`lib/admin/comissoes.ts`, `configuracoes-comissao`, `/admin/comissoes`).
+- **Portal do rep** (login OTP, dados escopados read-only, telas, conteudo) → **este modulo** [[portal-representante]] (`app/representante/**`, `app/api/representante/**`, `lib/representante/**`).
+
 ## Referencias
 - Backlog: `docs/backlog-whatsapp-bot/fase-representante-portal.md`
 - ADR: [[ADR-0025]] (portal), [[ADR-0019]] (representantes/comissao), [[ADR-0003]] (multi-tenancy)

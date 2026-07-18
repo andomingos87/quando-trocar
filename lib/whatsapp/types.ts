@@ -60,6 +60,13 @@ export type ToolCallRecord = {
   output: Record<string, unknown>;
 };
 
+// Reply button da Cloud API (fase CV3). `id` é determinístico (mapeado para um
+// intent em `sales-buttons.ts`); `title` é o rótulo visível (≤ 20 chars).
+export type SalesButton = {
+  id: string;
+  title: string;
+};
+
 export type AgentReply = {
   body: string;
   status: LeadStatus;
@@ -76,6 +83,18 @@ export type AgentReply = {
    * fallback). Ausente = rewrite (CV1).
    */
   conversationalGenerationMode?: ReplyGenerationMode;
+  /**
+   * Fallback nível 2 de vendas (fase CV3): quando presente, o webhook envia
+   * botões interativos (Cloud API reply buttons) em vez do menu de texto — o
+   * clique vira um `button_reply.id` determinístico, sem erro de classificação.
+   * `bodyText` é o corpo da mensagem interativa; `body` (acima) segue como
+   * degradação de texto quando o transporte não suporta botões. Determinístico:
+   * nunca passa pela camada de geração.
+   */
+  interactiveButtons?: {
+    bodyText: string;
+    buttons: ReadonlyArray<SalesButton>;
+  };
 };
 
 export type SalesConversationMemory = {
@@ -622,6 +641,19 @@ export type WhatsappSender = {
      * When provided, an extra `button` component is appended to the request.
      */
     urlButtonParameter?: string;
+  }): Promise<{
+    whatsappMessageId: string;
+    response?: unknown;
+  }>;
+  /**
+   * Envia uma mensagem interativa com reply buttons (Cloud API, máx 3). Opcional
+   * na interface: quando o sender não implementa, o webhook degrada para texto
+   * (fase CV3).
+   */
+  sendInteractiveButtons?(input: {
+    to: string;
+    body: string;
+    buttons: ReadonlyArray<SalesButton>;
   }): Promise<{
     whatsappMessageId: string;
     response?: unknown;

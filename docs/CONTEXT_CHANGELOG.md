@@ -19,6 +19,20 @@ Não registrar:
 
 ---
 
+## 2026-07-18 — Vendas: objeções, resumo de handoff e botões (Fase CV3, QTR-12)
+
+### Adicionado
+
+- **Objeções como FAQ** (não coluna `tipo`): seeds de `faq_vendas` (migration `20260718130000_faq_objecoes_vendas.sql`) para "não tenho tempo", "cliente não usa WhatsApp", "já controlo no caderno" e "vai achar chato" — contorno + CTA de teste, editáveis no admin. Decisão consciente de divergir do plano original (que previa coluna `tipo`): o [ADR-0022](./adr/0022-modo-respond-grounded.md)/[ADR-0023](./adr/0023-perguntas-sem-resposta.md) já estabeleceram a FAQ do banco como o canal editável-sem-deploy que alimenta o `respond` e o match de `pergunta_faq`.
+- **Resumo de handoff** (`lib/whatsapp/handoff-summary.ts`, prompt `whatsapp-handoff-summary.md`): quando o agente de vendas faz handoff, gera um resumo de 3 linhas (LLM, uso interno) e envia ao WhatsApp comercial. Best-effort (não bloqueia o handoff), só com `geracao_llm_modo != 'off'`, auditado em `agent_tool_calls`. Ver `regras-de-negocio.md §1.5`.
+- **Botões interativos** no fallback nível 2 de vendas: `sendInteractiveButtons` em `lib/whatsapp/whatsapp-client.ts` (Cloud API reply buttons, máx 3) + `lib/whatsapp/sales-buttons.ts` (id determinístico → mensagem canônica → intent, sem LLM) + parse de `button_reply.id` em `payload.ts`. Substitui `FALLBACK_VARIATIONS[1]`; degrada para texto quando o transporte não suporta botões. Determinístico — não marca respond nem altera o contador. Ver `regras-de-negocio.md §1`.
+
+### Notas
+
+- **Deploy**: a migration de seeds precisa ser aplicada ao banco (o deploy do código corre à frente das migrations neste projeto).
+
+---
+
 ## 2026-07-18 — Portal do representante (Fase R4)
 
 ### Adicionado

@@ -150,7 +150,7 @@ Transições válidas (decisão determinística, não LLM):
 | `pergunta_funcionamento` | `em_conversa` | sempre; copy curta na 2ª aparição (`funcionamento_explained`) |
 | `informa_volume_ticket` | `qualificado` | quando há volume + ticket válidos (memorizados ao longo de várias mensagens) |
 | `pergunta_preco` | mantém status atual | nunca rebaixa lead; incrementa contador; se memória tem volume+ticket, conecta com ROI |
-| `pergunta_faq` | mantém status atual | resposta vem de `faq_vendas` por match de palavra-chave |
+| `pergunta_faq` | mantém status atual | resposta vem de `faq_vendas` por match de palavra-chave. **Objeções** (CV3) são modeladas como linhas de `faq_vendas` (editáveis no admin, sem coluna `tipo`): "não tenho tempo", "cliente não usa WhatsApp", "já controlo no caderno", "vai achar chato/spam" → contorno + CTA de teste, respondidas aqui mesmo em vez de cair no `fora_escopo` |
 | `small_talk` | mantém status atual | resposta curta de redirect; não conta como fallback |
 | `social_test` | mantém status atual | "kkkk", "testando", mensagens muito curtas; resposta paciente (5 variações rotacionadas); **conta como fallback** |
 | `confirmacao_neutra` | mantém status atual | "ok"/"blz"/"entendi"; resposta curta se já explicou, senão cai pro fluxo padrão |
@@ -165,6 +165,8 @@ Transições válidas (decisão determinística, não LLM):
 **Saudação subsequente (ciclo 4):** quando `memory.greeted === true` e o lead manda outra saudação ("bom dia", "tudo bem?"), o bot responde com uma das **5 variações** sociais em vez de repetir o explicador. Não conta como fallback.
 
 **Contador `consecutive_fallback` (ciclo 4):** incrementado a cada `fora_escopo` ou `social_test` consecutivo; resetado por qualquer outro intent. Ao atingir **7**, dispara handoff automático para o WhatsApp comercial com `handoffReason = "fallback_loop"`. As 5 variações de `FALLBACK_VARIATIONS` rotacionam baseadas nesse contador. **O contador nunca reage à camada de geração** ([ADR-0024](./adr/0024-respond-em-vendas.md)): incrementa mesmo quando o respond respondeu bem — `off`/`sombra`/`on` só podem diferir no texto enviado, nunca no estado.
+
+**Botões interativos no fallback nível 2 (CV3):** no slot do menu da rotação (`FALLBACK_VARIATIONS[1]`), em vez do menu de texto o bot envia **reply buttons** da Cloud API (máx 3: "Como funciona", "Quanto custa", "Quero testar"). O clique volta como `button_reply.id` **determinístico**, mapeado para a mensagem canônica em `lib/whatsapp/sales-buttons.ts` (id → intent, **sem LLM**), eliminando erro de classificação de texto livre. É determinístico — **não** marca respond e não altera o contador (idêntico ao caminho de texto). Quando o transporte não suporta botões, degrada para o menu de texto. Fonte: `lib/whatsapp/sales-buttons.ts`, `sendInteractiveButtons` em `lib/whatsapp/whatsapp-client.ts`.
 
 - Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-sales-agent.md`](../.codex/prompts/whatsapp-sales-agent.md), `lib/whatsapp/sales-agent.ts`.
 
@@ -185,6 +187,13 @@ Transições válidas (decisão determinística, não LLM):
 - Segunda pergunta de preço (insistência) → handoff `wa.me` para WhatsApp comercial. Número configurado em `configuracoes_vendedor.whatsapp_handoff_comercial`.
 - Bot nunca diz "depende", nunca dá faixa, nunca compromete o valor final.
 - Fonte: [ADR-0012](./adr/0012-politica-de-preco.md), [`.codex/prompts/whatsapp-sales-agent.md`](../.codex/prompts/whatsapp-sales-agent.md).
+
+### 1.5 Resumo de handoff para o comercial (CV3)
+- Quando o agente de vendas decide **handoff** (`handoffRequired` — preço insistente, pedido de humano, rede/franquia, volume alto ou loop de fallback), o backend gera um **resumo de 3 linhas** da conversa (LLM) e o envia ao `configuracoes_vendedor.whatsapp_handoff_comercial`.
+- **Uso interno** — vai para o humano do comercial, **nunca** para o lead. Não decide estado (ADR-0001): o handoff já foi decidido pelo backend determinístico.
+- **Best-effort**: falha de geração/envio/timeout **não bloqueia** o handoff (o link `wa.me` já foi entregue ao lead). Auditado em `agent_tool_calls` (`handoff_summary`).
+- **Só com a camada de geração ativa** (`geracao_llm_modo != 'off'`) — em `off`, comportamento idêntico ao anterior (nenhuma chamada de LLM nova).
+- Fonte: `lib/whatsapp/handoff-summary.ts`, [`.codex/prompts/whatsapp-handoff-summary.md`](../.codex/prompts/whatsapp-handoff-summary.md), [ADR-0020](./adr/0020-camada-geracao-conversacional.md).
 
 ### 1.5 FAQ do vendedor
 - Perguntas comuns vivem em `faq_vendas` (gerenciada em `/admin/faq`).
@@ -1031,6 +1040,13 @@ Fonte canônica: [ADR-0025](./adr/0025-portal-do-representante.md) (estende a AD
 - **LGPD — sem PII de cliente final**: as telas de carteira mostram a oficina (contato comercial legítimo do rep: responsável, WhatsApp da oficina, cidade, plano) e **números agregados** (qtd. de clientes finais cadastrados, lembretes enviados/respondidos), nunca nome/WhatsApp de cliente final.
 - **Playbook e novidades são conteúdo estático** no código (`lib/representante/content/*`), curados no repositório; publicar = editar constante + deploy (runbook `docs/runbooks/publicar-novidade-representante.md`). Playbook não traz preço/condição comercial (ADR-0012). A visão geral também mostra o código e o link `wa.me` próprio do rep com botão copiar.
 - Fonte: `lib/representante/{session,otp,api-guard,carteira,leads,comissoes,dashboard}.ts`, `app/representante/**`, migration `20260718120000_portal_representante.sql`.
+
+### 18.8 Convite do representante por WhatsApp (manual)
+- Em `/admin/representantes`, cada representante tem um botão **"Convidar pelo WhatsApp"** (ícone) que dispara um template com o link do portal (`/representante`). Serve para dar o primeiro acesso: o representante clica, entra com o próprio WhatsApp e recebe o OTP (§18.7).
+- **Template obrigatório** (`WHATSAPP_TEMPLATE_CONVITE_REP_NAME`, categoria Marketing — boas-vindas/convite, `pt_BR`): o representante quase nunca está na janela de 24h, então texto livre seria rejeitado pela Meta. Variáveis **nomeadas** `{{nome}}` = primeiro nome, `{{link}}` = link do portal. Copy no runbook `docs/runbooks/meta-whatsapp-setup.md §12`. Enquadrar como aviso/boas-vindas: evitar termos de acesso/login no corpo ("código", "acesse", "entrar", "seu número de WhatsApp", "portal"), que a Meta lê como template de OTP. Categoria não afeta o código de envio.
+- **Só representante ativo** pode ser convidado — inativo não loga no portal; a rota recusa (409) e o botão fica desabilitado. Sem template configurado → 503 (não envia).
+- Ação iniciada por admin humano (ADR-0001), auditada como `representante.convite_enviado`. O convite **não** cria sessão nem muda estado do representante — é só a mensagem.
+- Fonte: `app/api/admin/representantes/[id]/convidar/route.ts`, `lib/admin/convite-representante.ts`, `components/admin/representantes-client.tsx`.
 
 ---
 

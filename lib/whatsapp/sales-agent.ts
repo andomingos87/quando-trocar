@@ -1,6 +1,11 @@
 import OpenAI from "openai";
 
 import { whatsappLink } from "../config";
+import {
+  SALES_FALLBACK_BUTTONS,
+  SALES_FALLBACK_BUTTONS_BODY,
+  SALES_FALLBACK_BUTTONS_TEXT,
+} from "./sales-buttons";
 import type {
   AgentReply,
   ConfiguracoesVendedor,
@@ -464,11 +469,17 @@ const GREETING_AFTER_GREETED = [
   "Tamo aqui chefe! Me diz no que posso ajudar: como funciona, preco, ou ja partir pro teste?",
 ];
 
+// Índice da variação "menu" dentro de FALLBACK_VARIATIONS. No nível 2 do
+// fallback (CV3) o webhook envia botões interativos em vez deste texto; o texto
+// segue como degradação quando o transporte não suporta botões.
+const MENU_VARIATION_INDEX = 1;
+
 // fora_escopo: 5 variacoes (rotaciona conforme consecutive_fallback)
 const FALLBACK_VARIATIONS = [
   // [0] explainer curto (1a aparicao apos ja ter explicado uma vez)
   "Nao entendi muito bem chefe. Se quiser ver como funciona ou ja topa testar 14 dias gratis, me fala.",
-  // [1] menu de opcoes
+  // [1] menu de opcoes — CV3: substituido por botoes interativos em runtime
+  //     (SALES_FALLBACK_BUTTONS); este texto e a degradacao sem botoes.
   "Pra eu te ajudar melhor chefe, escolhe uma:\n- Como funciona\n- Quanto custa\n- Ja quero testar\n- Falar com o Anderson",
   // [2] simples + gancho
   "Pode reformular chefe? Ou se preferir, eu te explico de novo o produto, te passo o preco, ou ja ativo o teste.",
@@ -826,6 +837,29 @@ function buildReply(
       handoffRequired: true,
       handoffReason: "fallback_loop",
       updatedContext: { sales: memory },
+    };
+  }
+
+  // CV3: no nivel 2 do fallback (indice do menu), troca o menu de texto por
+  // botoes interativos deterministicos. O webhook envia os botoes quando o
+  // transporte suporta; senao degrada para o texto do menu (`body`). E um
+  // sub-caminho deterministico — NAO marca respond (o clique ja resolve o
+  // intent, sem geracao). O estado (consecutive_fallback = nextCount, ja setado
+  // acima) e identico ao caminho de texto, preservando a invariante da ADR-0024
+  // (estado nunca reage a camada de geracao).
+  if (incomingFallbackCount % FALLBACK_VARIATIONS.length === MENU_VARIATION_INDEX) {
+    if (!memory.funcionamento_explained) {
+      memory.funcionamento_explained = true;
+    }
+    return {
+      status: statusForIntent(classification.intent),
+      body: SALES_FALLBACK_BUTTONS_TEXT,
+      toolCalls: [],
+      updatedContext: { sales: memory },
+      interactiveButtons: {
+        bodyText: SALES_FALLBACK_BUTTONS_BODY,
+        buttons: SALES_FALLBACK_BUTTONS,
+      },
     };
   }
 

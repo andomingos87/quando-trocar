@@ -37,6 +37,19 @@ representantes e auditoria. Uso interno da equipe (nao e o produto do cliente fi
 - `tests/admin-*.test.ts` (admins, clientes, comissoes, faq, leads, lembretes, mensagens, metrics,
   normalize, oficinas, otp, phone, pii, planos, representantes, tipos-servico...).
 
+## Dominio Representantes (mapa entre modulos)
+
+O dominio "representantes" cruza tres modulos por fronteira de responsabilidade — nao ha modulo
+unico "representantes" (cada arquivo tem um dono so, regra Aurea). Fio condutor: [[ADR-0019]]
+(atribuicao + comissao), [[ADR-0025]] (portal) e `regras-de-negocio.md §18`.
+
+- **Cadastro/CRUD do rep** → **este modulo** [[painel-admin]] (`lib/admin/representantes.ts`, `/admin/representantes`).
+  Inclui o **convite por WhatsApp** (botao na lista): `app/api/admin/representantes/[id]/convidar`
+  + `lib/admin/convite-representante.ts` (builder puro) disparam o template `WHATSAPP_TEMPLATE_CONVITE_REP_NAME`
+  com o link do portal; auditoria `representante.convite_enviado`, so para rep ativo (regras §18.8, [[ADR-0025]]).
+- **Motor de comissao** (geracao no webhook, config, payout) → [[billing]] (`lib/admin/comissoes.ts`, `configuracoes-comissao`, `/admin/comissoes`).
+- **Portal do rep** (login OTP, dados escopados read-only, telas, conteudo) → [[portal-representante]] (`app/representante/**`, `app/api/representante/**`, `lib/representante/**`).
+
 ## Referencias
 - Backlog: `docs/backlog-painel-admin/`
 - Regras de negocio: `docs/regras-de-negocio.md`

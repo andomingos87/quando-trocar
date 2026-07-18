@@ -43,6 +43,19 @@ bot e calcula comissao de representantes. Por isso vive em varios diretorios, ma
   `tests/admin-configuracoes-vendedor.test.ts`, `tests/whatsapp-cobranca-agent.test.ts`,
   `tests/payments-asaas-gateway.test.ts`, `tests/admin-configuracoes-pagamento.test.ts`.
 
+## Dominio Representantes (mapa entre modulos)
+
+O dominio "representantes" cruza tres modulos por fronteira de responsabilidade — nao ha modulo
+unico "representantes" (cada arquivo tem um dono so, regra Aurea). Fio condutor: [[ADR-0019]]
+(atribuicao + comissao), [[ADR-0025]] (portal) e `regras-de-negocio.md §18`.
+
+- **Cadastro/CRUD do rep** → [[painel-admin]] (`lib/admin/representantes.ts`, `/admin/representantes`).
+- **Motor de comissao** (geracao no webhook, config, payout) → **este modulo** [[billing]] (`lib/admin/comissoes.ts`, `configuracoes-comissao`, `/admin/comissoes`).
+- **Portal do rep** (login OTP, dados escopados read-only, telas, conteudo) → [[portal-representante]] (`app/representante/**`, `app/api/representante/**`, `lib/representante/**`).
+
+O wrapper read-only `lib/representante/comissoes.ts` (portal) chama `listComissoes` deste modulo; a
+mutacao de comissao (marcar paga/cancelar) permanece exclusiva daqui.
+
 ## Referencias
 - Regras de negocio: `docs/regras-de-negocio.md` §9 (preco/planos/billing/gateway), §10 (inadimplencia).
 - Runbooks: `docs/runbooks/asaas-setup.md`.

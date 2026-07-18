@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FaWhatsapp } from "react-icons/fa";
 
 import { formatBRL } from "@/lib/admin/format";
 import { formatPhoneBR } from "@/lib/admin/format-phone-br";
@@ -10,10 +11,16 @@ import type { RepresentanteListRow } from "@/lib/admin/representantes";
 import { whatsappLink } from "@/lib/config";
 import { RepresentanteFormModal } from "./representante-form-modal";
 
+// Verde oficial do WhatsApp: tratamos o glifo como marca de terceiro (mesma
+// logica de um logo), excecao consciente a regra de "so tokens" do design.
+const WHATSAPP_GREEN = "#25D366";
+
 type ModalState =
   | { open: false }
   | { open: true; mode: "create" }
   | { open: true; mode: "edit"; representante: RepresentanteListRow };
+
+type InviteStatus = "idle" | "sending" | "sent" | "error";
 
 function repLink(fraseLanding: string, codigo: string): string {
   return whatsappLink({ message: `${fraseLanding} #REP-${codigo}` });
@@ -24,6 +31,89 @@ function comissaoLabel(rep: RepresentanteListRow): string {
   return rep.comissao_tipo === "percentual"
     ? `${rep.comissao_valor}% por pagamento`
     : `${formatBRL(rep.comissao_valor)} por pagamento`;
+}
+
+/**
+ * Botao-icone que dispara o template de convite do portal no WhatsApp do
+ * representante. Confirma antes de enviar (a acao pinga uma pessoa real) e
+ * mostra o resultado no proprio tooltip. Fica desabilitado para representante
+ * inativo, que nao consegue logar no portal.
+ */
+function ConvidarWhatsAppButton({ rep }: { rep: RepresentanteListRow }) {
+  const [status, setStatus] = useState<InviteStatus>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const tooltip = !rep.ativo
+    ? "Representante inativo — ative para convidar"
+    : status === "sending"
+      ? "Enviando convite…"
+      : status === "sent"
+        ? "Convite enviado ✓"
+        : status === "error"
+          ? (message ?? "Erro ao enviar")
+          : "Convidar pelo WhatsApp";
+
+  const convidar = async () => {
+    if (!rep.ativo || status === "sending") return;
+    if (
+      !window.confirm(
+        `Enviar convite de acesso ao portal para ${rep.nome} no WhatsApp ${formatPhoneBR(
+          rep.whatsapp,
+        )}?`,
+      )
+    ) {
+      return;
+    }
+
+    setStatus("sending");
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/representantes/${rep.id}/convidar`, {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setStatus("error");
+        setMessage(data.message ?? "Erro ao enviar o convite.");
+        setTimeout(() => setStatus("idle"), 4000);
+        return;
+      }
+      setStatus("sent");
+      setTimeout(() => setStatus("idle"), 3000);
+    } catch {
+      setStatus("error");
+      setMessage("Erro de conexao.");
+      setTimeout(() => setStatus("idle"), 4000);
+    }
+  };
+
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        onClick={convidar}
+        disabled={!rep.ativo || status === "sending"}
+        aria-label={tooltip}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-ink transition hover:bg-line-soft disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <FaWhatsapp
+          aria-hidden="true"
+          className={status === "sending" ? "animate-pulse" : ""}
+          color={rep.ativo ? WHATSAPP_GREEN : undefined}
+          size={16}
+        />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
 }
 
 export function RepresentantesClient({
@@ -114,7 +204,8 @@ export function RepresentantesClient({
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2">
+                    <ConvidarWhatsAppButton rep={rep} />
                     <button
                       type="button"
                       onClick={() => copyLink(rep)}

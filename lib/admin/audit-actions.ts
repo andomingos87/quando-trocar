@@ -68,6 +68,7 @@ const ACOES: Record<string, AcaoDescricao> = {
   "representante.create": { label: "Cadastrou representante", categoria: "criacao" },
   "representante.update": { label: "Editou representante", categoria: "atualizacao" },
   "representante.soft_delete": { label: "Removeu representante", categoria: "remocao" },
+  "representante.convite_enviado": { label: "Enviou convite ao representante", categoria: "atualizacao" },
 
   "configuracoes_comissao.update": { label: "Editou regra de comissão", categoria: "financeiro" },
   "comissao.marcar_paga": { label: "Marcou comissão como paga", categoria: "financeiro" },

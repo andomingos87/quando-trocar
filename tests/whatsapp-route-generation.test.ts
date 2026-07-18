@@ -729,3 +729,207 @@ describe("webhook — perguntas_sem_resposta (ADR-0023)", () => {
     });
   });
 });
+
+// --- CV3 (QTR-12): botões interativos + resumo de handoff ---------------------
+
+describe("webhook — CV3 botões interativos no fallback nível 2 (vendas)", () => {
+  const MENU_TEXT =
+    "Pra eu te ajudar melhor chefe, escolhe uma:\n- Como funciona\n- Quanto custa\n- Ja quero testar";
+  const BODY_TEXT = "Pra eu te ajudar melhor chefe, e so tocar numa opcao:";
+
+  function buttonsSalesAgent() {
+    return {
+      generateReply: vi.fn(async () => ({
+        body: MENU_TEXT,
+        status: "em_conversa" as const,
+        toolCalls: [],
+        interactiveButtons: {
+          bodyText: BODY_TEXT,
+          buttons: [
+            { id: "sales_fb_funcionamento", title: "Como funciona" },
+            { id: "sales_fb_preco", title: "Quanto custa" },
+            { id: "sales_fb_testar", title: "Quero testar" },
+          ],
+        },
+      })),
+    };
+  }
+
+  test("transporte com botões: envia interativo, não o texto; pula a geração", async () => {
+    const repository = salesRepository("on");
+    const sendInteractiveButtons = vi.fn(async () => ({ whatsappMessageId: "wamid.btn" }));
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.txt" })),
+      sendInteractiveButtons,
+    };
+    const { generator, state } = makeGenerator("qualquer coisa gerada");
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: buttonsSalesAgent(),
+      replyGenerator: generator,
+    });
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("asdf aleatorio"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(sendInteractiveButtons).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "+5541999421180",
+        body: BODY_TEXT,
+        buttons: expect.arrayContaining([
+          expect.objectContaining({ id: "sales_fb_preco" }),
+        ]),
+      }),
+    );
+    expect(whatsapp.sendTextMessage).not.toHaveBeenCalled();
+    // Botão é determinístico: gerador não roda (allowGeneration = false).
+    expect(state.calls).toBe(0);
+    expect(replyGenerationCall(repository)).toBeUndefined();
+  });
+
+  test("transporte sem botões: degrada para o texto do menu", async () => {
+    const repository = salesRepository("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.txt" })),
+    };
+    const { generator } = makeGenerator("qualquer coisa gerada");
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: buttonsSalesAgent(),
+      replyGenerator: generator,
+    });
+    await handlers.POST(
+      signedRequest(inboundPayload("asdf aleatorio"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: MENU_TEXT,
+    });
+  });
+});
+
+describe("webhook — CV3 resumo de handoff (vendas)", () => {
+  function handoffSalesAgent() {
+    return {
+      generateReply: vi.fn(async () => ({
+        body: "Chefe, vou te conectar com o Anderson: https://wa.me/5511945207618",
+        status: "em_conversa" as const,
+        toolCalls: [],
+        handoffRequired: true,
+        handoffReason: "preco_insistente",
+      })),
+    };
+  }
+
+  function repoWithHandoff(modo: GeracaoLlmModo) {
+    return Object.assign(
+      salesRepository(modo, {
+        listRecentMessages: vi.fn(async () => [
+          { direction: "inbound", body: "quanto custa mesmo?", sentAt: null },
+        ]),
+      }),
+      { markConversationHandoff: vi.fn(async () => undefined) },
+    );
+  }
+
+  test("mode on: gera e envia o resumo ao comercial (não ao lead)", async () => {
+    const repository = repoWithHandoff("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.x" })),
+    };
+    const summarizer = {
+      summarizeHandoff: vi.fn(async () => "Lead quer preco; insistiu 2x."),
+    };
+    const { generator } = makeGenerator(null);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: handoffSalesAgent(),
+      replyGenerator: generator,
+      handoffSummarizer: summarizer,
+    });
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("mas quanto custa??"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(summarizer.summarizeHandoff).toHaveBeenCalledWith(
+      expect.objectContaining({ handoffReason: "preco_insistente" }),
+    );
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "+5511945207618",
+        body: expect.stringContaining("Lead quer preco"),
+      }),
+    );
+    // O lead recebeu a resposta de handoff normalmente.
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "+5541999421180" }),
+    );
+  });
+
+  test("mode off: não gera resumo (comportamento anterior)", async () => {
+    const repository = repoWithHandoff("off");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.x" })),
+    };
+    const summarizer = { summarizeHandoff: vi.fn(async () => "resumo") };
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: handoffSalesAgent(),
+      handoffSummarizer: summarizer,
+    });
+    await handlers.POST(
+      signedRequest(inboundPayload("mas quanto custa??"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(summarizer.summarizeHandoff).not.toHaveBeenCalled();
+    expect(whatsapp.sendTextMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ to: "+5511945207618" }),
+    );
+  });
+
+  test("resumo lança -> handoff e resposta ao lead seguem (best-effort)", async () => {
+    const repository = repoWithHandoff("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.x" })),
+    };
+    const summarizer = {
+      summarizeHandoff: vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    };
+    const { generator } = makeGenerator(null);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: handoffSalesAgent(),
+      replyGenerator: generator,
+      handoffSummarizer: summarizer,
+    });
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("mas quanto custa??"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(repository.markConversationHandoff).toHaveBeenCalled();
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "+5541999421180" }),
+    );
+  });
+});
