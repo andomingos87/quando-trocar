@@ -340,6 +340,10 @@ export function matchFaq(
 export function classifySalesMessage(
   message: string,
   faqs: ReadonlyArray<FaqVendasRecord> = [],
+  // Match semântico da FAQ resolvido fora do agente (CV5). Usado só como
+  // fallback quando o match por keyword falha — a keyword é curada pelo admin e
+  // tem prioridade. Ausente (sem embedder) → comportamento antigo, só keyword.
+  preMatchedFaqId?: string | null,
 ): SalesClassification {
   // 1. Recusa explicita -> sem_interesse (vence tudo, ate dor)
   if (isExplicitLossMessage(message)) {
@@ -415,10 +419,20 @@ export function classifySalesMessage(
     return { intent: "small_talk", confidence: 0.88 };
   }
 
-  // 12. FAQ por palavra-chave
+  // 12. FAQ por palavra-chave (curada pelo admin — precisa e prioritária).
   const faqMatch = matchFaq(message, faqs);
   if (faqMatch) {
     return { intent: "pergunta_faq", confidence: 0.85, faqId: faqMatch.id };
+  }
+
+  // 12b. FAQ por similaridade semântica (CV5): pega paráfrase que a keyword
+  // não cobre ("quanto sai por mês?" ~ FAQ de preço com keyword "custa"). Só
+  // vale se o id resolver numa FAQ ativa conhecida.
+  if (preMatchedFaqId) {
+    const semantic = faqs.find((faq) => faq.id === preMatchedFaqId);
+    if (semantic) {
+      return { intent: "pergunta_faq", confidence: 0.8, faqId: semantic.id };
+    }
   }
 
   // 13. Default
@@ -987,7 +1001,11 @@ export class WhatsappSalesAgent {
       };
     }
 
-    const deterministic = classifySalesMessage(input.message, faqs);
+    const deterministic = classifySalesMessage(
+      input.message,
+      faqs,
+      input.preMatchedFaqId,
+    );
 
     let classification: SalesClassification = deterministic;
     if (deterministic.confidence < 0.85) {
@@ -1006,8 +1024,13 @@ export class WhatsappSalesAgent {
             painDetected: true,
           };
         } else if (fromOpenAI.intent === "pergunta_faq") {
-          // Se o LLM disser pergunta_faq, prefiro o match deterministico.
-          const faq = matchFaq(input.message, faqs);
+          // Se o LLM disser pergunta_faq, prefiro o match deterministico
+          // (keyword) e, faltando, o semântico (CV5).
+          const faq =
+            matchFaq(input.message, faqs) ??
+            (input.preMatchedFaqId
+              ? faqs.find((f) => f.id === input.preMatchedFaqId) ?? null
+              : null);
           classification = faq
             ? { ...fromOpenAI, faqId: faq.id }
             : deterministic;

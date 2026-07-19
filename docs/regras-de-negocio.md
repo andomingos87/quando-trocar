@@ -197,7 +197,8 @@ Transições válidas (decisão determinística, não LLM):
 
 ### 1.5 FAQ do vendedor
 - Perguntas comuns vivem em `faq_vendas` (gerenciada em `/admin/faq`).
-- Match por palavra-chave: para cada FAQ ativa, conta quantas `palavras_chave` aparecem na mensagem normalizada (sem acento, lower-case). FAQ com mais matches vence; empate desempata pela menor `ordem`.
+- Match por palavra-chave (prioritário): para cada FAQ ativa, conta quantas `palavras_chave` aparecem na mensagem normalizada (sem acento, lower-case). FAQ com mais matches vence; empate desempata pela menor `ordem`.
+- **Busca semântica (CV5, fallback):** quando o match por keyword falha, o bot gera um embedding da mensagem (OpenAI `text-embedding-3-small`, 1536d) e busca a FAQ mais parecida por similaridade de cosseno (RPC `match_faq_vendas`, threshold configurável). Isso pega paráfrase que a keyword não cobre ("quanto sai por mês?" acha a FAQ de preço mesmo sem a keyword "custa"). **Best-effort:** sem embedding/erro, cai no match por keyword. O embedding de cada FAQ é gerado no save do admin (também best-effort).
 - Cache de 60s no agente (`SupabaseWhatsappRepository.listActiveFaqs`). Edições no admin demoram até 1 minuto pra refletir no bot.
 - Tool call registrada como `faq_lookup`.
 - **Escopo amplo na saudação (revisado ciclo 5):** a saudação inicial **menciona o escopo completo** — óleo, amortecedor, filtro, revisão, alinhamento, freio. Essa decisão sobrescreve o desenho anterior de "posicionamento estratificado / saudação só com óleo", a pedido do sócio que considerou que esconder o escopo perdia oportunidade. A FAQ `serve_para_outros_servicos` (slug interno, seedada em `20260523000000_faq_serve_outros_servicos.sql`) **continua existindo** para detalhar quando o lead pergunta especificamente.
@@ -210,6 +211,22 @@ O vendedor faz handoff (mantém status e marca `conversas.handoff_required = tru
 - Volume informado > 300 trocas/mês → reason `volume_alto`.
 - Em todos os casos, envia link `wa.me` para `configuracoes_vendedor.whatsapp_handoff_comercial`.
 - Fonte: `lib/whatsapp/sales-agent.ts`, `lib/whatsapp/webhook-handler.ts`.
+
+### 1.7 Follow-up proativo de leads (CV4)
+Reengajamento automático de leads que esfriaram, via **template Meta aprovado** (fora da janela de 24h — obrigatório, ADR-0005). Job diário protegido por `INTERNAL_JOB_SECRET`, acionado pelo cron do Supabase 1×/dia em horário comercial.
+- **Elegibilidade:** apenas leads com status `em_conversa` ou `qualificado`, não excluídos (`deleted_at is null`) e cuja conversa **não** está em handoff.
+- **Nunca** envia para `perdido`, `convertido`, `teste_aceito`, `interessado` nem `novo`.
+- **Janelas** (medidas desde a última interação do lead — `last_message_at`, ou `created_at` se nunca houve inbound): 1º follow-up com ≥ 24h; 2º follow-up com ≥ 72h.
+- **Cap de 2 follow-ups por lead** (`leads_oficina.followup_count`).
+- **Texto 100% determinístico** (template Meta; o LLM não entra — ADR-0001). Parâmetro `{{1}}` = primeiro nome do lead.
+- **Idempotência:** `followup_count`/`last_followup_at` só avançam após envio com sucesso; rodar o job 2× no mesmo dia não duplica envio. Falha de envio (ex.: template não aprovado) não queima o follow-up — é reprocessável no próximo dia.
+- Fonte: `lib/whatsapp/followup-leads.ts`, `app/api/internal/followup-leads/route.ts`, migrations `20260718140000_leads_followup.sql` e `20260718141000_followup_leads_cron.sql`.
+
+### 1.8 Volante de aprendizado (CV5)
+Melhoria contínua da FAQ sem deploy: pergunta que o bot não soube responder → admin responde 1× → bot sabe pra sempre.
+- Quando o modo `respond` devolve `dontKnow`, a pergunta é gravada em `perguntas_sem_resposta` (status `aberta`) — ADR-0023.
+- Tela `/admin/perguntas-sem-resposta`: lista as perguntas abertas **agrupadas por frequência**. Ações: **Virar FAQ** (abre o form de `faq_vendas` pré-preenchido; ao salvar, marca as ocorrências como `resolvida`) e **Ignorar** (marca `ignorada`). Toda ação é auditada em `admin_audit_log`.
+- Fonte: `lib/admin/perguntas-sem-resposta.ts`, `app/admin/(autenticado)/perguntas-sem-resposta/`, migration `20260718150000_faq_semantic_search.sql`.
 
 ---
 
@@ -346,6 +363,15 @@ Bot **não** inicia cadastro nem preenche campo quando:
 
 - Fonte: `lib/whatsapp/onboarding-agent.ts` (`neutralReply`, `classifyNeutral`, `saudacaoTemporal`, `PRICE_QUESTION_PATTERN`), `lib/whatsapp/webhook-handler.ts` (`localHourSaoPaulo`).
 
+### 3.3-bis Operação como assistente: consultas read-only e /ajuda (CV6)
+No modo `operacao`, além de registrar trocas, o bot responde consultas **read-only** (leitura não muda estado → não fere a ADR-0001). A intenção é classificada deterministicamente pelo agente (`classifyReadOnlyQuery`); a leitura é feita pelo webhook, **sempre escopada por `oficina_id`** (nunca vaza dados de outra oficina), e a resposta traz os **dados literais** (números/nomes nunca são gerados) com moldura conversacional só em respostas curtas.
+- `consulta_lembretes` (próximos): "quais lembretes dessa semana?", "quem vou avisar?" → `listUpcomingReminders({ oficinaId, days: 7 })`. A lista fica **literal** (sem geração, pra não perder item).
+- `consulta_lembretes` (mês): "quantos lembretes saíram esse mês?" → `countRemindersSentThisMonth({ oficinaId })`.
+- `consulta_cliente`: "dados do cliente João", "cliente 41999998888" → `getClienteResumo({ oficinaId, nomeOuTelefone })` (nome, WhatsApp, último serviço, total, próximo lembrete, aviso de opt-out). Não encontrado → mensagem pedindo pra conferir nome/telefone.
+- Consultas **só valem em `operacao`** (no `onboarding` a oficina ainda está aprendendo a registrar). Mensagem de cadastro (`hasRegistrationSignal`) nunca é interpretada como consulta. Registra `operacao_read_only_query` em `agent_tool_calls`.
+- **Comando `/ajuda`** (determinístico por modo, mesmo padrão de `/suporte`/`/voltar`): lista o que o bot faz naquele modo. Verbatim — nunca passa pela camada de geração.
+- Fonte: `lib/whatsapp/onboarding-agent.ts` (`classifyReadOnlyQuery`, `extractClienteTermo`), `lib/whatsapp/operacao-queries.ts`, `lib/whatsapp/webhook-handler.ts` (`resolveOperacaoReadOnlyQuery`, branch `/ajuda`), `lib/whatsapp/repository.ts` (`listUpcomingReminders`, `countRemindersSentThisMonth`, `getClienteResumo`).
+
 ### 3.4 Confirmação obrigatória antes de registrar (ADR-0017)
 Quando todos os campos obrigatórios estão preenchidos, o bot **não grava direto**. Primeiro devolve um resumo dos dados captados e marca `conversas.context.awaiting_confirmation = true` (carregando o draft completo em `service_draft`). É a rede de segurança que o [ADR-0015](./adr/0015-suporte-audio-whisper.md) assumia ("a oficina corrige manualmente") mas que não existia no fluxo — sem ela, uma transcrição errada do Whisper (ex.: veículo capturado como "Não houve loucura") era gravada e o template irreversível disparava ao cliente frio sem revisão humana.
 
@@ -381,23 +407,24 @@ Logo após o cadastro do serviço (RPC bem-sucedida), o bot envia uma **confirma
 
 - Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), [ADR-0018](./adr/0018-cliente-final-concierge-pre-lembrete.md), `lib/whatsapp/service-confirmation.ts`, `sendServiceConfirmation()` em `lib/whatsapp/webhook-handler.ts`.
 
-### 3.7 Concierge do cliente final antes do primeiro lembrete (ADR-0018)
+### 3.7 Concierge do cliente final antes do primeiro lembrete (ADR-0018, revisado pela ADR-0026)
 Entre a confirmação e o primeiro lembrete há uma janela em que o cliente final pode responder. Nessa janela ele **não** é lead de vendas:
 - **Reconhecimento**: o roteador identifica o cliente final por telefone via `findClienteFinalConversationByWhatsapp` (conversa `cliente_final` em `conversas`, independente de lembrete). Resolve `agent_mode = cliente_final_lembrete` **sem `lastReminderId`**; o webhook bifurca por esse campo — com lembrete ativo → agente de lembrete; sem → **concierge** (`lib/whatsapp/cliente-final-concierge.ts`). Ambiguidade multi-oficina (telefone com outbound de 2+ oficinas) → handoff suporte, como no lookup de lembrete.
-- **Comportamento (determinístico, sem LLM)** — intents e ações:
+- **Moldura gerada (CV8, ADR-0026):** a decisão do estado/ação e a **base da resposta** seguem determinísticas; o que muda é que os intents **seguros** (`quem_e`, `agradecimento`, `mensagem_indefinida`) podem ganhar moldura por LLM em **rewrite** quando `geracao_llm_modo != off`. A geração exige a **ponte `wa.me` da oficina** na saída (`requireHandoffLink`) e o `wa.me`/nome da oficina entram na allowlist do validador; qualquer reprovação/erro → frase determinística. `opt_out`, `numero_errado`, `nao_reconhece` e `pedido_oficina` permanecem **100% determinísticos**. Com `off`, comportamento idêntico ao da ADR-0018.
+- **Comportamento (intents e ações)** — a coluna "Resposta" é a base determinística (moldura gerada só nos intents marcados ✎):
 
-| Intent | Resposta | Efeito |
-|---|---|---|
-| `agradecimento` | curta + link da oficina | — |
-| `quem_e` | explica (assistente da oficina via Quando Trocar) + link | — |
-| `pedido_oficina` (preço, agendar, remarcar, horário, reclamação) | handoff `wa.me` pra oficina | `markConversationHandoff(pedido_cliente_final)` |
-| `opt_out` | "não envio mais mensagens" | `clienteStatus = opt_out` + cancela lembretes futuros |
-| `numero_errado` | "desculpe o engano" | `clienteStatus = numero_errado` + cancela lembretes futuros |
-| `nao_reconhece` | handoff pra oficina verificar | `markConversationHandoff(cliente_nao_reconhece)` |
-| `mensagem_indefinida` | handoff (destino seguro) | `markConversationHandoff(mensagem_ambigua)` |
+| Intent | Resposta | Moldura | Efeito |
+|---|---|---|---|
+| `agradecimento` | curta + link da oficina | ✎ rewrite | — |
+| `quem_e` | explica (assistente da oficina via Quando Trocar) + link | ✎ rewrite | — |
+| `mensagem_indefinida` | handoff (destino seguro) + link | ✎ rewrite | `markConversationHandoff(mensagem_ambigua)` |
+| `pedido_oficina` (preço, agendar, remarcar, horário, reclamação) | handoff `wa.me` pra oficina | determinística | `markConversationHandoff(pedido_cliente_final)` |
+| `opt_out` | "não envio mais mensagens" | determinística | `clienteStatus = opt_out` + cancela lembretes futuros |
+| `numero_errado` | "desculpe o engano" | determinística | `clienteStatus = numero_errado` + cancela lembretes futuros |
+| `nao_reconhece` | handoff pra oficina verificar | determinística | `markConversationHandoff(cliente_nao_reconhece)` |
 
-- Bot não cota preço nem agenda ([ADR-0009](./adr/0009-confirmacao-vs-pre-agendamento.md)/[ADR-0012](./adr/0012-politica-de-preco.md)); opt-out/status nunca via LLM ([ADR-0001](./adr/0001-llm-como-conselheiro-nao-decisor.md)). Tool call `cliente_final_concierge` registrada sempre.
-- Fonte: [ADR-0018](./adr/0018-cliente-final-concierge-pre-lembrete.md), `lib/whatsapp/cliente-final-concierge.ts`, `lib/whatsapp/conversation-router.ts`, `lib/whatsapp/webhook-handler.ts`.
+- Bot não cota preço nem agenda ([ADR-0009](./adr/0009-confirmacao-vs-pre-agendamento.md)/[ADR-0012](./adr/0012-politica-de-preco.md)); opt-out/status nunca via LLM ([ADR-0001](./adr/0001-llm-como-conselheiro-nao-decisor.md)). O validador barra preço/promessa/agenda mesmo na moldura gerada (red-team em `tests/whatsapp-concierge-generation.test.ts`). Tool call `cliente_final_concierge` registrada sempre.
+- Fonte: [ADR-0018](./adr/0018-cliente-final-concierge-pre-lembrete.md), [ADR-0026](./adr/0026-concierge-moldura-gerada.md), `lib/whatsapp/cliente-final-concierge.ts`, `lib/whatsapp/reply-validator.ts` (`requireHandoffLink`), `lib/whatsapp/conversation-router.ts`, `lib/whatsapp/webhook-handler.ts`.
 
 ---
 
@@ -841,9 +868,13 @@ O bot pode **gerar** o texto de saída via LLM (`OPENAI_MODEL_RESPONDER`), mas d
 - **Validador de saída** (`lib/whatsapp/reply-validator.ts`): reprova preço ≠ `precoPartida` — numérico (parsing pt-BR distingue milhar de decimal: `R$ 5.9` ≠ `R$ 59`) ou escrito por extenso ("cento e noventa reais") —, promessa de resultado/agenda/prazo, URL fora da allowlist (links são normalizados por NFKC + mapa de confusáveis Unicode antes da checagem: pontos/barras ideográficos e hosts com homóglifo não burlam a allowlist), vazamento cross-tenant e tamanho acima do cap. Em qualquer dúvida, reprova (fail-safe → enlatada).
 - **Fallback**: erro, timeout ou reprovação → envia a resposta enlatada padrão (comportamento pré-ADR-0020). Nunca há regressão pior que o bot determinístico.
 - **Modo** (`configuracoes_vendedor.geracao_llm_modo`): `off` (idêntico ao histórico) · `sombra` (gera+valida+loga, envia enlatada) · `on` (envia gerada aprovada). Kill switch permanente.
-- **Blindagem de respostas transacionais**: mesmo com o modo `on`, só respostas de **conversa livre** passam pelo gerador. Respostas transacionais do fluxo de operação — pergunta de campo faltante, **resumo de confirmação de cadastro**, "cliente cadastrado" e captura do nome da oficina — permanecem **determinísticas** (o webhook força `off` nelas via `allowGeneration`). Reescrever o resumo de confirmação poderia adulterar/omitir um campo e derrubar a rede de segurança da [ADR-0017](./adr/0017-confirmacao-antes-de-registrar-troca.md) (a oficina confere o dado exato antes do template irreversível ao cliente frio). Marcação em `OnboardingAgentReply.allowConversationalGeneration` (só `neutralReply` = `true`).
+- **Blindagem de respostas transacionais**: mesmo com o modo `on`, o **resumo de confirmação de cadastro** (pré-registro), a **pergunta de campo faltante** e a **captura do nome da oficina** permanecem **determinísticos** (o webhook força `off` via `allowGeneration`). Reescrever o resumo de confirmação poderia adulterar/omitir um campo e derrubar a rede de segurança da [ADR-0017](./adr/0017-confirmacao-antes-de-registrar-troca.md) (a oficina confere o dado exato antes do template irreversível ao cliente frio). Marcação em `OnboardingAgentReply.allowConversationalGeneration`.
+- **Moldura gerada com dados literais (CV6)**: o **ack de "cliente cadastrado"** (pós-registro) passa a aceitar geração em **rewrite** — o nome e os dias já estão no texto, então o rewrite só varia a moldura e o validador barra qualquer fato inventado; os dados extraídos seguem literais. As **consultas read-only da operação** (§3.3-bis) devolvem os dados **literais**: a lista de lembretes fica determinística (sem geração, pra não perder item); só respostas curtas (contagem do mês, "cliente não encontrado") aceitam moldura em rewrite.
 - **Auditoria**: cada geração registra versão do prompt (`cv2-2`), **`generationMode` (`rewrite|respond`)**, intenção (`pergunta` na operação, `fora_escopo` em vendas), `userMessage` truncado (~300 chars), aprovação/reprovação e uso de fallback em `agent_tool_calls`.
 - **Protocolo "não sei"**: fora do conhecimento fornecido, admite e encaminha (no respond, a enlatada de fallback já é um handoff). O gerador distingue `dont_know` de falha operacional: no audit, `dontKnow` registra `rejectionReason: "generation_dont_know"` (`generation_failed_or_null` fica só para erro/timeout).
+- **Humanização fina (CV7)**: antes de responder, o webhook marca o inbound como **lido** e mostra **"digitando…"** (`markReadAndTyping`, uma chamada da Cloud API, best-effort). Resposta de texto acima de **~350 chars** é quebrada em até **2 mensagens sequenciais** numa fronteira natural (regra no sender, `splitLongMessage` — não no LLM); cada parte vira uma linha em `mensagens`.
+- **`bot_muted` (CV7)**: ao passar pro humano, todo handoff seta `conversas.bot_muted_until = now() + 24h` (dentro de `markConversationHandoff`). Enquanto `bot_muted_until > now()`, o webhook **registra o inbound mas não responde nada** (`isBotMuted` — gate logo após salvar a mensagem) — resolve o bot atropelar o humano no pós-handoff. Expira sozinho em 24h ou é limpo quando o admin resolve o handoff (`resolverHandoff`).
+- **Métricas e qualidade do número (CV7)**: `/admin/metricas-conversacional` agrega sobre `agent_tool_calls`/`mensagens`/`conversas` (RPC `get_conversational_metrics`): % gerada×enlatada×reprovada, handoff, mensagens e gerações por intenção. O último evento de qualidade do número Meta (webhook `phone_number_quality_update`/`account_update`) é guardado em `meta_phone_status` e exibido com alerta de cor — o volume do follow-up proativo (CV4) pressiona o rating, que é o ativo mais caro do produto.
 - **Volante de aprendizado** ([ADR-0023](./adr/0023-perguntas-sem-resposta.md)): quando o modo **resolvido** foi respond e o LLM devolveu `dontKnow`, a pergunta vira registro em **`perguntas_sem_resposta`** (`agent_mode`, pergunta ≤500 chars, resposta enlatada enviada, `motivo` (v1 só `dont_know`), `geracao_modo`, `prompt_version`, `status` para triagem futura). Grava em `sombra` **e** `on` (sombra também aprende); gravação best-effort (falha nunca derruba a resposta); rewrite+`dontKnow` **não** grava (significa "não consegui reescrever", não "pergunta sem resposta"). O ciclo fecha sem deploy: registro → admin cria FAQ em `faq_vendas` → próxima mensagem já usa a FAQ no bloco de conhecimento.
 
 ---

@@ -243,6 +243,34 @@ export class WhatsAppCloudApiClient implements WhatsappSender, WhatsappMediaDown
     return { whatsappMessageId, response: body };
   }
 
+  async markReadAndTyping(input: { messageId: string }): Promise<void> {
+    // CV7: marca o inbound como lido e mostra "digitando..." antes de responder
+    // (Cloud API — uma chamada faz os dois). Custo ~zero, grande ganho de
+    // percepção de humano. Best-effort: qualquer erro é engolido (o caller
+    // segue e responde normalmente).
+    if (!this.input.accessToken || !this.input.phoneNumberId) return;
+    try {
+      await fetch(
+        `https://graph.facebook.com/v20.0/${this.input.phoneNumberId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.input.accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            status: "read",
+            message_id: input.messageId,
+            typing_indicator: { type: "text" },
+          }),
+        },
+      );
+    } catch {
+      // Best-effort — nunca bloqueia a resposta.
+    }
+  }
+
   async getMediaMetadata(mediaId: string): Promise<WhatsappMediaMetadata> {
     if (!this.input.accessToken) {
       throw new Error("Missing WhatsApp Cloud API access token");

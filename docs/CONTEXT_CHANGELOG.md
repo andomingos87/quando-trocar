@@ -19,6 +19,24 @@ Não registrar:
 
 ---
 
+## 2026-07-18 — Demais fases da camada conversacional (CV4–CV8, QTR-13 a QTR-17)
+
+Fecha o milestone "3. Demais fases (CV4–CV8)" do projeto Camada Conversacional. Todas protegidas por validador + fallback enlatado (ADR-0020); com `geracao_llm_modo='off'`, comportamento idêntico ao anterior.
+
+### Adicionado
+
+- **CV4 — Follow-up proativo de leads** (QTR-13): job diário `app/api/internal/followup-leads/route.ts` (protegido por `INTERNAL_JOB_SECRET`) + `lib/whatsapp/followup-leads.ts` (seleção pura testável). Até 2 follow-ups por lead via template Meta aprovado (fora da janela 24h — ADR-0005); janelas 24h/72h; só `em_conversa`/`qualificado`, nunca em handoff; idempotente (contador só avança em sucesso). Migrations `20260718140000_leads_followup.sql` e `20260718141000_followup_leads_cron.sql` (cron 1×/dia; requer o segredo `followup_leads_url` no Vault). Regras §1.7.
+- **CV5 — Volante de aprendizado** (QTR-14): busca semântica na FAQ (pgvector + `embedding` em `faq_vendas` + RPC `match_faq_vendas`, `lib/whatsapp/faq-embeddings.ts`), fallback pro match por keyword; embedding gerado no save do admin (best-effort). Tela `/admin/perguntas-sem-resposta` (lista por frequência, "virar FAQ" pré-preenchido, ignorar). Migration `20260718150000_faq_semantic_search.sql`. Regras §1.5/§1.8.
+- **CV6 — Operação como assistente** (QTR-15): consultas read-only escopadas por `oficina_id` (`listUpcomingReminders`, `countRemindersSentThisMonth`, `getClienteResumo`) via intents `consulta_lembretes`/`consulta_cliente` (`classifyReadOnlyQuery`); dados literais + moldura só em respostas curtas. Comando `/ajuda` determinístico por modo. Ack de cadastro ganha moldura (rewrite). Regras §3.3-bis/§13.
+- **CV7 — Humanização fina + métricas** (QTR-16): read receipt + typing (`markReadAndTyping`), quebra de mensagem longa (`message-split.ts`, ~350 chars → 2 msgs), `bot_muted` (silencia o bot 24h no handoff — `conversas.bot_muted_until`), tela `/admin/metricas-conversacional` (RPC `get_conversational_metrics`) e captura de quality rating do número (`meta_phone_status`, webhook `phone_number_quality_update`). Migrations `20260718160000`, `20260718161000`, `20260718162000`. Regras §13.
+- **CV8 — Concierge com moldura gerada** (QTR-17): [ADR-0026](./adr/0026-concierge-moldura-gerada.md) revisa a ADR-0018 — moldura gerada (rewrite) só nos intents `quem_e`/`agradecimento`/`mensagem_indefinida`; `opt_out`/`numero_errado`/`nao_reconhece`/`pedido_oficina` seguem determinísticos. Regra extra do validador `requireHandoffLink` (exige a ponte `wa.me` da oficina). Red-team em `tests/whatsapp-concierge-generation.test.ts`. Regras §3.7.
+
+### Notas
+
+- Migrations aplicadas via MCP nesta sessão; escritas idempotentes (`if not exists` / `create or replace`) — reaplicar por `db push` é seguro apesar do drift de timestamp nome-de-arquivo × versão registrada.
+- **Pendências operacionais**: submeter/aprovar os templates Meta `followup_lead_24h`/`followup_lead_72h` e definir `WHATSAPP_TEMPLATE_FOLLOWUP_*` (CV4); criar o segredo `followup_leads_url` no Vault (CV4); inscrever a WABA no webhook `phone_number_quality_update` (CV7).
+- Não implementado (fora do essencial do card): moldura gerada no reminder-agent (CV8 menciona como opcional) — o concierge é a superfície sensível e ficou coberto.
+
 ## 2026-07-18 — Vendas: objeções, resumo de handoff e botões (Fase CV3, QTR-12)
 
 ### Adicionado

@@ -17,16 +17,20 @@ type FormState = {
 export function FaqFormModal({
   mode,
   faq,
+  initialPergunta,
   onClose,
   onSaved,
 }: {
   mode: Mode;
   faq: FaqVendas | null;
+  // Pré-preenche a pergunta ao criar (fluxo "virar FAQ" do volante de
+  // aprendizado, CV5). Ignorado no modo edit (usa a FAQ existente).
+  initialPergunta?: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [form, setForm] = useState<FormState>(() => ({
-    pergunta: faq?.pergunta ?? "",
+    pergunta: faq?.pergunta ?? initialPergunta ?? "",
     resposta: faq?.resposta ?? "",
     palavras_chave: (faq?.palavras_chave ?? []).join(", "),
     ativo: faq ? faq.ativo : true,

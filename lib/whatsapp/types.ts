@@ -417,6 +417,17 @@ export type WhatsappRepository = {
     conversationId: string;
     reason: string;
   }): Promise<void>;
+  // CV7: true enquanto a conversa está silenciada (bot_muted_until > now).
+  // Setado no handoff, expira em 24h. O webhook checa antes de responder.
+  isBotMuted?(input: { conversationId: string }): Promise<boolean>;
+  // CV7: upsert do último evento de qualidade do número Meta (quality rating).
+  saveMetaPhoneStatus?(input: {
+    displayPhoneNumber: string;
+    qualityRating: string | null;
+    event: string | null;
+    currentLimit: string | null;
+    raw: Record<string, unknown>;
+  }): Promise<void>;
   getLatestPendingPagamento?(input: {
     oficinaId: string;
   }): Promise<{
@@ -608,6 +619,32 @@ export type WhatsappRepository = {
     response: unknown;
   }): Promise<void>;
   listActiveFaqs?(): Promise<FaqVendasRecord[]>;
+  // Busca semântica na FAQ (CV5). Chama a RPC pgvector `match_faq_vendas`.
+  // Opcional/best-effort: ausente ou erro → o caller usa o match por keyword.
+  matchFaqByEmbedding?(input: {
+    embedding: number[];
+    threshold: number;
+    limit: number;
+  }): Promise<FaqVendasRecord[]>;
+  // Backfill do embedding de uma FAQ (chamado no save do admin, best-effort).
+  updateFaqEmbedding?(input: {
+    id: string;
+    embedding: number[];
+  }): Promise<void>;
+  // Ferramentas read-only da operação (CV6). SEMPRE escopadas por oficina_id —
+  // nunca podem vazar dados de outra oficina. Leitura não muda estado (ADR-0001).
+  listUpcomingReminders?(input: {
+    oficinaId: string;
+    days: number;
+    limit?: number;
+  }): Promise<UpcomingReminder[]>;
+  countRemindersSentThisMonth?(input: {
+    oficinaId: string;
+  }): Promise<number>;
+  getClienteResumo?(input: {
+    oficinaId: string;
+    nomeOuTelefone: string;
+  }): Promise<ClienteResumo | null>;
   getConfiguracoesVendedor?(): Promise<ConfiguracoesVendedor>;
   // Ultimas N mensagens da conversa (asc por tempo). Primeira leitura de
   // historico do projeto — usada como contexto do gerador conversacional
@@ -616,6 +653,35 @@ export type WhatsappRepository = {
     conversationId: string;
     limit: number;
   }): Promise<RecentMessage[]>;
+  // Follow-up proativo de leads (CV4). Candidatos = leads ainda reengajáveis
+  // (status em_conversa/qualificado, não excluídos, followup_count < 2). A
+  // janela e o cap são decididos pela função pura `selectLeadsForFollowup`.
+  listFollowupCandidates?(input: {
+    limit: number;
+  }): Promise<FollowupLeadCandidate[]>;
+  // Marca um follow-up como enviado (avança o contador + carimba a data). Só é
+  // chamado após envio com sucesso — a idempotência do cron depende disso.
+  markLeadFollowup?(input: {
+    leadId: string;
+    followupNumber: number;
+    at: string;
+  }): Promise<void>;
+};
+
+// Candidato a follow-up proativo (CV4). `referenceAt` é a última interação do
+// lead (last_message_at, ou created_at quando nunca houve inbound); as janelas
+// de 24h/72h são medidas a partir dele. `handoffRequired` vem da conversa e
+// exclui o lead (já é caso humano).
+export type FollowupLeadCandidate = {
+  leadId: string;
+  conversationId: string | null;
+  whatsapp: string;
+  nome: string | null;
+  status: LeadStatus;
+  followupCount: number;
+  lastFollowupAt: string | null;
+  referenceAt: string;
+  handoffRequired: boolean;
 };
 
 export type WhatsappSender = {
@@ -646,6 +712,12 @@ export type WhatsappSender = {
     response?: unknown;
   }>;
   /**
+   * CV7: marca o inbound como lido + typing indicator antes de responder. Uma
+   * chamada da Cloud API faz os dois. Opcional e best-effort — quando ausente
+   * ou falha, o webhook só não mostra "digitando".
+   */
+  markReadAndTyping?(input: { messageId: string }): Promise<void>;
+  /**
    * Envia uma mensagem interativa com reply buttons (Cloud API, máx 3). Opcional
    * na interface: quando o sender não implementa, o webhook degrada para texto
    * (fase CV3).
@@ -666,6 +738,11 @@ export type SalesAgentInput = {
   context?: ConversationContext;
   salesConfig?: ConfiguracoesVendedor;
   faqs?: ReadonlyArray<FaqVendasRecord>;
+  /**
+   * FAQ resolvida por similaridade semântica fora do agente (CV5). Usada como
+   * fallback do match por keyword. Ausente → só keyword (comportamento antigo).
+   */
+  preMatchedFaqId?: string | null;
 };
 
 export type SalesAgent = {
@@ -712,6 +789,35 @@ export type OnboardingAgentReply = {
    * `pergunta` usa "respond" hoje — e pergunta de preço força "rewrite".
    */
   conversationalGenerationMode?: ReplyGenerationMode;
+  /**
+   * Consulta read-only da operação (CV6): o agente classifica a intenção mas
+   * NÃO acessa dados. O webhook-handler resolve contra o repositório, sempre
+   * escopado por `oficina_id`, e formata a resposta com os dados LITERAIS
+   * (números/nomes nunca são gerados — só a moldura em volta pode ser). Leitura
+   * não muda estado → não fere a ADR-0001.
+   */
+  readOnlyQuery?: OperacaoReadOnlyQuery;
+};
+
+export type OperacaoReadOnlyQuery =
+  | { kind: "consulta_lembretes"; scope: "proximos" | "mes" }
+  | { kind: "consulta_cliente"; termo: string };
+
+// Resultado de `listUpcomingReminders` (CV6). Escopado por oficina.
+export type UpcomingReminder = {
+  clienteNome: string;
+  veiculo: string;
+  scheduledAt: string;
+};
+
+// Resultado de `getClienteResumo` (CV6). Escopado por oficina.
+export type ClienteResumo = {
+  nome: string;
+  whatsapp: string;
+  status: string;
+  totalServicos: number;
+  ultimoServico: { tipo: string; data: string; veiculo: string } | null;
+  proximoLembreteAt: string | null;
 };
 
 export type ReminderIntent =

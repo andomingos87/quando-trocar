@@ -812,6 +812,108 @@ function neutralReply(
   };
 }
 
+// ---------------------------------------------------------------------------
+// CV6 — consultas read-only da operação. O agente só CLASSIFICA a intenção e
+// (para cliente) extrai o termo de busca; a leitura de dados é feita pelo
+// webhook-handler, sempre escopada por oficina_id. Leitura não muda estado
+// (ADR-0001). Detecção 100% determinística e testável.
+// ---------------------------------------------------------------------------
+const REMINDER_WORD =
+  /\b(lembrete|lembretes|avis(o|os|ei|amos|ar)|disparo|disparos)\b/;
+const MESSAGE_WORD = /\b(mensagem|mensagens)\b/;
+const MONTH_WORD =
+  /\b(mes|do mes|esse mes|este mes|no mes|neste mes|nesse mes|por mes)\b/;
+const COUNT_WORD = /\b(quant[oa]s?|quantidade|numero de|total de)\b/;
+const UPCOMING_HINT =
+  /\b(proxim[oa]s?|quais|quem|hoje|amanha|semana|agenda|pendente|pendentes|a vencer|pra voltar|pra vencer|vou avisar|vao vencer|vencendo)\b/;
+const CLIENTE_LOOKUP_CONTEXT =
+  /\b(dados|resumo|historico|info|informac(ao|oes)|ficha|status|ver|consultar|consulta|buscar|busca|procurar|quando|ultim[oa]|proximo lembrete)\b/;
+
+// Extrai o nome/telefone alvo de uma consulta de cliente. Telefone (>= 8
+// dígitos) tem prioridade; senão o texto após "cliente". Retorna null quando
+// não dá pra identificar um alvo.
+export function extractClienteTermo(message: string): string | null {
+  const digits = message.match(/\+?\d[\d\s().-]{7,}\d/);
+  if (digits) {
+    const onlyDigits = digits[0].replace(/\D/g, "");
+    if (onlyDigits.length >= 8) return onlyDigits;
+  }
+  // "cliente Joao", "cliente: Maria Silva", "do cliente Zé"
+  const afterCliente = message.match(/\bcliente\s*:?\s+(.+)$/i);
+  if (afterCliente) {
+    const termo = afterCliente[1].trim().replace(/[?!.]+$/, "").trim();
+    // Evita casar "cliente cadastrado", "cliente final", "clientes".
+    if (termo.length >= 2 && !/^(cadastrad|final|novo|nova)/i.test(termo)) {
+      return termo;
+    }
+  }
+  return null;
+}
+
+export function classifyReadOnlyQuery(
+  message: string,
+): NonNullable<OnboardingAgentReply["readOnlyQuery"]> | null {
+  const normalized = normalizeText(message);
+  const mentionsReminder = REMINDER_WORD.test(normalized) || MESSAGE_WORD.test(normalized);
+
+  // "quantos lembretes / quantas mensagens saíram esse mês"
+  if (mentionsReminder && MONTH_WORD.test(normalized) && COUNT_WORD.test(normalized)) {
+    return { kind: "consulta_lembretes", scope: "mes" };
+  }
+  // Próximos lembretes / quem vou avisar / agenda / quem tá pra voltar
+  if (
+    (REMINDER_WORD.test(normalized) && UPCOMING_HINT.test(normalized)) ||
+    /\bquem\s+(vou|vamos|eu vou|voce vai)\s+(avisar|lembrar)\b/.test(normalized) ||
+    /\bquem\s+(ta|esta)\s+pra\s+(voltar|trocar|vencer)\b/.test(normalized) ||
+    /\bproxim[oa]s?\s+lembretes?\b/.test(normalized) ||
+    /\bagenda\s+(de\s+)?(lembrete|troca)/.test(normalized)
+  ) {
+    return { kind: "consulta_lembretes", scope: "proximos" };
+  }
+  // Menção genérica a lembrete numa pergunta → assume próximos (a intenção
+  // "quais lembretes?" é a mais comum).
+  if (REMINDER_WORD.test(normalized) && isQuestionLike(message)) {
+    return { kind: "consulta_lembretes", scope: "proximos" };
+  }
+
+  // Consulta de cliente: exige um alvo identificável. Com contexto de busca
+  // explícito (dados/resumo/ver/quando...) aceita qualquer alvo; só com o "seco"
+  // "cliente X", exige que X pareça nome próprio (maiúscula) ou telefone — assim
+  // "cliente vai gostar disso" não vira consulta.
+  const hasLookupContext = CLIENTE_LOOKUP_CONTEXT.test(normalized);
+  if (hasLookupContext || /\bcliente\b/.test(normalized)) {
+    const termo = extractClienteTermo(message);
+    if (termo && (hasLookupContext || /^\+?\d/.test(termo) || /^[A-ZÀ-Ý]/.test(termo))) {
+      return { kind: "consulta_cliente", termo };
+    }
+  }
+
+  return null;
+}
+
+function readOnlyQueryReply(
+  query: NonNullable<OnboardingAgentReply["readOnlyQuery"]>,
+  message: string,
+  context: ConversationContext,
+): OnboardingAgentReply {
+  return {
+    // O body real é montado pelo webhook-handler com os dados LITERAIS. Este
+    // texto é só a rede de segurança (ex.: sem contexto de oficina).
+    body: "Deixa eu dar uma olhada nisso pra você...",
+    context,
+    registerServiceInput: null,
+    nextAgentMode: null,
+    readOnlyQuery: query,
+    toolCalls: [
+      {
+        toolName: "operacao_read_only_query",
+        input: { message },
+        output: { ...query },
+      },
+    ],
+  };
+}
+
 function blockedPromptInjectionReply(message: string): OnboardingAgentReply {
   return {
     body:
@@ -860,6 +962,15 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     }
 
     if (!input.context.missing_field && !hasRegistrationSignal(input.message)) {
+      // CV6: consultas read-only (lembretes/cliente) só na operação — no
+      // onboarding a oficina ainda está aprendendo a registrar. O webhook
+      // resolve os dados escopados por oficina_id.
+      if (input.mode === "operacao") {
+        const query = classifyReadOnlyQuery(input.message);
+        if (query) {
+          return readOnlyQueryReply(query, input.message, input.context);
+        }
+      }
       return neutralReply(
         input.message,
         input.context,

@@ -36,6 +36,8 @@ export async function resolverHandoff(
   const update: Record<string, unknown> = {
     handoff_required: false,
     handoff_reason: null,
+    // CV7: resolver o handoff destrava o bot (limpa o bot_muted).
+    bot_muted_until: null,
     updated_at: new Date().toISOString(),
   };
   if (nextAgentMode !== previousAgentMode) {

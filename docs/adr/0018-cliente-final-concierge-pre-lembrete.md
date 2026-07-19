@@ -1,8 +1,9 @@
 # ADR 0018: Concierge do cliente final antes do primeiro lembrete
 
-- **Status**: accepted
+- **Status**: accepted (parcialmente revisada — ver nota)
 - **Data**: 2026-06-14
 - **Decisores**: Anderson Domingos
+- **Revisada por**: [ADR-0026](./0026-concierge-moldura-gerada.md) — a decisão de concierge **100% determinístico** foi revista na fase CV8: os intents seguros (`quem_e`, `agradecimento`, `mensagem_indefinida`) passam a aceitar moldura gerada (rewrite) com validador + `requireHandoffLink`. Todo o resto desta ADR (roteamento, botão `wa.me`, intents/handoff) permanece válido.
 - **Fonte**: teste real (cliente "Rafael", confirmação de troca de óleo, 2026-06-14) — print mostrando resposta confusa do bot
 - **Relaciona-se com**: [ADR-0002](./0002-roteamento-via-agent-mode.md) (roteamento via agent_mode), [ADR-0009](./0009-confirmacao-vs-pre-agendamento.md) (handoff de agendamento), [ADR-0012](./0012-politica-de-preco.md) (bot não cota preço)
 

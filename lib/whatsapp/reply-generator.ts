@@ -324,6 +324,8 @@ export async function maybeGenerateConversationalReply(input: {
   generationMode?: ReplyGenerationMode;
   userMessage?: string;
   knowledge?: ReplyGenerationKnowledge;
+  // CV8: exige a ponte wa.me da oficina na saída (concierge do cliente final).
+  requireHandoffLink?: boolean;
 }): Promise<MaybeGenerateResult> {
   const { deterministicReply, mode } = input;
   // Espelha a normalizacao defensiva do gerador, para o audit refletir o modo
@@ -391,6 +393,7 @@ export async function maybeGenerateConversationalReply(input: {
     precoPartida,
     allowedLinks: input.allowedLinks,
     allowedNames: input.allowedNames,
+    requireHandoffLink: input.requireHandoffLink,
   });
 
   const approved = validation.ok;

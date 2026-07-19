@@ -2,6 +2,12 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import {
+  OpenAiFaqEmbedder,
+  faqEmbeddingText,
+  toPgVectorLiteral,
+  type FaqEmbedder,
+} from "@/lib/whatsapp/faq-embeddings";
 import { withAdminAudit } from "./audit";
 
 export type FaqVendas = {
@@ -70,6 +76,26 @@ export function validateFaqInput(
   return null;
 }
 
+// Backfill do embedding de uma FAQ no save (CV5). Best-effort: sem chave/erro
+// não bloqueia o save — a busca semântica simplesmente cai no match por
+// keyword para essa FAQ até o embedding existir. `embedder` é injetável p/ teste.
+export async function backfillFaqEmbedding(
+  supabase: SupabaseClient,
+  faq: Pick<FaqVendas, "id" | "pergunta" | "resposta" | "palavras_chave">,
+  embedder: FaqEmbedder = new OpenAiFaqEmbedder(),
+): Promise<void> {
+  try {
+    const vector = await embedder.embed(faqEmbeddingText(faq));
+    if (!vector) return;
+    await supabase
+      .from("faq_vendas")
+      .update({ embedding: toPgVectorLiteral(vector) })
+      .eq("id", faq.id);
+  } catch {
+    // Best-effort — nunca derruba o save do admin.
+  }
+}
+
 function normalizeKeywords(keywords: string[]): string[] {
   return keywords
     .map((kw) => kw.trim().toLowerCase())
@@ -116,7 +142,7 @@ export async function createFaq(
     throw err;
   }
 
-  return withAdminAudit(
+  const created = await withAdminAudit(
     supabase,
     (result: FaqVendas) => ({
       adminId: ctx.adminId,
@@ -142,6 +168,10 @@ export async function createFaq(
       return { ...data, palavras_chave: data.palavras_chave ?? [] };
     },
   );
+
+  // Busca semântica (CV5): gera o embedding no save. Best-effort.
+  await backfillFaqEmbedding(supabase, created);
+  return created;
 }
 
 export async function updateFaq(
@@ -173,7 +203,7 @@ export async function updateFaq(
   if (input.ativo !== undefined) patch.ativo = input.ativo;
   if (input.ordem !== undefined) patch.ordem = input.ordem;
 
-  return withAdminAudit(
+  const updated = await withAdminAudit(
     supabase,
     (after: FaqVendas) => ({
       adminId: ctx.adminId,
@@ -194,6 +224,17 @@ export async function updateFaq(
       return { ...data, palavras_chave: data.palavras_chave ?? [] };
     },
   );
+
+  // Reindexa o embedding só quando pergunta/resposta/keywords mudaram (o que
+  // afeta o texto embutido). Best-effort (CV5).
+  if (
+    input.pergunta !== undefined ||
+    input.resposta !== undefined ||
+    input.palavras_chave !== undefined
+  ) {
+    await backfillFaqEmbedding(supabase, updated);
+  }
+  return updated;
 }
 
 export async function deactivateFaq(

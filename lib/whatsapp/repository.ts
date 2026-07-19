@@ -1,10 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { toPgVectorLiteral } from "./faq-embeddings";
 import type {
+  ClienteResumo,
   ConfiguracoesVendedor,
   ConversationAgentMode,
   ConversationContext,
   FaqVendasRecord,
+  FollowupLeadCandidate,
   GeracaoLlmModo,
   InboundMediaType,
   LeadStatus,
@@ -14,6 +17,7 @@ import type {
   RegisteredService,
   SavedConversation,
   TipoServico,
+  UpcomingReminder,
   WhatsappRepository,
 } from "./types";
 
@@ -118,6 +122,195 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     return value;
   }
 
+  async matchFaqByEmbedding(input: {
+    embedding: number[];
+    threshold: number;
+    limit: number;
+  }): Promise<FaqVendasRecord[]> {
+    // pgvector aceita a forma textual canônica "[a,b,c]" tanto na RPC quanto no
+    // update — evita ambiguidade de coerção JSON→vector do PostgREST.
+    const result = (await this.supabase.rpc("match_faq_vendas", {
+      query_embedding: toPgVectorLiteral(input.embedding),
+      match_threshold: input.threshold,
+      match_count: input.limit,
+    })) as SupabaseResult<
+      Array<{
+        id: string;
+        pergunta: string;
+        resposta: string;
+        palavras_chave: string[] | null;
+        ordem: number;
+        similarity: number;
+      }>
+    >;
+
+    throwIfError(result);
+    return (result.data ?? []).map((row) => ({
+      id: row.id,
+      pergunta: row.pergunta,
+      resposta: row.resposta,
+      palavras_chave: row.palavras_chave ?? [],
+      ordem: row.ordem,
+    }));
+  }
+
+  async updateFaqEmbedding(input: {
+    id: string;
+    embedding: number[];
+  }): Promise<void> {
+    const result = (await this.supabase
+      .from("faq_vendas")
+      .update({ embedding: toPgVectorLiteral(input.embedding) })
+      .eq("id", input.id)) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
+  async listUpcomingReminders(input: {
+    oficinaId: string;
+    days: number;
+    limit?: number;
+  }): Promise<UpcomingReminder[]> {
+    // CV6: lembretes a vencer, ESCOPADOS por oficina_id (nunca vaza outra
+    // oficina). Só os que ainda vão sair (pendente/agendado/enfileirado).
+    const nowIso = new Date().toISOString();
+    const untilIso = new Date(
+      Date.now() + input.days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const result = (await this.supabase
+      .from("lembretes")
+      .select("scheduled_at, clientes_finais(nome), veiculos(descricao)")
+      .eq("oficina_id", input.oficinaId)
+      .in("status", ["pendente", "agendado", "enfileirado"])
+      .gte("scheduled_at", nowIso)
+      .lt("scheduled_at", untilIso)
+      .order("scheduled_at", { ascending: true })
+      .limit(input.limit ?? 10)) as SupabaseResult<
+      Array<{
+        scheduled_at: string;
+        clientes_finais: { nome: string } | { nome: string }[] | null;
+        veiculos: { descricao: string } | { descricao: string }[] | null;
+      }>
+    >;
+
+    throwIfError(result);
+    return (result.data ?? []).map((row) => {
+      const cliente = Array.isArray(row.clientes_finais)
+        ? row.clientes_finais[0]
+        : row.clientes_finais;
+      const veiculo = Array.isArray(row.veiculos) ? row.veiculos[0] : row.veiculos;
+      return {
+        clienteNome: cliente?.nome ?? "Cliente",
+        veiculo: veiculo?.descricao ?? "veículo",
+        scheduledAt: row.scheduled_at,
+      };
+    });
+  }
+
+  async countRemindersSentThisMonth(input: {
+    oficinaId: string;
+  }): Promise<number> {
+    // CV6: quantos lembretes já saíram no mês corrente, ESCOPADO por oficina.
+    const now = new Date();
+    const startOfMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    ).toISOString();
+    const result = (await this.supabase
+      .from("lembretes")
+      .select("id", { count: "exact", head: true })
+      .eq("oficina_id", input.oficinaId)
+      .in("status", ["enviado", "respondido", "sem_resposta"])
+      .gte("sent_at", startOfMonth)) as SupabaseResult<null> & { count: number | null };
+
+    throwIfError(result);
+    return result.count ?? 0;
+  }
+
+  async getClienteResumo(input: {
+    oficinaId: string;
+    nomeOuTelefone: string;
+  }): Promise<ClienteResumo | null> {
+    // CV6: resumo de um cliente, ESCOPADO por oficina_id. Busca por telefone
+    // (dígitos) quando o termo parece um número; senão por nome (ilike).
+    const digits = input.nomeOuTelefone.replace(/\D/g, "");
+    const byPhone = digits.length >= 8;
+
+    let query = this.supabase
+      .from("clientes_finais")
+      .select("id, nome, whatsapp, status")
+      .eq("oficina_id", input.oficinaId)
+      .is("deleted_at", null);
+    query = byPhone
+      ? query.ilike("whatsapp", `%${digits}%`)
+      : query.ilike("nome", `%${input.nomeOuTelefone.trim()}%`);
+
+    const clienteResult = (await query
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{
+      id: string;
+      nome: string;
+      whatsapp: string;
+      status: string;
+    }>;
+
+    throwIfError(clienteResult);
+    const cliente = clienteResult.data;
+    if (!cliente) return null;
+
+    // Serviços do cliente (escopados por oficina + cliente).
+    const servicosResult = (await this.supabase
+      .from("servicos")
+      .select("tipo_servico, data_servico, veiculos(descricao)")
+      .eq("oficina_id", input.oficinaId)
+      .eq("cliente_id", cliente.id)
+      .order("data_servico", { ascending: false })) as SupabaseResult<
+      Array<{
+        tipo_servico: string;
+        data_servico: string;
+        veiculos: { descricao: string } | { descricao: string }[] | null;
+      }>
+    >;
+
+    throwIfError(servicosResult);
+    const servicos = servicosResult.data ?? [];
+    const ultimo = servicos[0];
+    const ultimoVeiculo = ultimo
+      ? Array.isArray(ultimo.veiculos)
+        ? ultimo.veiculos[0]
+        : ultimo.veiculos
+      : null;
+
+    // Próximo lembrete pendente do cliente (escopado por oficina).
+    const lembreteResult = (await this.supabase
+      .from("lembretes")
+      .select("scheduled_at")
+      .eq("oficina_id", input.oficinaId)
+      .eq("cliente_id", cliente.id)
+      .in("status", ["pendente", "agendado", "enfileirado"])
+      .gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()) as SupabaseResult<{ scheduled_at: string }>;
+
+    throwIfError(lembreteResult);
+
+    return {
+      nome: cliente.nome,
+      whatsapp: cliente.whatsapp,
+      status: cliente.status,
+      totalServicos: servicos.length,
+      ultimoServico: ultimo
+        ? {
+            tipo: ultimo.tipo_servico,
+            data: ultimo.data_servico,
+            veiculo: ultimoVeiculo?.descricao ?? "veículo",
+          }
+        : null,
+      proximoLembreteAt: lembreteResult.data?.scheduled_at ?? null,
+    };
+  }
+
   async getConfiguracoesVendedor(): Promise<ConfiguracoesVendedor> {
     if (this.configCache && Date.now() - this.configCache.loadedAt < CONFIG_CACHE_TTL_MS) {
       return this.configCache.value;
@@ -188,6 +381,76 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         body: row.body ?? "",
         sentAt: row.sent_at ?? row.created_at ?? null,
       }));
+  }
+
+  async listFollowupCandidates(input: {
+    limit: number;
+  }): Promise<FollowupLeadCandidate[]> {
+    // Leads ainda reengajáveis: status em_conversa/qualificado, não excluídos,
+    // com menos de 2 follow-ups. Embute as conversas para pegar o id (necessário
+    // para registrar o outbound em `mensagens`) e o flag de handoff (exclui o
+    // lead — já é caso humano). A decisão de janela/cap fica na função pura
+    // `selectLeadsForFollowup` (CV4).
+    const result = (await this.supabase
+      .from("leads_oficina")
+      .select(
+        "id,whatsapp,nome,status,followup_count,last_followup_at,last_message_at,created_at,conversas(id,agent_mode,handoff_required)",
+      )
+      .in("status", ["em_conversa", "qualificado"])
+      .is("deleted_at", null)
+      .lt("followup_count", 2)
+      .order("last_message_at", { ascending: true, nullsFirst: true })
+      .limit(input.limit)) as SupabaseResult<
+      Array<{
+        id: string;
+        whatsapp: string;
+        nome: string | null;
+        status: LeadStatus;
+        followup_count: number | null;
+        last_followup_at: string | null;
+        last_message_at: string | null;
+        created_at: string;
+        conversas:
+          | Array<{ id: string; agent_mode: string; handoff_required: boolean }>
+          | null;
+      }>
+    >;
+
+    throwIfError(result);
+    return (result.data ?? []).map((row) => {
+      const conversas = row.conversas ?? [];
+      // Preferimos a conversa de vendas; senão a primeira disponível.
+      const vendas = conversas.find((c) => c.agent_mode === "vendas");
+      const conversation = vendas ?? conversas[0] ?? null;
+      return {
+        leadId: row.id,
+        conversationId: conversation?.id ?? null,
+        whatsapp: row.whatsapp,
+        nome: row.nome,
+        status: row.status,
+        followupCount: row.followup_count ?? 0,
+        lastFollowupAt: row.last_followup_at,
+        referenceAt: row.last_message_at ?? row.created_at,
+        handoffRequired: conversas.some((c) => c.handoff_required),
+      };
+    });
+  }
+
+  async markLeadFollowup(input: {
+    leadId: string;
+    followupNumber: number;
+    at: string;
+  }): Promise<void> {
+    const result = (await this.supabase
+      .from("leads_oficina")
+      .update({
+        followup_count: input.followupNumber,
+        last_followup_at: input.at,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.leadId)) as SupabaseResult<null>;
+
+    throwIfError(result);
   }
 
 
@@ -695,16 +958,58 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
   }
 
   async markConversationHandoff(input: { conversationId: string; reason: string }) {
+    // CV7: ao passar pro humano, silencia o bot por 24h (bot_muted) — resolve o
+    // bot atropelar o humano no pós-handoff. Limpo quando o admin resolve o
+    // handoff (lib/admin/conversas.ts) ou expira sozinho.
+    const mutedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const result = (await this.supabase
       .from("conversas")
       .update({
         handoff_required: true,
         handoff_reason: input.reason,
+        bot_muted_until: mutedUntil,
         updated_at: new Date().toISOString(),
       })
       .eq("id", input.conversationId)) as SupabaseResult<null>;
 
     throwIfError(result);
+  }
+
+  async saveMetaPhoneStatus(input: {
+    displayPhoneNumber: string;
+    qualityRating: string | null;
+    event: string | null;
+    currentLimit: string | null;
+    raw: Record<string, unknown>;
+  }): Promise<void> {
+    // CV7: upsert do último evento de qualidade por número.
+    const result = (await this.supabase.from("meta_phone_status").upsert(
+      {
+        display_phone_number: input.displayPhoneNumber,
+        quality_rating: input.qualityRating,
+        event: input.event,
+        current_limit: input.currentLimit,
+        raw: input.raw,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "display_phone_number" },
+    )) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
+  async isBotMuted(input: { conversationId: string }): Promise<boolean> {
+    // CV7: true enquanto bot_muted_until estiver no futuro. Uma linha, escopada
+    // pela conversa; o webhook usa isso como gate antes de responder.
+    const result = (await this.supabase
+      .from("conversas")
+      .select("bot_muted_until")
+      .eq("id", input.conversationId)
+      .maybeSingle()) as SupabaseResult<{ bot_muted_until: string | null }>;
+
+    throwIfError(result);
+    const mutedUntil = result.data?.bot_muted_until;
+    return mutedUntil ? new Date(mutedUntil).getTime() > Date.now() : false;
   }
 
   async getLatestPendingPagamento(input: { oficinaId: string }) {

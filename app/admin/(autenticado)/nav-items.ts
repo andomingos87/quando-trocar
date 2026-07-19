@@ -51,6 +51,8 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: "Conteúdo & IA",
     items: [
       { href: "/admin/faq", label: "FAQ vendedor" },
+      { href: "/admin/perguntas-sem-resposta", label: "Perguntas sem resposta" },
+      { href: "/admin/metricas-conversacional", label: "Métricas IA" },
       { href: "/admin/tipos-servico", label: "Tipos de serviço" },
       { href: "/admin/inteligencia-mercado", label: "Inteligência mercado" },
     ],

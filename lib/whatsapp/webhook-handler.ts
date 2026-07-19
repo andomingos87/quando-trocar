@@ -20,7 +20,10 @@ import { WhatsappOnboardingAgent } from "./onboarding-agent";
 import { extractRepresentanteCodigo, extractWorkshopName } from "./sales-agent";
 import { OFICINA_SEM_NOME } from "./repository";
 import { WhatsappReminderAgent } from "./reminder-agent";
-import { WhatsappClienteFinalConciergeAgent } from "./cliente-final-concierge";
+import {
+  WhatsappClienteFinalConciergeAgent,
+  buildWorkshopWaLink,
+} from "./cliente-final-concierge";
 import { WhatsappSupportAgent } from "./support-agent";
 import {
   OpenAiReplyGenerator,
@@ -36,9 +39,23 @@ import {
   OpenAiHandoffSummarizer,
   type HandoffSummarizer,
 } from "./handoff-summary";
+import {
+  OpenAiFaqEmbedder,
+  resolveSemanticFaqMatch,
+  type FaqEmbedder,
+} from "./faq-embeddings";
+import {
+  ajudaMessage,
+  clienteNaoEncontrado,
+  formatClienteResumo,
+  formatRemindersSentThisMonth,
+  formatUpcomingReminders,
+} from "./operacao-queries";
+import { splitLongMessage } from "./message-split";
 import { siteConfig, whatsappLink } from "../config";
 import {
   extractInboundMessages,
+  extractPhoneQualityEvents,
   extractProviderEventId,
   extractStatusEvents,
   extractWhatsappMessageId,
@@ -57,6 +74,7 @@ import type {
   ConversationAgentMode,
   InboundWhatsappMessage,
   OnboardingAgent,
+  OperacaoReadOnlyQuery,
   RecentMessage,
   RegisterServiceInput,
   ReminderAgent,
@@ -180,6 +198,7 @@ type HandlerDeps = {
   cobrancaAgent?: CobrancaAgent;
   replyGenerator?: ReplyGenerator;
   handoffSummarizer?: HandoffSummarizer;
+  faqEmbedder?: FaqEmbedder;
   mediaDownloader?: MediaDownloader;
   audioTranscriber?: AudioTranscriber;
   imageDescriber?: ImageDescriber;
@@ -211,6 +230,70 @@ function errorDetails(error: unknown) {
 
 function errorStack(error: unknown) {
   return error instanceof Error ? error.stack ?? null : null;
+}
+
+// CV8 (ADR-0026): intents do concierge do cliente final que podem receber
+// moldura gerada (rewrite). Os demais (opt_out, numero_errado, nao_reconhece,
+// pedido_oficina) seguem 100% determinísticos — compliance Meta / ponte literal.
+const CONCIERGE_GENERATED_INTENTS: ReadonlySet<string> = new Set([
+  "quem_e",
+  "agradecimento",
+  "mensagem_indefinida",
+]);
+
+// CV6: resolve uma consulta read-only da operação contra o repositório, SEMPRE
+// escopada por oficina_id. Os dados voltam LITERAIS; `allowGeneration` decide se
+// a moldura pode ser polida (só respostas curtas — a lista de lembretes fica
+// literal pra não perder itens). Leitura não muda estado (ADR-0001).
+async function resolveOperacaoReadOnlyQuery(input: {
+  repository: WhatsappRepository;
+  oficinaId: string | null;
+  query: OperacaoReadOnlyQuery;
+}): Promise<{ body: string; allowGeneration: boolean }> {
+  const { repository, oficinaId, query } = input;
+  const errorFallback = {
+    body: "Não consegui consultar isso agora, chefe. Tenta de novo daqui a pouco?",
+    allowGeneration: false,
+  };
+  if (!oficinaId) {
+    return {
+      body: "Preciso que sua oficina esteja cadastrada pra consultar isso, chefe.",
+      allowGeneration: false,
+    };
+  }
+
+  try {
+    if (query.kind === "consulta_lembretes") {
+      if (query.scope === "mes") {
+        if (!repository.countRemindersSentThisMonth) return errorFallback;
+        const count = await repository.countRemindersSentThisMonth({ oficinaId });
+        return { body: formatRemindersSentThisMonth(count), allowGeneration: true };
+      }
+      if (!repository.listUpcomingReminders) return errorFallback;
+      const days = 7;
+      const reminders = await repository.listUpcomingReminders({ oficinaId, days });
+      // Lista fica literal (não geramos, pra não perder item); vazia é uma
+      // frase só e pode ganhar moldura.
+      return {
+        body: formatUpcomingReminders(reminders, days),
+        allowGeneration: reminders.length === 0,
+      };
+    }
+
+    // consulta_cliente
+    if (!repository.getClienteResumo) return errorFallback;
+    const resumo = await repository.getClienteResumo({
+      oficinaId,
+      nomeOuTelefone: query.termo,
+    });
+    if (!resumo) {
+      return { body: clienteNaoEncontrado(query.termo), allowGeneration: true };
+    }
+    // Resumo multi-linha → literal (protege os dados). ADR-0017.
+    return { body: formatClienteResumo(resumo), allowGeneration: false };
+  } catch {
+    return errorFallback;
+  }
 }
 
 // Resumo de handoff de vendas (fase CV3). Gera um resumo curto da conversa e o
@@ -748,6 +831,10 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
   const handoffSummarizer: HandoffSummarizer | undefined =
     deps.handoffSummarizer ??
     (process.env.OPENAI_API_KEY ? new OpenAiHandoffSummarizer() : undefined);
+  // Embedder da busca semântica na FAQ (CV5). Ausente => só match por keyword.
+  const faqEmbedder: FaqEmbedder | undefined =
+    deps.faqEmbedder ??
+    (process.env.OPENAI_API_KEY ? new OpenAiFaqEmbedder() : undefined);
   const mediaDownloader: MediaDownloader | null =
     deps.mediaDownloader ??
     (typeof (deps.whatsapp as Partial<MediaDownloader>).getMediaMetadata === "function" &&
@@ -814,6 +901,26 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
 
       const inboundMessages = extractInboundMessages(payload);
       const statusEvents = extractStatusEvents(payload);
+
+      // CV7: eventos de qualidade do número Meta — persiste o último por número
+      // para o admin acompanhar o rating. Best-effort (nunca derruba o webhook).
+      if (deps.repository.saveMetaPhoneStatus) {
+        for (const quality of extractPhoneQualityEvents(payload)) {
+          if (!quality.displayPhoneNumber) continue;
+          try {
+            await deps.repository.saveMetaPhoneStatus({
+              displayPhoneNumber: quality.displayPhoneNumber,
+              qualityRating: quality.qualityRating,
+              event: quality.event,
+              currentLimit: quality.currentLimit,
+              raw: quality.raw,
+            });
+          } catch (err) {
+            console.error("saveMetaPhoneStatus failed", err);
+          }
+        }
+      }
+
       const processingErrors: Array<{
         whatsappMessageId: string;
         errorType: string;
@@ -1007,6 +1114,29 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           continue;
         }
 
+        // CV7 — bot_muted: se a conversa foi silenciada por um handoff recente
+        // (expira em 24h), NÃO respondemos nada — o humano está no controle. O
+        // inbound já ficou registrado acima; só pulamos toda geração/envio.
+        if (deps.repository.isBotMuted) {
+          try {
+            if (await deps.repository.isBotMuted({ conversationId: resolved.conversationId })) {
+              continue;
+            }
+          } catch (err) {
+            // Falha na checagem não deve calar o bot — segue o fluxo normal.
+            console.error("bot_muted check failed", err);
+          }
+        }
+
+        // CV7: marca o inbound como lido + "digitando..." antes de responder.
+        // Best-effort (o método já engole erros); cobre todos os caminhos de
+        // resposta abaixo (fallback de áudio/mídia e resposta dos agentes).
+        if (deps.whatsapp.markReadAndTyping) {
+          await deps.whatsapp.markReadAndTyping({
+            messageId: inbound.whatsappMessageId,
+          });
+        }
+
         // Áudio que não transcreveu: responde com fallback do agente em cena
         // e pula o roteamento normal. Roteamento foi feito acima só para
         // resolvermos `agent_mode`. Persiste o outbound normalmente.
@@ -1165,6 +1295,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           // respond responde a pergunta grounded. Só a categoria `pergunta`
           // da operação seta respond hoje.
           let generationMode: ReplyGenerationMode = "rewrite";
+          // CV8 (ADR-0026): geração do concierge do cliente final exige a ponte
+          // wa.me na saída; e o wa.me da própria oficina entra na allowlist.
+          let requireHandoffLink = false;
+          const extraAllowedLinks: string[] = [];
+          const extraAllowedNames: string[] = [];
           // Fallback nível 2 de vendas (CV3): quando setado, o envio usa botões
           // interativos em vez de texto. Determinístico — a camada de geração é
           // pulada (allowGeneration = false abaixo).
@@ -1197,14 +1332,30 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             }
             replyBody =
               "Pronto, voltei pro modo normal. O que precisa hoje?";
+          } else if (normalizedBody === "/ajuda") {
+            // CV6: ajuda determinística por modo (mesmo padrão de /suporte,
+            // /voltar). Verbatim — nunca passa pela camada de geração.
+            replyBody = ajudaMessage(effectiveAgentMode);
+            allowGeneration = false;
           } else if (effectiveAgentMode === "vendas") {
             const leadStatus = resolved.leadStatus ?? "em_conversa";
+            // Busca semântica na FAQ (CV5): resolve uma FAQ por similaridade
+            // fora do agente, usada só como fallback do match por keyword.
+            // Best-effort — sem embedder/erro devolve null e nada muda.
+            const semanticFaq = await resolveSemanticFaqMatch({
+              message: inbound.body,
+              embedder: faqEmbedder,
+              repository: deps.repository.matchFaqByEmbedding
+                ? { matchFaqByEmbedding: deps.repository.matchFaqByEmbedding.bind(deps.repository) }
+                : undefined,
+            });
             const reply = await deps.agent.generateReply({
               message: inbound.body,
               leadStatus,
               context: resolved.context,
               salesConfig,
               faqs,
+              preMatchedFaqId: semanticFaq?.id ?? null,
             });
 
             if (
@@ -1452,13 +1603,28 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               if (confirmationSent) {
                 replyBody += ` Já avisei o ${nomeCliente} que o serviço foi registrado.`;
               }
+              // CV6: moldura gerada no ack. Nome/dias já estão no texto → o
+              // rewrite preserva os dados literais (ADR-0017).
+              allowGeneration = true;
+              generationMode = "rewrite";
+            } else if (onboardingReply.readOnlyQuery) {
+              // CV6: consulta read-only resolvida contra o repo, escopada por
+              // oficina_id. Dados literais; moldura só em resposta curta.
+              const resolvedQuery = await resolveOperacaoReadOnlyQuery({
+                repository: deps.repository,
+                oficinaId: resolved.oficinaId,
+                query: onboardingReply.readOnlyQuery,
+              });
+              replyBody = resolvedQuery.body;
+              allowGeneration = resolvedQuery.allowGeneration;
+              generationMode = "rewrite";
             } else {
               replyBody = onboardingReply.body;
+              // Só conversa livre (saudação, small-talk, "como funciona") pode ser
+              // reescrita; cadastro/confirmação/campo faltante ficam determinísticos.
+              allowGeneration = onboardingReply.allowConversationalGeneration === true;
+              generationMode = onboardingReply.conversationalGenerationMode ?? "rewrite";
             }
-            // Só conversa livre (saudação, small-talk, "como funciona") pode ser
-            // reescrita; cadastro/confirmação/campo faltante ficam determinísticos.
-            allowGeneration = onboardingReply.allowConversationalGeneration === true;
-            generationMode = onboardingReply.conversationalGenerationMode ?? "rewrite";
           } else if (
             effectiveAgentMode === "cliente_final_lembrete" &&
             !resolved.context.lastReminderId
@@ -1521,6 +1687,22 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             }
 
             replyBody = conciergeReply.replyBody;
+            // CV8 (ADR-0026): moldura gerada só nos intents seguros; os demais
+            // (opt_out, numero_errado, nao_reconhece, pedido_oficina) seguem
+            // 100% determinísticos. A geração exige a ponte wa.me da oficina
+            // (requireHandoffLink) e adiciona o wa.me/ nome da oficina à
+            // allowlist do validador — senão o rewrite seria sempre reprovado.
+            if (CONCIERGE_GENERATED_INTENTS.has(conciergeReply.intent)) {
+              allowGeneration = true;
+              generationMode = "rewrite";
+              requireHandoffLink = true;
+              const waLink = buildWorkshopWaLink(oficina?.whatsappPrincipal ?? null);
+              if (waLink) extraAllowedLinks.push(waLink);
+              const wsName = oficina?.nome ?? resolved.oficinaNome;
+              if (wsName) extraAllowedNames.push(wsName);
+            } else {
+              allowGeneration = false;
+            }
           } else if (effectiveAgentMode === "cliente_final_lembrete") {
             const reminderReply = await reminderAgent.generateReply({
               message: inbound.body,
@@ -1702,7 +1884,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               whatsappLink({ phone: salesConfig.whatsappHandoffComercial }),
             );
           }
-          const allowedNames = [resolved.oficinaNome].filter(
+          // CV8: wa.me da própria oficina (concierge) entra na allowlist.
+          allowedLinks.push(...extraAllowedLinks);
+          const allowedNames = [resolved.oficinaNome, ...extraAllowedNames].filter(
             (name): name is string => Boolean(name),
           );
 
@@ -1728,6 +1912,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             allowedNames,
             generationMode,
             userMessage: inbound.body,
+            requireHandoffLink,
             knowledge:
               generationMode === "respond"
                 ? effectiveAgentMode === "vendas"
@@ -1799,32 +1984,70 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           });
 
           try {
-            const sent =
-              sendAsButtons && deps.whatsapp.sendInteractiveButtons
-                ? await deps.whatsapp.sendInteractiveButtons({
+            if (sendAsButtons && deps.whatsapp.sendInteractiveButtons) {
+              const sent = await deps.whatsapp.sendInteractiveButtons({
+                to: inbound.normalizedFrom,
+                body: interactiveButtons!.bodyText,
+                buttons: interactiveButtons!.buttons,
+              });
+              await deps.repository.markOutboundSent({
+                outboundMessageId: outbox.id,
+                whatsappMessageId: sent.whatsappMessageId,
+                response: sent.response ?? null,
+              });
+              await deps.repository.saveOutboundMessage({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                oficinaId: resolved.oficinaId,
+                whatsappMessageId: sent.whatsappMessageId,
+                body: sentBody,
+                rawMessage: sent.response ?? null,
+                sentAt: new Date().toISOString(),
+              });
+            } else {
+              // CV7: mensagem longa (> ~350 chars) vira até 2 mensagens
+              // sequenciais. O 1º envio ancora o outbox; os extras são
+              // best-effort (o 1º já saiu). Cada parte vira uma linha em
+              // `mensagens` pra o transcript refletir o que o cliente vê.
+              const chunks = splitLongMessage(replyBody);
+              const firstSent = await deps.whatsapp.sendTextMessage({
+                to: inbound.normalizedFrom,
+                body: chunks[0],
+              });
+              await deps.repository.markOutboundSent({
+                outboundMessageId: outbox.id,
+                whatsappMessageId: firstSent.whatsappMessageId,
+                response: firstSent.response ?? null,
+              });
+              await deps.repository.saveOutboundMessage({
+                conversationId: resolved.conversationId,
+                leadId: resolved.leadId,
+                oficinaId: resolved.oficinaId,
+                whatsappMessageId: firstSent.whatsappMessageId,
+                body: chunks[0],
+                rawMessage: firstSent.response ?? null,
+                sentAt: new Date().toISOString(),
+              });
+              for (const extra of chunks.slice(1)) {
+                try {
+                  const partSent = await deps.whatsapp.sendTextMessage({
                     to: inbound.normalizedFrom,
-                    body: interactiveButtons!.bodyText,
-                    buttons: interactiveButtons!.buttons,
-                  })
-                : await deps.whatsapp.sendTextMessage({
-                    to: inbound.normalizedFrom,
-                    body: replyBody,
+                    body: extra,
                   });
-
-            await deps.repository.markOutboundSent({
-              outboundMessageId: outbox.id,
-              whatsappMessageId: sent.whatsappMessageId,
-              response: sent.response ?? null,
-            });
-            await deps.repository.saveOutboundMessage({
-              conversationId: resolved.conversationId,
-              leadId: resolved.leadId,
-              oficinaId: resolved.oficinaId,
-              whatsappMessageId: sent.whatsappMessageId,
-              body: sentBody,
-              rawMessage: sent.response ?? null,
-              sentAt: new Date().toISOString(),
-            });
+                  await deps.repository.saveOutboundMessage({
+                    conversationId: resolved.conversationId,
+                    leadId: resolved.leadId,
+                    oficinaId: resolved.oficinaId,
+                    whatsappMessageId: partSent.whatsappMessageId,
+                    body: extra,
+                    rawMessage: partSent.response ?? null,
+                    sentAt: new Date().toISOString(),
+                  });
+                } catch (splitErr) {
+                  console.error("split message part failed", splitErr);
+                }
+              }
+            }
           } catch (error) {
             const outboundError = errorDetails(error);
             await deps.repository.markOutboundFailed({

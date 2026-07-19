@@ -268,12 +268,29 @@ function checkCrossTenant(
   return { ok: true };
 }
 
+// Regra extra do público cliente final (CV8, ADR-0026): a resposta gerada tem
+// que conter a ponte wa.me da oficina (um link da allowlist). Garante que a
+// naturalização nunca "engole" o caminho pra oficina — o valor do concierge.
+function checkHandoffLinkPresent(
+  generated: string,
+  allowedLinks: string[],
+): ReplyValidationResult {
+  const normalized = normalizeForLinks(generated);
+  const present = new Set(extractLinks(normalized).map(canonicalLink));
+  const hasAllowed = allowedLinks
+    .map(canonicalLink)
+    .some((allowed) => allowed.length > 0 && present.has(allowed));
+  return hasAllowed ? { ok: true } : { ok: false, reason: "sem_ponte_oficina" };
+}
+
 export function validateGeneratedReply(input: {
   generated: string;
   precoPartida: number;
   allowedLinks: string[];
   allowedNames: string[];
   maxLength?: number;
+  // CV8: exige a presença da ponte wa.me da oficina (concierge do cliente final).
+  requireHandoffLink?: boolean;
 }): ReplyValidationResult {
   const generated = input.generated ?? "";
   const maxLength = input.maxLength ?? DEFAULT_MAX_LENGTH;
@@ -299,6 +316,11 @@ export function validateGeneratedReply(input: {
 
   const crossTenant = checkCrossTenant(generated, input.allowedNames);
   if (!crossTenant.ok) return crossTenant;
+
+  if (input.requireHandoffLink) {
+    const bridge = checkHandoffLinkPresent(generated, input.allowedLinks);
+    if (!bridge.ok) return bridge;
+  }
 
   return { ok: true };
 }

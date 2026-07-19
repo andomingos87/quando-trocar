@@ -52,6 +52,12 @@ type MetaChange = {
       recipient_id?: string;
       errors?: Array<{ code?: string | number; title?: string; message?: string }>;
     }>;
+    // Campos do webhook `phone_number_quality_update` / `account_update` (CV7).
+    display_phone_number?: string;
+    event?: string;
+    current_limit?: string;
+    quality_rating?: string;
+    quality_score?: { score?: string } | string;
   };
 };
 
@@ -301,6 +307,51 @@ export function extractStatusEvents(payload: unknown): WhatsappStatusEvent[] {
           rawStatus: status as Record<string, unknown>,
         });
       }
+    }
+  }
+
+  return events;
+}
+
+// CV7: eventos de qualidade do número (webhook `phone_number_quality_update` /
+// `account_update`). Follow-up proativo aumenta volume e o quality rating é o
+// ativo mais caro do produto — o admin precisa ver quando cai.
+export type PhoneQualityEvent = {
+  displayPhoneNumber: string | null;
+  event: string | null;
+  currentLimit: string | null;
+  qualityRating: string | null;
+  raw: Record<string, unknown>;
+};
+
+export function extractPhoneQualityEvents(payload: unknown): PhoneQualityEvent[] {
+  const typed = payload as MetaPayload;
+  const events: PhoneQualityEvent[] = [];
+
+  for (const entry of typed.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      if (
+        change.field !== "phone_number_quality_update" &&
+        change.field !== "account_update"
+      ) {
+        continue;
+      }
+      const value = change.value;
+      if (!value) continue;
+      const qualityScore =
+        typeof value.quality_score === "string"
+          ? value.quality_score
+          : value.quality_score?.score ?? null;
+      // Só registramos quando há de fato sinal de qualidade/evento.
+      if (!value.event && !value.quality_rating && !qualityScore) continue;
+
+      events.push({
+        displayPhoneNumber: value.display_phone_number ?? null,
+        event: value.event ?? null,
+        currentLimit: value.current_limit ?? null,
+        qualityRating: value.quality_rating ?? qualityScore ?? null,
+        raw: value as Record<string, unknown>,
+      });
     }
   }
 
