@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* Perfect Automotive identity — navy / red / cyan / orange */
+  /* Quando Trocar identity — navy / red / cyan / orange */
   --color-ink: #001E62;        /* navy — primary text + dark sections */
   --color-ink-soft: #0a2a7a;   /* navy hover/secondary */
   --color-ink-deep: #041C2C;   /* near-black navy — footer, deepest bg */

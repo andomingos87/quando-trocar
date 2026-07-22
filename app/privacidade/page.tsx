@@ -28,7 +28,7 @@ export default function PrivacidadePage() {
             </h1>
             <p className="mt-5 text-[15px] leading-relaxed text-muted">
               Esta política descreve como o <strong>Quando Trocar</strong>{" "}
-              (operado por Perfect Automotive) coleta, usa, armazena,
+              coleta, usa, armazena,
               compartilha e protege dados pessoais de oficinas mecânicas
               clientes e dos motoristas atendidos por elas, em conformidade
               com a Lei Geral de Proteção de Dados Pessoais (Lei nº
@@ -43,8 +43,7 @@ export default function PrivacidadePage() {
           <Section title="1. Quem somos">
             <p>
               O <strong>Quando Trocar</strong> é um serviço de retenção de
-              clientes para oficinas mecânicas, operado por{" "}
-              <strong>Perfect Automotive</strong>, com sede no Brasil. Atuamos
+              clientes para oficinas mecânicas, com sede no Brasil. Atuamos
               como <em>controlador</em> dos dados das oficinas que contratam
               nosso serviço e como <em>operador</em> dos dados dos motoristas
               cadastrados pelas oficinas, processados em nome destas para o
@@ -452,7 +451,7 @@ export default function PrivacidadePage() {
           <Section title="16. Foro">
             <p>
               Fica eleito o foro da comarca do domicílio da operadora
-              (Perfect Automotive) no Brasil para dirimir qualquer
+              (Quando Trocar) no Brasil para dirimir qualquer
               controvérsia decorrente desta política, com renúncia a
               qualquer outro, por mais privilegiado que seja.
             </p>

@@ -28,8 +28,8 @@ export default function TermosPage() {
             </h1>
             <p className="mt-5 text-[15px] leading-relaxed text-muted">
               Estes Termos de Uso regulam o acesso e a utilização do{" "}
-              <strong>Quando Trocar</strong> (operado por Perfect Automotive)
-              por oficinas mecânicas contratantes e pelos motoristas que
+              <strong>Quando Trocar</strong> por oficinas mecânicas
+              contratantes e pelos motoristas que
               recebem mensagens enviadas em nome dessas oficinas. Ao
               contratar o serviço, criar uma conta ou utilizar qualquer
               funcionalidade, você declara ter lido, compreendido e aceito
@@ -49,7 +49,7 @@ export default function TermosPage() {
                 lembretes e atendimento automatizado.
               </li>
               <li>
-                <strong>Operadora:</strong> Perfect Automotive, pessoa
+                <strong>Operadora:</strong> Quando Trocar, pessoa
                 jurídica responsável pela operação da Plataforma.
               </li>
               <li>

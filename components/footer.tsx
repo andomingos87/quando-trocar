@@ -13,11 +13,11 @@ export function Footer() {
           <Link
             href="/"
             className="flex items-center transition-opacity hover:opacity-80"
-            aria-label="Quando Trocar by Perfect Automotive"
+            aria-label="Quando Trocar"
           >
             <Image
               src="/logo_qt_byperfect_white.png"
-              alt="Quando Trocar by Perfect Automotive"
+              alt="Quando Trocar"
               width={1810}
               height={697}
               sizes="160px"

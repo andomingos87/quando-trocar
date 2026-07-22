@@ -28,8 +28,8 @@ export default function ExclusaoDadosPage() {
             </h1>
             <p className="mt-5 text-[15px] leading-relaxed text-muted">
               Esta página explica como você pode solicitar a exclusão dos
-              seus dados pessoais tratados pelo <strong>Quando Trocar</strong>
-              {" "}(operado por Perfect Automotive), em conformidade com a Lei
+              seus dados pessoais tratados pelo <strong>Quando Trocar</strong>,
+              em conformidade com a Lei
               Geral de Proteção de Dados (LGPD, art. 18, VI) e com as
               exigências da Meta Platforms para aplicativos integrados ao
               WhatsApp Business Platform.

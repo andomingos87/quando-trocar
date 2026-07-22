@@ -8,7 +8,7 @@ metadata:
 
 # Quando Trocar — Design Skill
 
-Guia obrigatório quando você for tocar qualquer pedaço de UI deste projeto. A identidade visual segue o **Manual Perfect Automotive** adaptado para o produto **Quando Trocar** — não é genérico, e tem desvios deliberados que não estão no PDF original.
+Guia obrigatório quando você for tocar qualquer pedaço de UI deste projeto. A identidade visual do **Quando Trocar** — não é genérica, e tem desvios deliberados em relação ao manual de marca herdado.
 
 ## Fontes de verdade (nessa ordem)
 
@@ -19,7 +19,7 @@ Guia obrigatório quando você for tocar qualquer pedaço de UI deste projeto. A
 
 ## Desvio importante: laranja é o CTA primário, não o vermelho
 
-O manual Perfect Automotive descreve vermelho `#EE2737` como CTA primário. **No Quando Trocar isso mudou:**
+O manual de marca herdado descrevia vermelho `#EE2737` como CTA primário. **No Quando Trocar isso mudou:**
 
 - **Laranja `#E19D4E`** (cor do "CAR" no logo Quando Trocar) → **CTA primário**, ações principais, foco.
 - **Vermelho `#EE2737`** → **urgência / destaque pontual** (alertas, badges de atenção). **NÃO usar como botão primário.**
@@ -53,11 +53,12 @@ Utilitários custom já prontos (todos em `app/globals.css` — verifique antes 
 
 ## Logos
 
-- `/public/logo_qt_byperfect.png` — versão colorida (fundos claros)
-- `/public/logo_qt_byperfect_white.png` — versão branca (fundos escuros: navy, ink-deep, brand)
-- `/public/logo.png` — versão genérica
+- `/public/logo.png` — wordmark "Quando Trocar" colorido (fundos claros)
+- _(pendente)_ versão **branca** do wordmark para fundos escuros (navy, ink-deep, brand)
 
-Regras do manual que **continuam valendo**: nunca distorcer, sem opacity, sem sombra/outline/glow, sem rotação, sem cor alterada. Área de proteção = largura da letra "E". Tamanho mínimo: "PERFECT" 12px, "AUTOMOTIVE" 6px.
+> Os assets `logo_qt_byperfect*.png` estão **descontinuados** (traziam "by Perfect Automotive" embutido na imagem).
+
+Regras do manual que **continuam valendo**: nunca distorcer, sem opacity, sem sombra/outline/glow, sem rotação, sem cor alterada. Área de proteção = largura da letra "E". Tamanho mínimo: manter o wordmark "Quando Trocar" legível (não reduzir abaixo de ~12px de altura de texto).
 
 ## Princípios de layout
 

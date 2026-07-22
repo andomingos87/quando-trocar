@@ -18,7 +18,7 @@ Especificações funcionais e visuais. Tudo em português.
 - [PRD — Landing prototype](./product/PRD-landing-prototype.md) — spec do protótipo de validação comercial (frontend-only, mockado). Histórico, mas ainda válido como referência da demo.
 - [Telas web](./product/telas-web.md) — proposta de painel operacional para a oficina.
 - [Copy](./product/copy.md) — microcopy da landing page (gitignored, material de referência).
-- [Design system](./product/design-system.md) — identidade visual "Perfect Automotive" para a landing (gitignored, material de referência).
+- [Design system](./product/design-system.md) — identidade visual do "Quando Trocar" para a landing (gitignored, material de referência).
 
 ## Arquitetura e decisões
 
