@@ -20,7 +20,10 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 - `conversation-router.ts` — resolve identidade do participante e `agent_mode`.
 - `sales-agent.ts` / `onboarding-agent.ts` / `reminder-agent.ts` / `support-agent.ts` — agentes por modo.
 - `cliente-final-concierge.ts` — concierge do cliente final (ADR-0018).
-- `service-confirmation.ts` — confirmacao da oficina antes de registrar a troca (ADR-0017).
+- `service-confirmation.ts` — template `confirmacao_servico` enviado ao CLIENTE FINAL apos o
+  cadastro (ADR-0005). E a ultima barreira antes da mensagem que o cliente da oficina le:
+  nenhum texto livre da oficina pode virar parametro de template (ADR-0027). A confirmacao da
+  OFICINA antes de gravar (o "sim" sobre o card) vive no `onboarding-agent.ts` (ADR-0017).
 - `reminder-worker.ts` — consome a fila e dispara lembretes via template.
 - `repository.ts` — toda a persistencia Supabase do bot.
 - `whatsapp-client.ts` — envio pela Cloud API.
@@ -37,7 +40,14 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
   transicao de `lead.status`, `participant_type`, `agent_mode`, pagamento, opt-out e status de
   lembrete e decidida por regra deterministica no backend.
 - Modos explicitos: `vendas`, `onboarding`, `operacao`, `cliente_final_lembrete`, `suporte`.
-- Parsing deterministico primeiro; OpenAI so p/ texto livre, sempre com Structured Outputs (enum fechado).
+- OpenAI sempre com Structured Outputs (enum fechado). Para **classificacao de intencao**, o
+  deterministico vem primeiro. Para **extracao de cadastro de troca**, o LLM e o extrator primario
+  e o parser posicional por virgula e fallback (ADR-0027): em transcricao de audio a posicao da
+  virgula nao separa campos, e o parser gravava `nome = "Ó"`. Depois de qualquer extracao roda a
+  guarda de sanidade deterministica (`suspectDraftFields`) — campo suspeito volta a ser perguntado,
+  nunca e persistido. A data e sempre deterministica (`parseBrazilianDate`).
+- O que o bot promete tem de ser o que o banco gravou: a copy do cadastro informa a data que o RPC
+  devolveu (`scheduled_at`), nunca um prazo recalculado de outra fonte.
 - Persistir evento inbound antes de processar; guardar provider message IDs; idempotencia obrigatoria.
 - Respeitar janela de 24h; fora dela, so template aprovado. Preservar opt-out / consentimento negativo.
 - Decisoes que afetam estado de negocio sao logadas em `agent_tool_calls`.
@@ -52,5 +62,5 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 - Arquitetura: `docs/architecture/whatsapp-bot-technical-plan.md`
 - Backlog: `docs/backlog-whatsapp-bot/`
 - Regras de negocio: `docs/regras-de-negocio.md`
-- ADRs relevantes: ADR-0001 (LLM nao muda estado), ADR-0017 (confirmacao da oficina), ADR-0018 (concierge cliente final), ADR-0020/0022/0024 (camada de geracao conversacional), ADR-0023 (perguntas_sem_resposta)
+- ADRs relevantes: ADR-0001 (LLM nao muda estado), ADR-0017 (confirmacao da oficina), ADR-0018 (concierge cliente final), ADR-0020/0022/0024 (camada de geracao conversacional), ADR-0023 (perguntas_sem_resposta), ADR-0027 (extracao de cadastro por LLM + guarda de sanidade)
 - Convencoes: `.context/conventions.md`

@@ -34,6 +34,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0024](./0024-respond-em-vendas.md) | Fallback conversacional em vendas (respond no `fora_escopo`) | accepted | 2026-07-16 |
 | [0025](./0025-portal-do-representante.md) | Portal do representante (login OTP, read-only escopado, sem PII) | accepted | 2026-07-18 |
 | [0026](./0026-concierge-moldura-gerada.md) | Moldura gerada no concierge do cliente final (revisão da ADR-0018) | accepted | 2026-07-18 |
+| [0027](./0027-extracao-de-cadastro-por-llm.md) | Extração de cadastro por LLM, com guarda de sanidade determinística | accepted | 2026-07-25 |
 
 ### Em aberto (drafts)
 

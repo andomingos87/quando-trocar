@@ -19,6 +19,25 @@ Não registrar:
 
 ---
 
+## 2026-07-25 — Qualidade do cadastro: extração por LLM, barreira de saída e data única (QTR-35 P0)
+
+Correção dos três itens P0 da [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no), a partir da análise das conversas de teste ponta a ponta em produção (cadastro da Oficina Marsili, 24/07/2026). O fluxo completava, mas gravava dado corrompido e prometia à oficina uma data diferente da agendada. Plano em [`qtr-35-p0-qualidade-cadastro.md`](./backlog-whatsapp-bot/qtr-35-p0-qualidade-cadastro.md).
+
+### Decidido
+
+- **[ADR-0027](./adr/0027-extracao-de-cadastro-por-llm.md)** — o LLM passa a ser o **extrator primário** do cadastro de troca; o parser posicional por vírgula vira fallback e nunca roda em transcrição de áudio. Como o extrator primário passa a ser não-determinístico, entra uma **guarda de sanidade determinística** (`suspectDraftFields`) depois dele: campo suspeito volta a ser perguntado, nunca é persistido. A `data_servico` continua determinística. Não viola a ADR-0001 (o LLM extrai campo, não decide estado) e o gate da ADR-0017 (o "sim" da oficina) permanece.
+
+### Alterado
+
+- **Barreira de saída no template do cliente final** — o `{{produto}}` do `confirmacao_servico` sai de um mapa fechado por `tipo_servico` (antes `revisao`/`outro` mandavam o texto livre que a oficina ditou). Sanitização aplicada aos **quatro** parâmetros, porque `{{nome}}` e `{{carro}}` também vêm da fala; parâmetro que não sobrevive **aborta o envio** e audita `skipped: param_invalido`. Regras §3.6.
+- **Data do lembrete com fonte única** — `register_service_with_reminder` passa a devolver `scheduled_at` e `dias_lembrete` (migration `20260725120000_register_service_returns_scheduled_at.sql`), e a copy informa **a data** (`dd/mm/aaaa`) em vez de "em N dias". Antes a copy lia `oficinas.dias_lembrete_padrao` (90) enquanto o RPC agendava pela cadência do tipo (`amortecedor` = 730). Sem consentimento não há lembrete e o bot deixa de prometer um. Regras §4.1.
+- **`requiredLiterals` no validador da camada de geração** — reescrita que perde ou altera um dado literal obrigatório (hoje a data do lembrete) é reprovada (`literal_ausente`) e cai na enlatada. O ack de cadastro passava por rewrite sem nenhuma garantia disso.
+
+### Pendente
+
+- Aplicar a migration no banco e conferir `list_migrations` depois do deploy (lição `0002-deploy-corre-na-frente-das-migrations`). Até então o ack usa copy neutra, sem prometer data.
+- P1 (itens 4–8) e P2 (itens 9–12) da QTR-35 seguem abertos — entre eles o guard cross-tenant vetando o nome da própria oficina e o gancho de conversão para sinal de cadastro em modo vendas.
+
 ## 2026-07-18 — Demais fases da camada conversacional (CV4–CV8, QTR-13 a QTR-17)
 
 Fecha o milestone "3. Demais fases (CV4–CV8)" do projeto Camada Conversacional. Todas protegidas por validador + fallback enlatado (ADR-0020); com `geracao_llm_modo='off'`, comportamento idêntico ao anterior.

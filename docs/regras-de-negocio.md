@@ -332,7 +332,21 @@ Opcional: `valor`.
 Condicional:
 - `marca_peca` — **só obrigatório quando `tipo_servico = amortecedor`**. Enum fechado `perfect | monroe | cofap | nakata | outra`. Se a oficina mencionar a marca espontaneamente, o parser extrai. Se faltar, agente pergunta uma vez com as 5 opções em ordem alfabética (`Cofap, Monroe, Nakata, Perfect, outra`) — Perfect nunca aparece primeiro, para evitar viés nos relatórios de mercado.
 
+**Quem extrai os campos** ([ADR-0027](./adr/0027-extracao-de-cadastro-por-llm.md)): o **LLM é o extrator primário**. O parser posicional por vírgula (`Nome, Carro, Servico, Data, Telefone`) é **fallback**, usado só quando não há OpenAI disponível (sem chave, erro de API, timeout), e **nunca** em mensagem vinda de áudio — em fala natural a posição da vírgula não separa campos. Em áudio o caminho determinístico só aproveita os campos independentes de posição (telefone, data, marca, consentimento). O `sourceMediaType` chega ao agente e é gravado na tool call `solicitou_confirmacao_cadastro`, para medir acerto de extração por origem.
+
+A **`data_servico` continua determinística** (`parseBrazilianDate`), mesmo com o LLM como extrator primário: o modelo não tem referência temporal confiável para "na data de hoje", e data errada agenda o lembrete no ano errado. A data devolvida pelo LLM só entra quando o parser não achou nada, e ainda passa pela guarda de sanidade.
+
+**Guarda de sanidade determinística** (`suspectDraftFields`), aplicada **depois** da extração e **antes** de o rascunho ser aceito, nas três portas de captura (extração, follow-up, correção na confirmação):
+- `nome_cliente` — reprova muleta de fala (`Ó`, `Então`, `Olha`), token de rótulo (`nome`, `cliente`) e contaminação de outro campo (`ele`, `dele`, `acabou`, `data`).
+- `veiculo` — reprova frase (mesma lista), > 40 chars ou > 6 tokens.
+- `servico` — reprova > 60 chars ou verbo conjugado de fala (`acabou`, `troquei`, `tem`, `fiz`).
+- `data_servico` — reprova formato não-ISO e distância > 366 dias de hoje (erro de ordem de grandeza, ex.: `2028-07-23` para "hoje").
+
+Campo reprovado **sai do rascunho e volta a ser perguntado** — não é confirmado nem persistido. A ocorrência é auditada na tool call `extracao_suspeita` (com os valores descartados). Quando o `servico` é reprovado, o `tipo_servico` derivado dele cai junto, para não agendar com a cadência de um serviço que foi corrigido.
+
 O `nome_cliente` é **normalizado na captura** (`normalizeNomeCliente` em `lib/whatsapp/onboarding-agent.ts`): remove frases de intenção/rótulo que a oficina às vezes envia junto (ex.: "Quero cadastrar o cliente Luca Marcilli" → `Luca Marcilli`), apara pontuação nas pontas e aplica caixa de nome próprio (partículas `de/da/do/das/dos/e` em minúsculas). Aplica-se aos três pontos de captura: parser determinístico, resposta de follow-up e extração via LLM. Se sobrar vazio após normalizar, o campo continua faltante e o bot pergunta o nome.
+
+O `servico` é **normalizado na captura** (`normalizeServico`): guarda a descrição curta, sem o embrulho de fala (ex.: "ele acabou de trocar um amortecedor da Perfect" → `amortecedor da Perfect`, "eu troquei o oleo" → `oleo`). O infinitivo e o substantivo ficam intactos (`troca de oleo` não muda). O prompt do LLM exige descrição de no máximo 5 palavras, sem verbo conjugado.
 
 O `veiculo` é **normalizado na captura** (`normalizeVeiculo` em `lib/whatsapp/onboarding-agent.ts`): remove o embrulho conversacional que a oficina costuma escrever (ex.: "o carro dele é um UP" → `UP`, "ela tem um HB20 prata" → `HB20 Prata`, "carro: Onix" → `Onix`), apara stopwords/pontuação nas pontas e ajusta a caixa preservando siglas/códigos de modelo (`UP`, `HB20`, `S10`, `208` ficam intactos; `gol`→`Gol`, `civic`→`Civic`). Aplica-se aos três pontos de captura (parser determinístico, follow-up e LLM) + guard final antes de persistir; o prompt da LLM também exige devolver só marca/modelo. Esse valor vai direto pra mensagem que o cliente final lê (template `confirmacao_servico` → `{{carro}}`), então não pode conter frase. Se sobrar vazio após normalizar, o campo continua faltante e o bot pergunta o carro.
 
@@ -399,7 +413,9 @@ Mesmo se a oficina mandar novo cadastro do mesmo número.
 ### 3.6 Confirmação ao cliente no cadastro
 Logo após o cadastro do serviço (RPC bem-sucedida), o bot envia uma **confirmação ao cliente final**:
 - **Só com consentimento**: dispara apenas se `consentimento_whatsapp = true` (mesma regra dos lembretes — [§7.1](#71-consentimento-obrigatório)).
-- **Sempre via template aprovado**: o cliente é um número "frio" (nunca iniciou conversa), então o envio cai fora da janela de 24h → template Meta obrigatório ([ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md)). Template: `confirmacao_servico` / `pt_BR` (configurável via `WHATSAPP_CONFIRMACAO_TEMPLATE` e `WHATSAPP_CONFIRMACAO_TEMPLATE_LANGUAGE`). Usa **variáveis nomeadas**: `{{nome}}`, `{{produto}}`, `{{carro}}`, `{{oficina}}`. O `{{produto}}` vem do tipo de serviço (`troca_oleo`→"óleo", `amortecedor`→"amortecedor"; `revisao`/`outro` usam o texto livre que a oficina digitou).
+- **Sempre via template aprovado**: o cliente é um número "frio" (nunca iniciou conversa), então o envio cai fora da janela de 24h → template Meta obrigatório ([ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md)). Template: `confirmacao_servico` / `pt_BR` (configurável via `WHATSAPP_CONFIRMACAO_TEMPLATE` e `WHATSAPP_CONFIRMACAO_TEMPLATE_LANGUAGE`). Usa **variáveis nomeadas**: `{{nome}}`, `{{produto}}`, `{{carro}}`, `{{oficina}}`.
+- **Nenhum texto livre da oficina vira parâmetro de template.** O `{{produto}}` sai de um **mapa fechado por `tipo_servico`** (`troca_oleo`→"óleo", `amortecedor`→"amortecedor", `revisao`→"revisão", `outro`→"revisão"). O mapa vive no código (`PRODUCT_LABEL_BY_TIPO`) e é exaustivo — tipo novo quebra o build. Não usa `tipos_servico_default.label`, que é editável no admin: parâmetro de template não pode depender de texto editável.
+- **Sanitização como última barreira**, aplicada aos **quatro** parâmetros — `{{nome}}` e `{{carro}}` também saem do que a oficina ditou: colapsa espaços, remove `\n`/`\t` (a Cloud API rejeita) e impõe limite por campo (nome/oficina 60, produto/carro 40). **Parâmetro que não sobrevive à sanitização aborta o envio**: registra `notify_cliente_confirmacao` com `skipped: param_invalido` + o campo culpado e a oficina segue recebendo o ack, sem o "já avisei o cliente". Mandar texto sujo para o cliente da oficina é pior que não mandar nada.
 - **Não bloqueante**: qualquer falha de envio (template não aprovado, erro do provedor) é registrada (`outbound_messages` em `failed` + `agent_tool_calls.notify_cliente_confirmacao`) mas **não** derruba a resposta de confirmação para a oficina.
 - **Reflexo na resposta à oficina**: quando a confirmação é enviada, o bot acrescenta "Já avisei o {cliente} que o serviço foi registrado." à mensagem de cadastro.
 - A conversa do cliente final é criada/reusada em `conversas` (`participant_type = cliente_final`, `agent_mode = cliente_final_lembrete`).
@@ -442,7 +458,11 @@ Entre a confirmação e o primeiro lembrete há uma janela em que o cliente fina
 | `outro` | 180 | `lembrete_revisao_geral` |
 
 - **Fallback**: se o tipo estiver `ativo = false` (admin desativou), usa `oficinas.dias_lembrete_padrao` (default 90). Mantido por compatibilidade.
-- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [ADR-0014](./adr/0014-cadencia-e-template-por-tipo-de-servico.md), migration `20260522000000_tipos_servico_default.sql`.
+- **O que o bot diz à oficina é a data, não o prazo.** O RPC `register_service_with_reminder` devolve `scheduled_at` e `dias_lembrete`, e a copy do cadastro informa **essa data** (`dd/mm/aaaa`): "Cliente cadastrado. Vou lembrar o {cliente} em 24/07/2028 pra voltar com você.". Antes a copy lia `oficinas.dias_lembrete_padrao` enquanto o RPC agendava pela cadência do **tipo** — o bot prometeu 90 dias tendo gravado 730. Data é conferível pela oficina na hora; "N dias" esconde a divergência.
+- **Sem consentimento não há lembrete**: o RPC não insere em `lembretes` e `scheduled_at` volta `null`. Nesse caso o bot diz explicitamente que não vai mandar lembrete, em vez de prometer um aviso que nunca sairia.
+- A data é formatada em **UTC**: a sessão do Postgres roda em UTC, então `scheduled_at` é meia-noite UTC do dia pretendido; formatar no fuso da oficina devolveria o dia anterior.
+- A data é registrada em `requiredLiterals` da camada de geração: se a reescrita conversacional perder ou alterar a data, a resposta é reprovada (`literal_ausente`) e o bot envia a enlatada.
+- Fonte: [PRD §10](./product/PRD-whatsapp-bot.md), [ADR-0014](./adr/0014-cadencia-e-template-por-tipo-de-servico.md), migrations `20260522000000_tipos_servico_default.sql` e `20260725120000_register_service_returns_scheduled_at.sql`.
 
 ### 4.2 Estados do lembrete
 ```

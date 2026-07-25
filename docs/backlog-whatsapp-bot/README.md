@@ -22,6 +22,7 @@ Arquivos por fase:
 6. [Fase Representantes - Atribuicao e comissao](./fase-representantes-comissao.md)
 7. [Fase Conversacional - Geracao de resposta com validador](./fase-camada-conversacional.md)
 8. [Fase R4 - Portal do Representante (login e visibilidade)](./fase-representante-portal.md)
+9. [QTR-35 P0 - Qualidade do cadastro (extracao por LLM, barreira de saida, data unica)](./qtr-35-p0-qualidade-cadastro.md)
 
 Resumo consolidado:
 

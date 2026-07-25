@@ -1,5 +1,11 @@
 # QTR-35 · P0 — extração por LLM, barreira de saída e data única
 
+**Status: implementado em 25/07/2026** (commits `836ce4a`, `a63c8db`, `b4e45c1` + docs).
+Pendência única: **a migration `20260725120000_register_service_returns_scheduled_at.sql`
+não foi aplicada** — depende de aprovação para rodar no banco (projeto único, teste = prod).
+Enquanto não for aplicada, o ack usa a copy neutra da janela de deploy (ver Etapa 3, item 3).
+Decisões confirmadas na execução: data em `dd/mm/aaaa` e rótulo `revisão` fixo no código.
+
 Plano executável para os **três itens P0** da issue [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no).
 P1 (itens 4–8) e P2 (itens 9–12) **não** entram nesta entrega.
 
@@ -234,22 +240,34 @@ deles com o produto melhor do que estava.
 
 ## Critérios de conclusão dos P0 (recorte da issue)
 
-- [ ] O áudio de teste produz `nome_cliente = Leonardo`, `veiculo = BMW`, `servico` curto, `tipo_servico = amortecedor` — com teste fixando a transcrição literal.
-- [ ] Nenhum caminho manda texto livre da oficina como parâmetro de template (teste para `revisao` e `outro`).
-- [ ] A copy informa a mesma data de `lembretes.scheduled_at` (teste para 90/730/180) e não promete lembrete quando não há consentimento.
-- [ ] `docs/regras-de-negocio.md` atualizado + ADR-0027.
-- [ ] `npm test` e `npm run lint` verdes; `list_migrations` conferido após o deploy.
+- [x] O áudio de teste produz `nome_cliente = Leonardo`, `veiculo = BMW`, `servico` curto, `tipo_servico = amortecedor` — teste fixando a transcrição literal em `tests/whatsapp-onboarding-agent.test.ts` + eval `onb-010`.
+- [x] Nenhum caminho manda texto livre da oficina como parâmetro de template — `tests/whatsapp-service-confirmation.test.ts` cobre `revisao`, `outro` e os quatro parâmetros.
+- [x] A copy informa a mesma data de `lembretes.scheduled_at` (teste para 90/730/180 em `tests/whatsapp-route-phase2.test.ts`) e não promete lembrete quando não há consentimento.
+- [x] `docs/regras-de-negocio.md` atualizado (§3.2, §3.6, §4.1) + [ADR-0027](../adr/0027-extracao-de-cadastro-por-llm.md).
+- [x] `npm test` (776) e `npm run lint` verdes; `npx tsc --noEmit` limpo.
+- [ ] **Migration aplicada** e `list_migrations` conferido após o deploy (lição `0002-deploy-corre-na-frente-das-migrations`) — pendente de aprovação.
 
-## Decisões que quero confirmar antes de codar
+## Decisões tomadas na execução
 
-1. **Formato da data no ack.** A issue sugere *"te aviso em julho de 2028"*. Proponho
-   **`23/07/2028`**: satisfaz o critério de forma mais estrita (é literalmente o
-   `scheduled_at`), é conferível na hora pela oficina, e um erro de 8x salta aos olhos.
-   Mês/ano por extenso deixa margem para o rewrite "arredondar".
-2. **Rótulo de `revisao`/`outro` no `{{produto}}`.** Proponho `"revisão"` fixo no
-   código, não `tipos_servico_default.label` (que é editável no admin e hoje está
-   `"Revisao"`, sem acento). Se preferir ler do banco, o campo precisa virar
-   não-editável ou validado.
+1. **Formato da data no ack: `dd/mm/aaaa`** (e não "em julho de 2028"). Satisfaz o
+   critério de forma mais estrita — é literalmente o `scheduled_at` — é conferível na
+   hora pela oficina, e um erro de 8x salta aos olhos. Mês/ano por extenso deixaria
+   margem para o rewrite "arredondar".
+2. **Rótulo de `revisao`/`outro` no `{{produto}}`: `"revisão"` fixo no código**, não
+   `tipos_servico_default.label` (editável no admin, e hoje `"Revisao"` sem acento).
+   Parâmetro de template não pode depender de texto editável.
+3. **Formatação da data em UTC.** Confirmado no banco que a sessão do Postgres roda em
+   `UTC`, então `data_servico::timestamptz + interval` é meia-noite UTC do dia
+   pretendido. Formatar em `America/Sao_Paulo` devolveria o dia anterior — trocaria um
+   erro de meses por um erro de um dia, todo dia.
+4. **Janela de sanidade da data em ±366 dias**, não ±7 como o plano esboçou: quando a
+   mensagem não traz o ano, `parseBrazilianDate` assume o ano corrente, então uma data
+   legítima pode estar a ~364 dias ("31/12" dito em janeiro). O alvo da guarda é o erro
+   de ordem de grandeza (2028 para "hoje"), que é o que agenda lembrete anos à frente.
+5. **Copy neutra para a janela de deploy.** O código sobe por push na `main` e as
+   migrations são aplicadas à parte (lição 0002). Se o RPC antigo não devolver
+   `scheduled_at` mas o lembrete existir, o ack diz "vou lembrar quando estiver na hora
+   de voltar": não inventa data nem nega o lembrete.
 
 ## Fora do escopo desta entrega
 
