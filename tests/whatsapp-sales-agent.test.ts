@@ -529,6 +529,66 @@ describe("whatsapp sales agent — post-test fixes (1-5)", () => {
   });
 });
 
+describe("whatsapp sales agent — QTR-35 P1-6: apresentacao em toda primeira resposta", () => {
+  const GREETING = "Aqui e do Quando Trocar";
+
+  test("primeira resposta contem a apresentacao para FAQ, preco, small talk, volume e humano", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const firstMessages = [
+      "preciso integrar com meu erp", // pergunta_faq
+      "quanto custa?", // pergunta_preco
+      "pra que time voce torce?", // small_talk
+      "faco 80 trocas por mes", // informa_volume_ticket
+      "quero falar com humano", // quer_humano (handoff)
+      "quero testar", // quer_testar (pergunta o nome)
+    ];
+
+    for (const message of firstMessages) {
+      const reply = await agent.generateReply({
+        message,
+        leadStatus: "em_conversa",
+        context: {},
+        salesConfig: baseConfig,
+        faqs,
+      });
+      expect(reply.body, message).toContain(GREETING);
+      expect(reply.updatedContext?.sales?.greeted, message).toBe(true);
+    }
+  });
+
+  test("segunda mensagem nao repete a apresentacao", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const first = await agent.generateReply({
+      message: "preciso integrar com meu erp",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+    const second = await agent.generateReply({
+      message: "quanto custa?",
+      leadStatus: "em_conversa",
+      context: first.updatedContext,
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(second.body).not.toContain(GREETING);
+  });
+
+  test("explainer de primeiro turno nao ganha prefixo duplicado", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "como funciona?",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+    });
+    const occurrences = reply.body.split(GREETING).length - 1;
+    expect(occurrences).toBe(1);
+  });
+});
+
 describe("whatsapp sales agent — QTR-35 P1-4: aceite ampliado e guard simetrico", () => {
   test("variacoes reais de aceite classificam como quer_testar sem LLM", () => {
     for (const message of [

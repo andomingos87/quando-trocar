@@ -521,11 +521,31 @@ function pickVariation<T>(pool: ReadonlyArray<T>, index: number): T {
   return pool[index % pool.length];
 }
 
-function withGreeting(memory: SalesConversationMemory, body: string) {
-  if (memory.greeted) {
-    return { body, greeted: true as const };
-  }
-  return { body: `${GREETING_PREFIX}\n\n${body}`, greeted: true as const };
+// QTR-35 P1-6: a apresentação sai de um ÚNICO ponto — qualquer primeira
+// resposta da conversa (FAQ, preço, small talk, handoff...) carrega o prefixo,
+// e os branches individuais não precisam lembrar de saudar. Aplica também ao
+// corpo dos botões interativos (bodyText), que espelha o corpo enviado.
+function ensureGreeting(alreadyGreeted: boolean, reply: AgentReply): AgentReply {
+  if (alreadyGreeted) return reply;
+  const sales: SalesConversationMemory = {
+    ...(reply.updatedContext?.sales ?? {}),
+    greeted: true,
+  };
+  const prefix = (text: string) =>
+    text.startsWith(GREETING_PREFIX) ? text : `${GREETING_PREFIX}\n\n${text}`;
+  return {
+    ...reply,
+    body: prefix(reply.body),
+    ...(reply.interactiveButtons
+      ? {
+          interactiveButtons: {
+            ...reply.interactiveButtons,
+            bodyText: prefix(reply.interactiveButtons.bodyText),
+          },
+        }
+      : {}),
+    updatedContext: { ...(reply.updatedContext ?? {}), sales },
+  };
 }
 
 type ReplyContext = {
@@ -789,15 +809,13 @@ function buildReply(
       : "Funciona assim chefe: voce cadastra o servico aqui (oleo, amortecedor, qualquer peca com retorno previsivel), o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra voce ver rodando na sua oficina?";
 
     const painWrapped = withPain(memory, context.message, baseBody);
-    const greeted = withGreeting(memory, painWrapped.body);
 
     memory.pain_detected = painWrapped.painDetected;
     memory.funcionamento_explained = true;
-    memory.greeted = greeted.greeted;
 
     return {
       status: statusForIntent(classification.intent),
-      body: greeted.body,
+      body: painWrapped.body,
       toolCalls: [],
       updatedContext: { sales: memory },
     };
@@ -824,21 +842,20 @@ function buildReply(
     };
   }
 
-  // Primeira aparicao (greeted=false): explainer + saudacao. Marca como fallback #1.
+  // Primeira aparicao (greeted=false): explainer. Marca como fallback #1.
+  // A saudacao em si vem do ensureGreeting no fim do generateReply (P1-6).
   if (!memory.greeted) {
     const baseBody =
       "Funciona assim chefe: voce cadastra o servico aqui (oleo, amortecedor, qualquer peca com retorno previsivel), o sistema chama o cliente no dia certo da proxima e te avisa quem voltou. Bora ativar 14 dias gratis pra ver rodando na sua oficina?";
     const fallbackPain = withPain(memory, context.message, baseBody);
-    const fallbackGreeted = withGreeting(memory, fallbackPain.body);
 
     memory.pain_detected = fallbackPain.painDetected;
     memory.funcionamento_explained = true;
-    memory.greeted = fallbackGreeted.greeted;
     memory.consecutive_fallback = 1;
 
     return {
       status: statusForIntent(classification.intent),
-      body: fallbackGreeted.body,
+      body: fallbackPain.body,
       toolCalls: [],
       updatedContext: { sales: memory },
     };
@@ -961,6 +978,14 @@ export class WhatsappSalesAgent {
   }
 
   async generateReply(input: SalesAgentInput): Promise<AgentReply> {
+    // QTR-35 P1-6: o estado de "já saudou" é o de ENTRADA do turno; a
+    // apresentação é aplicada uma única vez, aqui, sobre QUALQUER resposta.
+    const alreadyGreeted = input.context?.sales?.greeted === true;
+    const reply = await this.replyForInput(input);
+    return ensureGreeting(alreadyGreeted, reply);
+  }
+
+  private async replyForInput(input: SalesAgentInput): Promise<AgentReply> {
     const salesConfig = input.salesConfig ?? defaultConfig();
     const faqs = input.faqs ?? [];
     const memory: SalesConversationMemory = { ...(input.context?.sales ?? {}) };

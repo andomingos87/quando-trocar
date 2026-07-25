@@ -1557,6 +1557,13 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               }
             }
 
+            // QTR-35 P1-6: se a enlatada carrega a apresentação (primeira
+            // resposta da conversa), o rewrite não pode sumir com a marca —
+            // o validador exige o literal, como faz com a data do lembrete.
+            if (replyBody.includes("Quando Trocar")) {
+              requiredLiterals = [...(requiredLiterals ?? []), "Quando Trocar"];
+            }
+
             for (const toolCall of reply.toolCalls) {
               await deps.repository.saveAgentToolCall({
                 conversationId: resolved.conversationId,

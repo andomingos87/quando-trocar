@@ -126,13 +126,13 @@ The classifier must be told explicitly:
 - Human request ("passa pro Anderson") → `quer_humano`.
 - Bot identity ("quem e voce", "voce e IA") → `pergunta_faq` (dedicated FAQ).
 
-## Greeting on first turn
+## Greeting on first turn (QTR-35 P1-6)
 
-When `context.sales.greeted !== true`, the "explainer" intents (`pergunta_funcionamento`, `fora_escopo`) get prefixed with:
+When `context.sales.greeted !== true`, **every** first reply of the conversation gets prefixed with:
 
 > *"Fala chefe! Aqui e do Quando Trocar — a gente faz seu cliente voltar pra proxima troca de qualquer peca ou servico automotivo: oleo, amortecedor, filtro, revisao, alinhamento, freio..."*
 
-Persisted via `memory.greeted = true`. Other intents (`pergunta_preco`, `informa_volume_ticket`, `quer_testar`, etc.) do **not** get the greeting — they have their own purposeful copy.
+This is centralized in `ensureGreeting`, applied once at the single exit point of `generateReply` — FAQ, price, small talk, volume, handoff and registration-hook replies all included (the previous behavior only greeted the explainer intents, so a FAQ-first conversation started with a naked FAQ answer). The prefix also mirrors into `interactiveButtons.bodyText`. Persisted via `memory.greeted = true`. In the webhook, when the deterministic reply carries the brand ("Quando Trocar"), it is added to `requiredLiterals` so the CV1 rewrite can never drop the presentation.
 
 ## Forced handoff signals
 
