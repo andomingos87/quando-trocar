@@ -128,20 +128,21 @@ pergunta_funcionamento · informa_volume_ticket · pergunta_preco · pergunta_fa
 **Ordem de detecção em `classifySalesMessage`** (atualizada ciclo 4):
 1. `isExplicitLossMessage` → `sem_interesse` (vence tudo, até dor).
 2. **`detectPain` → `pergunta_funcionamento`** (override forte).
-3. **`detectQuerHumano` → `quer_humano`**.
-4. **`detectVaiPensar` → `vai_pensar`**.
-5. **`detectBasicGreeting` → `fora_escopo`** (confidence 0.9). Saudação simples e body vazio.
-6. **`detectNeutralAck` → `confirmacao_neutra`** (vem antes do social_test pra "blz" não cair como social).
-7. **`detectSocialTest` → `social_test`** (mensagens ≤3 chars não-cobertas, "kkkk", "testando").
-8. `detectPriceQuestion` → `pergunta_preco`.
-9. `extractVolumeOrTicket` → `informa_volume_ticket`.
-10. Regex de funcionamento → `pergunta_funcionamento`.
-11. Regex de interesse → `quer_testar`.
-12. **`detectSmallTalk` → `small_talk`** (off-topic explícito: time, futebol, piada).
-13. `matchFaq` → `pergunta_faq`.
-14. Default → `fora_escopo`.
+3. **Gatilho promovido pelo volante** → intent comercial não-terminal (só após revisão humana; recusa explícita e dor continuam vencendo).
+4. **`detectQuerHumano` → `quer_humano`**.
+5. **`detectVaiPensar` → `vai_pensar`**.
+6. **`detectBasicGreeting` → `fora_escopo`** (confidence 0.9). Saudação simples e body vazio.
+7. **`detectNeutralAck` → `confirmacao_neutra`** (vem antes do social_test pra "blz" não cair como social).
+8. **`detectSocialTest` → `social_test`** (mensagens ≤3 chars não-cobertas, "kkkk", "testando").
+9. `detectPriceQuestion` → `pergunta_preco`.
+10. `extractVolumeOrTicket` → `informa_volume_ticket`.
+11. Regex de funcionamento → `pergunta_funcionamento`.
+12. Regex de interesse → `quer_testar`.
+13. **`detectSmallTalk` → `small_talk`** (off-topic explícito: time, futebol, piada).
+14. `matchFaq` → `pergunta_faq`.
+15. Default → `fora_escopo`.
 
-Há um segundo gate dentro de `WhatsappSalesAgent.generateReply`: se o OpenAI fallback classificar como `sem_interesse` mas a mensagem disparar `detectPain` sem `isExplicitLossMessage`, o agente sobrescreve para `pergunta_funcionamento`.
+Há um segundo gate dentro de `WhatsappSalesAgent.generateReply`: se o OpenAI fallback classificar como `sem_interesse` mas a mensagem **não** passar em `isExplicitLossMessage`, o agente descarta essa intenção. Com dor, aplica `pergunta_funcionamento`; sem dor, mantém o resultado determinístico. Assim LLM nunca produz `perdido` nem copy de despedida por conta própria.
 
 Transições válidas (decisão determinística, não LLM):
 
@@ -160,13 +161,15 @@ Transições válidas (decisão determinística, não LLM):
 | `sem_interesse` | `perdido` | **só** se mensagem passa em `isExplicitLossMessage()` |
 | `fora_escopo` | mantém status atual | nunca rebaixa lead `interessado`; copy curta na 2ª aparição; **caso geral vira faixa livre** ([ADR-0024](./adr/0024-respond-em-vendas.md)): a camada de geração responde grounded (modo respond) com a enlatada do pool como fallback — sub-caminhos (saudações, lead `interessado`, handoff ≥7) seguem determinísticos |
 
-**Saudação no primeiro turno:** quando `context.sales.greeted !== true`, as respostas de `pergunta_funcionamento` e `fora_escopo` (que são os "explicadores") recebem o prefixo *"Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico."*. Flag persistida no contexto.
+**Saudação no primeiro turno:** quando `context.sales.greeted !== true`, **toda** primeira resposta de vendas recebe uma única vez o prefixo *"Fala chefe! Aqui e do Quando Trocar — a gente faz o cliente que troca oleo (ou faz revisao) voltar pro proximo servico."* — incluindo FAQ, preço, small talk, handoff, aceite e volume. A flag é persistida no contexto; respostas seguintes não repetem a apresentação.
 
 **Saudação subsequente (ciclo 4):** quando `memory.greeted === true` e o lead manda outra saudação ("bom dia", "tudo bem?"), o bot responde com uma das **5 variações** sociais em vez de repetir o explicador. Não conta como fallback.
 
 **Contador `consecutive_fallback` (ciclo 4):** incrementado a cada `fora_escopo` ou `social_test` consecutivo; resetado por qualquer outro intent. Ao atingir **7**, dispara handoff automático para o WhatsApp comercial com `handoffReason = "fallback_loop"`. As 5 variações de `FALLBACK_VARIATIONS` rotacionam baseadas nesse contador. **O contador nunca reage à camada de geração** ([ADR-0024](./adr/0024-respond-em-vendas.md)): incrementa mesmo quando o respond respondeu bem — `off`/`sombra`/`on` só podem diferir no texto enviado, nunca no estado.
 
 **Botões interativos no fallback nível 2 (CV3):** no slot do menu da rotação (`FALLBACK_VARIATIONS[1]`), em vez do menu de texto o bot envia **reply buttons** da Cloud API (máx 3: "Como funciona", "Quanto custa", "Quero testar"). O clique volta como `button_reply.id` **determinístico**, mapeado para a mensagem canônica em `lib/whatsapp/sales-buttons.ts` (id → intent, **sem LLM**), eliminando erro de classificação de texto livre. É determinístico — **não** marca respond e não altera o contador (idêntico ao caminho de texto). Quando o transporte não suporta botões, degrada para o menu de texto. Fonte: `lib/whatsapp/sales-buttons.ts`, `sendInteractiveButtons` em `lib/whatsapp/whatsapp-client.ts`.
+
+**Botões nos momentos de decisão (QTR-35 P1):** a primeira resposta de preço oferece `Quero testar | Como funciona | Falar com o Anderson`; o explicador oferece `Quero testar | Quanto custa | Falar com o Anderson`. Os IDs continuam determinísticos; só o corpo pode passar pelo rewrite CV1 já validado. No card de cadastro, `Confirmar | Corrigir` vira as mensagens canônicas `confirmar`/`corrigir`; `corrigir` pergunta o campo a ajustar sem chamada de LLM. O card e seus botões nunca passam pela geração e não alteram estado sem o "sim" da oficina.
 
 - Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), [`.codex/prompts/whatsapp-sales-agent.md`](../.codex/prompts/whatsapp-sales-agent.md), `lib/whatsapp/sales-agent.ts`.
 
@@ -228,6 +231,12 @@ Melhoria contínua da FAQ sem deploy: pergunta que o bot não soube responder �
 - Tela `/admin/perguntas-sem-resposta`: lista as perguntas abertas **agrupadas por frequência**. Ações: **Virar FAQ** (abre o form de `faq_vendas` pré-preenchido; ao salvar, marca as ocorrências como `resolvida`) e **Ignorar** (marca `ignorada`). Toda ação é auditada em `admin_audit_log`.
 - Fonte: `lib/admin/perguntas-sem-resposta.ts`, `app/admin/(autenticado)/perguntas-sem-resposta/`, migration `20260718150000_faq_semantic_search.sql`.
 
+### 1.9 Volante de intenção de vendas (QTR-35 P1)
+- Quando o fallback LLM diverge do classificador determinístico, o webhook grava best-effort uma ocorrência em `divergencias_intencao_vendas`: mensagem limitada a 500 caracteres, intents/confianças determinístico e LLM, e o intent efetivamente aplicado pelo backend.
+- A promoção manual cria uma linha ativa em `gatilhos_intencao_vendas`; o bot lê os gatilhos com cache curto e os testa depois de recusa explícita e dor. O schema só permite `quer_testar`, `pergunta_preco`, `pergunta_funcionamento`, `quer_humano` e `vai_pensar`: `sem_interesse`/perda jamais podem ser promovidos.
+- As duas tabelas têm RLS sem policies e são acessíveis apenas pelo backend com service role. A tela de triagem/admin é uma entrega separada; até lá a promoção é operacional via Supabase Studio.
+- Fonte: ADR-0028, `lib/whatsapp/sales-agent.ts`, `lib/whatsapp/repository.ts`, migration `20260725201415_volante_intencao_vendas.sql`.
+
 ---
 
 ## 2. Conversão (lead → oficina)
@@ -240,7 +249,9 @@ Uma oficina vira `cliente_ativo` quando:
 
 Dados mínimos coletados no fluxo: `nome_oficina`, `whatsapp_principal`.
 
-**Captura do nome da oficina (obrigatória):** quando o lead aceita testar (`quer_testar`), o bot **não converte na hora** — primeiro pergunta o nome da oficina ("Boa chefe! Antes de ativar seu teste, como chama a sua oficina?") e marca `sales.awaiting_workshop_name = true`. Na resposta, `extractWorkshopName()` limpa frases de embrulho ("minha oficina se chama X", "é a X", "o nome é X") e valida que não é saudação/ack/pergunta/preço nem só dígitos. Se a resposta não parecer um nome, o bot repergunta. Se o lead desistir (`isExplicitLossMessage`), vira `perdido`. Com o nome válido, o agente devolve `convertToOficina = true` e `nomeOficina = <nome>`, e a tool call `capture_workshop_name` é registrada. O nome capturado fica em `sales.workshop_name`.
+**Captura do nome da oficina (obrigatória):** quando o lead aceita testar (`quer_testar`), o bot **não converte na hora** — primeiro pergunta o nome da oficina ("Boa chefe! Antes de ativar seu teste, como chama a sua oficina?") e marca `sales.awaiting_workshop_name = true`. Na resposta, `extractWorkshopName()` limpa frases de embrulho ("minha oficina se chama X", "é a X", "o nome é X") e valida que não é saudação/ack/pergunta/preço, só dígitos ou uma afirmação pura (`sim`, `pode`, `fechado`, `ok`…). Se a resposta não parecer um nome, o bot repergunta. Se o lead desistir (`isExplicitLossMessage`), vira `perdido`. Com o nome válido, o agente devolve `convertToOficina = true` e `nomeOficina = <nome>`, e a tool call `capture_workshop_name` é registrada. O nome capturado fica em `sales.workshop_name`.
+
+**Gancho de cadastro ainda em vendas (QTR-35 P1):** se a mensagem já combina sinal de cadastro (telefone + serviço, ou lista com campos), ela é avaliada **antes** de volume/ticket e não cai em FAQ/ROI. O bot guarda `pending_registration` (texto, origem e data São Paulo do turno), pede o nome da oficina e ativa o teste. Na conversão, o webhook recupera o texto antes de `convertLeadToOficina` limpar o contexto e o entrega ao onboarding com a data original — preserva o significado de "hoje". O onboarding mostra card ou pede o campo faltante; **não** grava `servicos`/`lembretes` até o "sim" da oficina.
 
 - Fonte: [PRD §8](./product/PRD-whatsapp-bot.md), `extractWorkshopName()` em `lib/whatsapp/sales-agent.ts`.
 
@@ -390,6 +401,7 @@ No modo `operacao`, além de registrar trocas, o bot responde consultas **read-o
 Quando todos os campos obrigatórios estão preenchidos, o bot **não grava direto**. Primeiro devolve um resumo dos dados captados e marca `conversas.context.awaiting_confirmation = true` (carregando o draft completo em `service_draft`). É a rede de segurança que o [ADR-0015](./adr/0015-suporte-audio-whisper.md) assumia ("a oficina corrige manualmente") mas que não existia no fluxo — sem ela, uma transcrição errada do Whisper (ex.: veículo capturado como "Não houve loucura") era gravada e o template irreversível disparava ao cliente frio sem revisão humana.
 
 - **Resumo**: lista cliente, carro, serviço (com marca do amortecedor quando houver), data e WhatsApp; pede "Responda *sim* pra confirmar, ou me diga o que corrigir". Registra a tool call `solicitou_confirmacao_cadastro`.
+- **Atalhos de botão**: `Confirmar` é a mesma afirmação canônica; `Corrigir`/`não`/`errado` secos pedem diretamente o campo a corrigir, sem tentar extrair uma alteração vazia por LLM.
 - **Afirmação** (`sim`, `isso`, `pode cadastrar`, `ok`, `beleza`… — só quando **todos** os tokens da resposta são afirmativos, pra "sim, mas o carro é Gol" não confirmar por engano): aí sim chama a RPC e dispara a confirmação ao cliente. Tool call `confirmou_cadastro` com `confirmed=true`.
 - **Correção** (qualquer resposta não-afirmativa): re-extrai os campos informados **via LLM** (o parser por vírgula é perigoso em respostas curtas) e mescla sobre o draft, reapresentando o resumo para novo "sim". Se nada foi entendido, pede explicitamente o que corrigir. Em nenhum caso grava ou dispara template enquanto não houver afirmação. Tool call `confirmou_cadastro` com `confirmed=false`.
 

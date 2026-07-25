@@ -209,6 +209,136 @@ describe("whatsapp webhook phase 2", () => {
     });
   });
 
+  test("retoma o cadastro sinalizado no mesmo turno da conversao, sem gravar antes do card", async () => {
+    const pendingMessage = "Leonardo, BMW, troca de oleo hoje, 11 99300-5555";
+    const repository = phase2Repository({
+      upsertSalesLeadConversation: vi.fn(async () => ({
+        id: "conversation-id",
+        leadId: "lead-id",
+        agentMode: "vendas" as const,
+        participantType: "lead_oficina" as const,
+        context: {
+          sales: { awaiting_workshop_name: true },
+          pending_registration: {
+            message: pendingMessage,
+            media_type: "audio" as const,
+            received_at: "2026-07-24",
+          },
+        },
+      })),
+      convertLeadToOficina: vi.fn(async () => ({
+        oficinaId: "oficina-id",
+        nome: "Oficina Marsili",
+        diasLembretePadrao: 90,
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-text" })),
+      sendInteractiveButtons: vi.fn(async () => ({ whatsappMessageId: "wamid.out-buttons" })),
+    };
+    const onboardingAgent = {
+      generateReply: vi.fn(async () => ({
+        body: "Confere os dados antes de eu registrar:",
+        context: { awaiting_confirmation: true, service_draft: { nome_cliente: "Leonardo" } },
+        registerServiceInput: null,
+        nextAgentMode: null,
+        toolCalls: [
+          {
+            toolName: "solicitou_confirmacao_cadastro",
+            input: { source_media_type: "audio" },
+            output: { draft: { nome_cliente: "Leonardo" } },
+          },
+        ],
+        interactiveButtons: {
+          bodyText: "Confere os dados antes de eu registrar:",
+          buttons: [
+            { id: "onb_confirmar", title: "Confirmar" },
+            { id: "onb_corrigir", title: "Corrigir" },
+          ],
+        },
+      })),
+    };
+    const agent = {
+      generateReply: vi.fn(async () => ({
+        body: "Show chefe!",
+        status: "teste_aceito" as const,
+        convertToOficina: true,
+        nomeOficina: "Oficina Marsili",
+        toolCalls: [],
+      })),
+    };
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent,
+      onboardingAgent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("Oficina Marsili"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(onboardingAgent.generateReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: pendingMessage,
+        mode: "onboarding",
+        context: {},
+        today: "2026-07-24",
+        sourceMediaType: "audio",
+      }),
+    );
+    expect(repository.registerServiceWithReminder).not.toHaveBeenCalled();
+    expect(repository.updateConversationModeAndContext).toHaveBeenCalledWith({
+      conversationId: "conversation-id",
+      agentMode: "onboarding",
+      context: { awaiting_confirmation: true, service_draft: { nome_cliente: "Leonardo" } },
+    });
+    expect(whatsapp.sendInteractiveButtons).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("Oficina Marsili esta cadastrada"),
+      }),
+    );
+  });
+
+  test("salva divergência de intenção em best-effort sem afetar a resposta", async () => {
+    const saveSalesIntentDivergence = vi.fn(async () => undefined);
+    const repository = phase2Repository({ saveSalesIntentDivergence });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const agent = {
+      generateReply: vi.fn(async () => ({
+        body: "Me conta melhor, chefe.",
+        status: "em_conversa" as const,
+        toolCalls: [],
+        classificationAudit: {
+          deterministicIntent: "fora_escopo" as const,
+          deterministicConfidence: 0.6,
+          llmIntent: "sem_interesse" as const,
+          llmConfidence: 0.95,
+          appliedIntent: "fora_escopo" as const,
+        },
+      })),
+    };
+    const handlers = createWhatsappWebhookHandlers({ env, repository, whatsapp, agent });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("hmm depende de muita coisa"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(saveSalesIntentDivergence).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: "conversation-id",
+        leadId: "lead-id",
+        message: "hmm depende de muita coisa",
+        audit: expect.objectContaining({ llmIntent: "sem_interesse" }),
+      }),
+    );
+  });
+
   test("asks for the workshop name when the oficina has the placeholder name", async () => {
     const repository = phase2Repository({
       getOficinaByWhatsapp: vi.fn(async () => ({

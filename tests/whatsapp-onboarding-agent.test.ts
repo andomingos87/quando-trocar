@@ -1146,3 +1146,97 @@ describe("WhatsappOnboardingAgent — extração do áudio real (QTR-35)", () =>
     expect(result.body).toContain("Me diga o que corrigir");
   });
 });
+
+describe("QTR-35 P1-8 — card de confirmacao com botoes Confirmar/Corrigir", () => {
+  const confirmationDraftContext: ConversationContext = {
+    pending_action: "registrar_primeira_troca",
+    awaiting_confirmation: true,
+    service_draft: {
+      nome_cliente: "Joao",
+      whatsapp_cliente: "+5541999990000",
+      veiculo: "Civic 2018",
+      servico: "troca de oleo",
+      data_servico: "2026-04-25",
+      valor: null,
+      consentimento_whatsapp: true,
+      tipo_servico: "troca_oleo",
+    },
+  };
+
+  test("o card de confirmacao carrega os botoes Confirmar/Corrigir", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+    const result = await agent.generateReply({
+      message: "Joao, Civic 2018, troca de oleo hoje, 41999990000",
+      mode: "onboarding",
+      context: {},
+      today: "2026-04-25",
+    });
+
+    expect(result.context.awaiting_confirmation).toBe(true);
+    expect(result.interactiveButtons?.buttons.map((b) => b.id)).toEqual([
+      "onb_confirmar",
+      "onb_corrigir",
+    ]);
+    // ADR-0024: o corpo interativo espelha o texto do card (degradacao igual).
+    expect(result.interactiveButtons?.bodyText).toBe(result.body);
+  });
+
+  test('mensagem canonica "confirmar" (botao) confirma e gera registerServiceInput', async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+    const result = await agent.generateReply({
+      message: "confirmar",
+      mode: "onboarding",
+      context: confirmationDraftContext,
+      today: "2026-04-25",
+    });
+
+    expect(result.registerServiceInput).not.toBeNull();
+    expect(result.registerServiceInput?.nomeCliente).toBe("Joao");
+  });
+
+  test('mensagem canonica "corrigir" (botao) entra na correcao SEM chamar o LLM', async () => {
+    const agent = new WhatsappOnboardingAgent({
+      openai: {
+        responses: {
+          create: async () => {
+            throw new Error("nao deveria chamar OpenAI para 'corrigir' seco");
+          },
+        },
+      } as never,
+    });
+
+    const result = await agent.generateReply({
+      message: "corrigir",
+      mode: "onboarding",
+      context: confirmationDraftContext,
+      today: "2026-04-25",
+    });
+
+    expect(result.registerServiceInput).toBeNull();
+    expect(result.context.awaiting_confirmation).toBe(true);
+    expect(result.body).toContain("Me diga o que corrigir");
+  });
+
+  test('"nao" e "ta errado" secos tambem entram na correcao deterministicamente', async () => {
+    const agent = new WhatsappOnboardingAgent({
+      openai: {
+        responses: {
+          create: async () => {
+            throw new Error("nao deveria chamar OpenAI para correcao seca");
+          },
+        },
+      } as never,
+    });
+
+    for (const message of ["nao", "ta errado", "errado"]) {
+      const result = await agent.generateReply({
+        message,
+        mode: "onboarding",
+        context: confirmationDraftContext,
+        today: "2026-04-25",
+      });
+      expect(result.body, message).toContain("Me diga o que corrigir");
+      expect(result.context.awaiting_confirmation, message).toBe(true);
+    }
+  });
+});

@@ -19,6 +19,26 @@ Não registrar:
 
 ---
 
+## 2026-07-25 — Intenção de compra, conversão guiada e volante seguro (QTR-35 P1)
+
+Fecha localmente os itens 4–8 da [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no). Plano e evidência de origem em [`qtr-35-p1-intencao-e-conversao.md`](./backlog-whatsapp-bot/qtr-35-p1-intencao-e-conversao.md). A migration do volante permanece pendente de aplicação remota.
+
+### Decidido
+
+- **[ADR-0028](./adr/0028-volante-de-gatilhos-de-intencao.md)** — divergência entre classificador determinístico e LLM vira audit best-effort; somente humano promove gatilho e o schema proíbe intent terminal.
+- **[ADR-0029](./adr/0029-sinal-de-cadastro-em-vendas.md)** — tentativa de cadastro em vendas vira conversão guiada. O texto, origem e data sobrevivem à conversão e só são extraídos no onboarding, ainda atrás do card + "sim".
+
+### Alterado
+
+- Aceites reais como "quero fazer" passam a ser determinísticos; LLM não consegue produzir `sem_interesse`/`perdido` sem recusa explícita.
+- A apresentação do Quando Trocar sai uma vez em toda primeira resposta de vendas; o cross-tenant permite o nome que o próprio lead acabou de fornecer, sem liberar nome inventado.
+- Botões passam a cobrir preço/explicador e o card `Confirmar | Corrigir`; IDs e efeitos continuam determinísticos.
+
+### Pendente
+
+- Aplicar `20260725201415_volante_intencao_vendas.sql`, rodar advisors e conferir histórico de migrations depois do deploy.
+- Criar issue-filha para tela administrativa de triagem/promoção de `divergencias_intencao_vendas`.
+
 ## 2026-07-25 — Qualidade do cadastro: extração por LLM, barreira de saída e data única (QTR-35 P0)
 
 Correção dos três itens P0 da [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no), a partir da análise das conversas de teste ponta a ponta em produção (cadastro da Oficina Marsili, 24/07/2026). O fluxo completava, mas gravava dado corrompido e prometia à oficina uma data diferente da agendada. Plano em [`qtr-35-p0-qualidade-cadastro.md`](./backlog-whatsapp-bot/qtr-35-p0-qualidade-cadastro.md).

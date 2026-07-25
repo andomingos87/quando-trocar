@@ -33,6 +33,7 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
   `perguntas_sem_resposta` (ADR-0023).
 - `date-parse.ts` — parsing deterministico de datas.
 - `transcription.ts` / `image-vision.ts` / `document-text.ts` — media inbound (audio/imagem/pdf).
+- `registration-signal.ts` — sinal deterministico compartilhado de cadastro, usado antes da classificação de vendas e no onboarding.
 - `payload.ts`, `signature.ts`, `types.ts`, `*-fallbacks.ts` — parsing, assinatura, contratos e fallbacks.
 
 ## Regras/invariantes do modulo
@@ -46,6 +47,11 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
   virgula nao separa campos, e o parser gravava `nome = "Ó"`. Depois de qualquer extracao roda a
   guarda de sanidade deterministica (`suspectDraftFields`) — campo suspeito volta a ser perguntado,
   nunca e persistido. A data e sempre deterministica (`parseBrazilianDate`).
+- Em vendas, `hasRegistrationSignal` roda antes de volume/ticket (ADR-0029): só guarda o rascunho
+  e conduz à captura do nome. A extração volta no onboarding após a conversão e nunca grava sem
+  card + "sim" da oficina.
+- Divergências entre classificador determinístico e LLM são auditadas best-effort; gatilhos só
+  entram após promoção humana e o schema proíbe intenções terminais (ADR-0028).
 - O que o bot promete tem de ser o que o banco gravou: a copy do cadastro informa a data que o RPC
   devolveu (`scheduled_at`), nunca um prazo recalculado de outra fonte.
 - Persistir evento inbound antes de processar; guardar provider message IDs; idempotencia obrigatoria.
@@ -62,5 +68,5 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 - Arquitetura: `docs/architecture/whatsapp-bot-technical-plan.md`
 - Backlog: `docs/backlog-whatsapp-bot/`
 - Regras de negocio: `docs/regras-de-negocio.md`
-- ADRs relevantes: ADR-0001 (LLM nao muda estado), ADR-0017 (confirmacao da oficina), ADR-0018 (concierge cliente final), ADR-0020/0022/0024 (camada de geracao conversacional), ADR-0023 (perguntas_sem_resposta), ADR-0027 (extracao de cadastro por LLM + guarda de sanidade)
+- ADRs relevantes: ADR-0001 (LLM nao muda estado), ADR-0017 (confirmacao da oficina), ADR-0018 (concierge cliente final), ADR-0020/0022/0024 (camada de geracao conversacional), ADR-0023 (perguntas_sem_resposta), ADR-0027 (extracao de cadastro por LLM + guarda de sanidade), ADR-0028 (volante de intencao), ADR-0029 (cadastro sinalizado em vendas)
 - Convencoes: `.context/conventions.md`

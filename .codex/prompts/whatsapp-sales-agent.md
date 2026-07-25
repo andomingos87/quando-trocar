@@ -134,6 +134,21 @@ When `context.sales.greeted !== true`, **every** first reply of the conversation
 
 This is centralized in `ensureGreeting`, applied once at the single exit point of `generateReply` — FAQ, price, small talk, volume, handoff and registration-hook replies all included (the previous behavior only greeted the explainer intents, so a FAQ-first conversation started with a naked FAQ answer). The prefix also mirrors into `interactiveButtons.bodyText`. Persisted via `memory.greeted = true`. In the webhook, when the deterministic reply carries the brand ("Quando Trocar"), it is added to `requiredLiterals` so the CV1 rewrite can never drop the presentation.
 
+## Cadastro enviado ainda em vendas (QTR-35 P1-7)
+
+Before the ordinary sales classification, detect a registration signal: phone + automotive service, or a comma-separated record with at least three fields and phone/service. This is deterministic and must run before `extractVolumeOrTicket`, otherwise the customer phone can be mistaken for sales volume.
+
+- Store `pending_registration = { message, media_type, received_at }` plus `sales.awaiting_workshop_name = true`; answer with a deterministic conversion hook and ask only for the workshop name.
+- A repeated registration signal replaces the saved message and does not repeat the long pitch.
+- Pure affirmatives (`sim`, `pode`, `fechado`, `ok`...) are never valid workshop names; ask again.
+- On conversion, read this context before `convertLeadToOficina` clears it. Feed it to onboarding with its original São Paulo date so "hoje" means the original turn. The onboarding card is still mandatory: never write a service/reminder in the conversion turn.
+
+## Volante de intenção (QTR-35 P1-4c)
+
+Only human-promoted database triggers may add a deterministic classification. They run after explicit loss and pain; both always win. The schema only allows `quer_testar`, `pergunta_preco`, `pergunta_funcionamento`, `quer_humano` and `vai_pensar` — never promote `sem_interesse` or any terminal state.
+
+When the LLM fallback returns a different intent, expose deterministic/LLM/applied intents and confidences as audit data. The webhook persists that divergence best-effort; a failed audit insert never changes the response or webhook processing.
+
 ## Forced handoff signals
 
 These set `handoffRequired = true` (marks `conversas.handoff_required`), reply contains a `wa.me` link to commercial number, and **status is not changed**:

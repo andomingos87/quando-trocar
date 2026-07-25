@@ -683,6 +683,120 @@ describe("whatsapp sales agent — QTR-35 P1-4: aceite ampliado e guard simetric
   });
 });
 
+describe("whatsapp sales agent — QTR-35 P1-7: cadastro durante vendas", () => {
+  test("sinal de cadastro antecede volume/ticket e guarda o rascunho para a conversao", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const message = "Leonardo, BMW, troca de oleo hoje, 11 99300-5555";
+
+    const reply = await agent.generateReply({
+      message,
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+      sourceMediaType: "audio",
+      receivedAt: "2026-07-24",
+    });
+
+    expect(reply.status).toBe("interessado");
+    expect(reply.body).toContain("nome da sua oficina");
+    expect(reply.updatedContext?.sales?.awaiting_workshop_name).toBe(true);
+    expect(reply.updatedContext?.pending_registration).toEqual({
+      message,
+      media_type: "audio",
+      received_at: "2026-07-24",
+    });
+    expect(reply.toolCalls).toEqual([
+      expect.objectContaining({ toolName: "registration_signal_em_vendas" }),
+    ]);
+  });
+
+  test("sinal repetido atualiza o ultimo rascunho e nao aceita 'sim' como nome", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const first = await agent.generateReply({
+      message: "Leonardo, BMW, troca de oleo hoje, 11 99300-5555",
+      leadStatus: "em_conversa",
+      context: {},
+      salesConfig: baseConfig,
+      faqs,
+      receivedAt: "2026-07-24",
+    });
+    const repeated = "Leonardo, BMW 320i, troca de oleo hoje, 11 99300-5555";
+    const updated = await agent.generateReply({
+      message: repeated,
+      leadStatus: "interessado",
+      context: first.updatedContext,
+      salesConfig: baseConfig,
+      faqs,
+      receivedAt: "2026-07-24",
+    });
+
+    expect(updated.body).toContain("atualizei esse cadastro");
+    expect(updated.updatedContext?.pending_registration?.message).toBe(repeated);
+
+    const nameReply = await agent.generateReply({
+      message: "sim",
+      leadStatus: "interessado",
+      context: updated.updatedContext,
+      salesConfig: baseConfig,
+      faqs,
+    });
+    expect(nameReply.convertToOficina).not.toBe(true);
+    expect(nameReply.body).toContain("nome da sua oficina");
+  });
+});
+
+describe("whatsapp sales agent — QTR-35 P1-4c: volante de intenção", () => {
+  test("gatilho promovido classifica sem LLM, mas recusa explícita continua vencendo", () => {
+    const triggers = [
+      { id: "trigger-1", pattern: "quero colocar pra rodar", intent: "quer_testar" as const },
+    ];
+
+    expect(classifySalesMessage("quero colocar pra rodar", faqs, null, triggers)).toMatchObject({
+      intent: "quer_testar",
+      confidence: 0.9,
+    });
+    expect(
+      classifySalesMessage("nao quero colocar pra rodar", faqs, null, triggers).intent,
+    ).toBe("sem_interesse");
+  });
+
+  test("divergência do LLM é exposta para auditoria sem mudar o guardrail", async () => {
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: {
+        responses: {
+          create: async () => ({
+            output_text: JSON.stringify({
+              intent: "sem_interesse",
+              confidence: 0.95,
+              monthlyChanges: null,
+              averageTicket: null,
+            }),
+          }),
+        },
+      } as never,
+    });
+
+    const reply = await agent.generateReply({
+      message: "hmm depende de muita coisa isso ai",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).not.toBe("perdido");
+    expect(reply.classificationAudit).toEqual({
+      deterministicIntent: "fora_escopo",
+      deterministicConfidence: 0.6,
+      llmIntent: "sem_interesse",
+      llmConfidence: 0.95,
+      appliedIntent: "fora_escopo",
+    });
+  });
+});
+
 describe("whatsapp sales agent — Ciclo 3 (TIER 1 + TIER 2 criticos)", () => {
   test("detectBasicGreeting catches saudacoes puras and empty bodies", () => {
     expect(detectBasicGreeting("oi")).toBe(true);

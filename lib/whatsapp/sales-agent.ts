@@ -2,10 +2,13 @@ import OpenAI from "openai";
 
 import { whatsappLink } from "../config";
 import {
+  SALES_EXPLAINER_BUTTONS,
   SALES_FALLBACK_BUTTONS,
   SALES_FALLBACK_BUTTONS_BODY,
   SALES_FALLBACK_BUTTONS_TEXT,
+  SALES_PRICE_BUTTONS,
 } from "./sales-buttons";
+import { hasRegistrationSignal } from "./registration-signal";
 import type {
   AgentReply,
   ConfiguracoesVendedor,
@@ -17,6 +20,7 @@ import type {
   SalesAgentInput,
   SalesClassification,
   SalesConversationMemory,
+  SalesIntentTrigger,
   SalesIntent,
 } from "./types";
 
@@ -184,6 +188,21 @@ const WORKSHOP_NAME_STRIP_PATTERNS: ReadonlyArray<RegExp> = [
   /^[\s:,.\-]+/,
 ];
 
+const AFFIRMATIVE_ONLY_WORKSHOP_NAME_TOKENS = new Set([
+  "sim",
+  "isso",
+  "pode",
+  "bora",
+  "quero",
+  "fechado",
+  "fechou",
+  "ok",
+  "okay",
+  "beleza",
+  "confirmar",
+  "confirmo",
+]);
+
 // Valida se a mensagem pode ser uma resposta de nome de oficina (não é
 // saudação, ack, pergunta nem só dígitos) e devolve o nome limpo, ou null.
 export function extractWorkshopName(message: string): string | null {
@@ -219,6 +238,14 @@ export function extractWorkshopName(message: string): string | null {
 
   value = value.replace(/[\s:,.\-]+$/g, "").trim();
   if (value.length < 2 || /^\d+$/.test(value.replace(/\s/g, ""))) return null;
+
+  const tokens = normalizeText(value).split(" ").filter(Boolean);
+  if (
+    tokens.length > 0 &&
+    tokens.every((token) => AFFIRMATIVE_ONLY_WORKSHOP_NAME_TOKENS.has(token))
+  ) {
+    return null;
+  }
 
   return value;
 }
@@ -344,6 +371,7 @@ export function classifySalesMessage(
   // fallback quando o match por keyword falha — a keyword é curada pelo admin e
   // tem prioridade. Ausente (sem embedder) → comportamento antigo, só keyword.
   preMatchedFaqId?: string | null,
+  intentTriggers: ReadonlyArray<SalesIntentTrigger> = [],
 ): SalesClassification {
   // 1. Recusa explicita -> sem_interesse (vence tudo, ate dor)
   if (isExplicitLossMessage(message)) {
@@ -357,6 +385,22 @@ export function classifySalesMessage(
       confidence: 0.9,
       painDetected: true,
     };
+  }
+
+  // P1-4c / ADR-0028: padrão só chega aqui depois de promoção humana no
+  // volante. Ainda assim, recusa explícita e dor sempre vencem o gatilho.
+  const normalizedTriggerMessage = normalizeText(message);
+  for (const trigger of intentTriggers) {
+    const normalizedPattern = normalizeText(trigger.pattern);
+    if (!normalizedPattern) continue;
+    const expression = normalizedPattern
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("\\s+");
+    if (expression && new RegExp(`\\b${expression}\\b`).test(normalizedTriggerMessage)) {
+      return { intent: trigger.intent, confidence: 0.9 };
+    }
   }
 
   // 3. Pedido de humano -> quer_humano (ciclo 3)
@@ -671,6 +715,13 @@ function buildReply(
         body: reply.body,
         toolCalls: [],
         updatedContext: { sales: memory },
+        // QTR-35 P1-8: momento de decisão do funil — depois do preço, o lead
+        // escolhe com um toque. Corpo é conteúdo CV1 (generationEligible).
+        interactiveButtons: {
+          bodyText: reply.body,
+          buttons: SALES_PRICE_BUTTONS,
+          generationEligible: true,
+        },
       };
     }
 
@@ -818,6 +869,12 @@ function buildReply(
       body: painWrapped.body,
       toolCalls: [],
       updatedContext: { sales: memory },
+      // QTR-35 P1-8: depois do explicador, o próximo passo vira um toque.
+      interactiveButtons: {
+        bodyText: painWrapped.body,
+        buttons: SALES_EXPLAINER_BUTTONS,
+        generationEligible: true,
+      },
     };
   }
 
@@ -858,6 +915,12 @@ function buildReply(
       body: fallbackPain.body,
       toolCalls: [],
       updatedContext: { sales: memory },
+      // QTR-35 P1-8: o explicador de primeiro contato também oferece o toque.
+      interactiveButtons: {
+        bodyText: fallbackPain.body,
+        buttons: SALES_EXPLAINER_BUTTONS,
+        generationEligible: true,
+      },
     };
   }
 
@@ -990,6 +1053,37 @@ export class WhatsappSalesAgent {
     const faqs = input.faqs ?? [];
     const memory: SalesConversationMemory = { ...(input.context?.sales ?? {}) };
 
+    // QTR-35 P1-7: antes da classificação (inclusive de volume/ticket), uma
+    // mensagem que já parece cadastro vira um gancho de conversão. Não há
+    // extração nem escrita neste momento: apenas guardamos o texto para o
+    // onboarding ler depois da conversão e confirmar com a oficina.
+    if (!isExplicitLossMessage(input.message) && hasRegistrationSignal(input.message)) {
+      const repeated = memory.awaiting_workshop_name === true;
+      const receivedAt = input.receivedAt ?? new Date().toISOString().slice(0, 10);
+      return {
+        status: "interessado",
+        body: repeated
+          ? "Perfeito chefe, atualizei esse cadastro. Antes de eu ativar o teste, qual o nome da sua oficina?"
+          : "Chefe, e exatamente isso que eu faco: guardo a troca e aviso o cliente na data certa da proxima. Ja anotei o que voce mandou — me diz o nome da sua oficina que eu ativo seu teste gratis e deixo esse cadastro pronto pra confirmar.",
+        toolCalls: [
+          {
+            toolName: "registration_signal_em_vendas",
+            input: { source_media_type: input.sourceMediaType ?? "text", repeated },
+            output: { pending_registration: true },
+          },
+        ],
+        updatedContext: {
+          ...input.context,
+          pending_registration: {
+            message: input.message,
+            media_type: input.sourceMediaType ?? null,
+            received_at: receivedAt,
+          },
+          sales: { ...memory, awaiting_workshop_name: true },
+        },
+      };
+    }
+
     // Estamos esperando o nome da oficina pra concluir a conversão.
     if (memory.awaiting_workshop_name) {
       // O lead ainda pode desistir nesse ponto.
@@ -1035,9 +1129,11 @@ export class WhatsappSalesAgent {
       input.message,
       faqs,
       input.preMatchedFaqId,
+      input.intentTriggers,
     );
 
     let classification: SalesClassification = deterministic;
+    let classificationAudit: AgentReply["classificationAudit"];
     if (deterministic.confidence < 0.85) {
       const fromOpenAI = await this.classifyWithOpenAI(input.message);
       if (fromOpenAI) {
@@ -1071,6 +1167,16 @@ export class WhatsappSalesAgent {
         } else {
           classification = fromOpenAI;
         }
+
+        if (fromOpenAI.intent !== deterministic.intent) {
+          classificationAudit = {
+            deterministicIntent: deterministic.intent,
+            deterministicConfidence: deterministic.confidence,
+            llmIntent: fromOpenAI.intent,
+            llmConfidence: fromOpenAI.confidence,
+            appliedIntent: classification.intent,
+          };
+        }
       }
     }
 
@@ -1102,16 +1208,18 @@ export class WhatsappSalesAgent {
             },
           ],
           updatedContext: { sales: newMemory },
+          ...(classificationAudit ? { classificationAudit } : {}),
         };
       }
       // Sem FAQ encontrada (raro): cai pro fallback
-      return buildReply(
+      const fallbackReply = buildReply(
         { intent: "fora_escopo", confidence: 0.5 },
         { message: input.message, leadStatus: input.leadStatus, memory, salesConfig },
       );
+      return classificationAudit ? { ...fallbackReply, classificationAudit } : fallbackReply;
     }
 
-    return reply;
+    return classificationAudit ? { ...reply, classificationAudit } : reply;
   }
 
   private async classifyWithOpenAI(message: string): Promise<SalesClassification | null> {

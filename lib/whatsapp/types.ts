@@ -47,6 +47,28 @@ export type SalesClassification = {
   scaleHandoff?: boolean;
 };
 
+/** Intents que podem ser promovidos por revisão humana sem abrir risco terminal. */
+export type PromotableSalesIntent =
+  | "quer_testar"
+  | "pergunta_preco"
+  | "pergunta_funcionamento"
+  | "quer_humano"
+  | "vai_pensar";
+
+export type SalesIntentTrigger = {
+  id: string;
+  pattern: string;
+  intent: PromotableSalesIntent;
+};
+
+export type SalesClassificationAudit = {
+  deterministicIntent: SalesIntent;
+  deterministicConfidence: number;
+  llmIntent: SalesIntent;
+  llmConfidence: number;
+  appliedIntent: SalesIntent;
+};
+
 export type RoiCalculation = {
   monthlyChanges: number;
   averageTicket: number;
@@ -75,6 +97,8 @@ export type AgentReply = {
   /** Nome da oficina capturado no fluxo de conversão (acompanha convertToOficina). */
   nomeOficina?: string | null;
   updatedContext?: ConversationContext;
+  /** Divergência do classificador, gravada best-effort pelo webhook (P1-4c). */
+  classificationAudit?: SalesClassificationAudit;
   handoffRequired?: boolean;
   handoffReason?: string;
   /**
@@ -84,16 +108,23 @@ export type AgentReply = {
    */
   conversationalGenerationMode?: ReplyGenerationMode;
   /**
-   * Fallback nível 2 de vendas (fase CV3): quando presente, o webhook envia
-   * botões interativos (Cloud API reply buttons) em vez do menu de texto — o
-   * clique vira um `button_reply.id` determinístico, sem erro de classificação.
-   * `bodyText` é o corpo da mensagem interativa; `body` (acima) segue como
-   * degradação de texto quando o transporte não suporta botões. Determinístico:
-   * nunca passa pela camada de geração.
+   * Quando presente, o webhook envia botões interativos (Cloud API reply
+   * buttons) — o clique vira um `button_reply.id` determinístico, sem erro de
+   * classificação. `bodyText` é o corpo da mensagem interativa; `body` (acima)
+   * segue como degradação de texto quando o transporte não suporta botões.
+   * Usado no fallback nível 2 (fase CV3) e nos momentos de decisão do funil
+   * (explicador/preço, QTR-35 P1-8).
    */
   interactiveButtons?: {
     bodyText: string;
     buttons: ReadonlyArray<SalesButton>;
+    /**
+     * QTR-35 P1-8 (decisão c): `true` quando o corpo é conteúdo CV1
+     * (explicador, preço) — a camada de geração segue ligada e o texto
+     * aprovado substitui `bodyText`. Ausente/false = interação determinística
+     * (menu de fallback): a geração é desligada, como na CV3.
+     */
+    generationEligible?: boolean;
   };
 };
 
@@ -221,6 +252,16 @@ export type ConversationContext = {
   ambiguousReminderLookup?: boolean;
   supportHandoffReason?: string;
   sales?: SalesConversationMemory;
+  /**
+   * Cadastro que um lead tentou enviar antes de ativar a oficina. O texto é
+   * retomado uma única vez logo após a conversão, com a data do turno original,
+   * e continua sujeito ao card de confirmação da ADR-0017.
+   */
+  pending_registration?: {
+    message: string;
+    media_type: InboundMediaType | null;
+    received_at: string;
+  };
   /**
    * Conversa de oficina cujo cadastro ficou com nome placeholder
    * ("Oficina sem nome"): aguardando a oficina responder o nome real
@@ -517,6 +558,15 @@ export type WhatsappRepository = {
     geracaoModo: Exclude<GeracaoLlmModo, "off">;
     promptVersion: string;
   }): Promise<void>;
+  // Volante de intenção de vendas (ADR-0028). Ambos são best-effort: a falta
+  // temporária da migration nunca pode interromper um webhook de produção.
+  listActiveSalesIntentTriggers?(): Promise<SalesIntentTrigger[]>;
+  saveSalesIntentDivergence?(input: {
+    conversationId: string;
+    leadId: string | null;
+    message: string;
+    audit: SalesClassificationAudit;
+  }): Promise<void>;
   markWhatsappEventProcessed(input: {
     eventId: string;
   }): Promise<void>;
@@ -754,6 +804,12 @@ export type SalesAgentInput = {
    * fallback do match por keyword. Ausente → só keyword (comportamento antigo).
    */
   preMatchedFaqId?: string | null;
+  /** Origem do texto que será retomado no onboarding após a conversão. */
+  sourceMediaType?: InboundMediaType | null;
+  /** Data Sao Paulo do recebimento, usada para preservar datas relativas. */
+  receivedAt?: string;
+  /** Padrões promovidos manualmente; só intents não-terminais são aceitos. */
+  intentTriggers?: ReadonlyArray<SalesIntentTrigger>;
 };
 
 export type SalesAgent = {
@@ -814,6 +870,17 @@ export type OnboardingAgentReply = {
    * não muda estado → não fere a ADR-0001.
    */
   readOnlyQuery?: OperacaoReadOnlyQuery;
+  /**
+   * QTR-35 P1-8: botões interativos do card de confirmação ("Confirmar" /
+   * "Corrigir"). Determinístico — nunca passa pela camada de geração; `body`
+   * segue como degradação quando o transporte não suporta botões. O toque vira
+   * a mensagem canônica ("confirmar"/"corrigir"), tratada pelo mesmo fluxo de
+   * confirmação (ADR-0017/ADR-0024: estado idêntico com ou sem botões).
+   */
+  interactiveButtons?: {
+    bodyText: string;
+    buttons: ReadonlyArray<SalesButton>;
+  };
 };
 
 export type OperacaoReadOnlyQuery =

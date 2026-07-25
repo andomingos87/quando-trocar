@@ -362,13 +362,30 @@ function onboardingIntroMessage(nomeOficina?: string | null) {
   ].join("\n");
 }
 
-function localDateSaoPaulo() {
+function pendingRegistrationFromContext(
+  context: import("./types").ConversationContext,
+) {
+  const pending = context.pending_registration;
+  if (
+    !pending ||
+    typeof pending.message !== "string" ||
+    pending.message.trim().length === 0 ||
+    typeof pending.received_at !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(pending.received_at)
+  ) {
+    return null;
+  }
+
+  return pending;
+}
+
+function localDateSaoPaulo(at: Date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(at);
   const part = (type: string) => parts.find((item) => item.type === type)?.value;
 
   return `${part("year")}-${part("month")}-${part("day")}`;
@@ -1036,6 +1053,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
       const faqs = deps.repository.listActiveFaqs
         ? await deps.repository.listActiveFaqs()
         : [];
+      // Migration aditiva: enquanto a aplicação chega antes do schema, o bot
+      // continua classificando como antes. O volante é aprendizagem, não gate.
+      const intentTriggers = deps.repository.listActiveSalesIntentTriggers
+        ? await deps.repository.listActiveSalesIntentTriggers().catch(() => [])
+        : [];
 
       for (const inbound of inboundMessages) {
         // Transcrição de áudio (síncrona, timeout 15s). Resultado vira o
@@ -1372,7 +1394,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           // interativos em vez de texto. Determinístico — a camada de geração é
           // pulada (allowGeneration = false abaixo).
           let interactiveButtons:
-            | { bodyText: string; buttons: ReadonlyArray<SalesButton> }
+            | {
+                bodyText: string;
+                buttons: ReadonlyArray<SalesButton>;
+                generationEligible?: boolean;
+              }
             | null = null;
           const normalizedBody = inbound.body.trim().toLowerCase();
 
@@ -1424,7 +1450,23 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               salesConfig,
               faqs,
               preMatchedFaqId: semanticFaq?.id ?? null,
+              sourceMediaType: inbound.mediaType,
+              receivedAt: localDateSaoPaulo(inbound.timestamp ?? undefined),
+              intentTriggers,
             });
+
+            if (reply.classificationAudit && deps.repository.saveSalesIntentDivergence) {
+              try {
+                await deps.repository.saveSalesIntentDivergence({
+                  conversationId: resolved.conversationId,
+                  leadId: resolved.leadId,
+                  message: inbound.body,
+                  audit: reply.classificationAudit,
+                });
+              } catch {
+                // Auditoria não pode derrubar a resposta nem o webhook idempotente.
+              }
+            }
 
             // QTR-35 P1-5: o nome da oficina capturado neste turno (ou guardado
             // na memoria de vendas em turnos anteriores, ainda como lead) entra
@@ -1500,6 +1542,12 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               resolved.leadId &&
               deps.repository.convertLeadToOficina
             ) {
+              // `convertLeadToOficina` zera o contexto e troca o modo. Leitura
+              // antes da conversão é obrigatória para não perder o cadastro que
+              // motivou o lead a pedir o teste (QTR-35 P1-7).
+              const pendingRegistration = pendingRegistrationFromContext(
+                resolved.context,
+              );
               const converted = await deps.repository.convertLeadToOficina({
                 leadId: resolved.leadId,
                 conversationId: resolved.conversationId,
@@ -1524,7 +1572,51 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 output: converted,
               });
 
-              replyBody = onboardingIntroMessage(converted.nome);
+              if (pendingRegistration) {
+                // O rascunho só é extraído DEPOIS da conversão e não é gravado
+                // aqui. O onboarding devolve card ou pergunta de campo; o "sim"
+                // da oficina continua sendo o único caminho para o RPC.
+                const onboardingReply = await onboardingAgent.generateReply({
+                  message: pendingRegistration.message,
+                  mode: "onboarding",
+                  context: {},
+                  today: pendingRegistration.received_at,
+                  hourSaoPaulo: localHourSaoPaulo(),
+                  handoffComercial: salesConfig?.whatsappHandoffComercial ?? null,
+                  sourceMediaType: pendingRegistration.media_type,
+                });
+
+                if (deps.repository.updateConversationModeAndContext) {
+                  await deps.repository.updateConversationModeAndContext({
+                    conversationId: resolved.conversationId,
+                    agentMode: onboardingReply.nextAgentMode ?? "onboarding",
+                    context: onboardingReply.context,
+                  });
+                }
+
+                for (const toolCall of onboardingReply.toolCalls) {
+                  await deps.repository.saveAgentToolCall({
+                    conversationId: resolved.conversationId,
+                    leadId: resolved.leadId,
+                    oficinaId: converted.oficinaId,
+                    clienteId: resolved.clienteId,
+                    toolName: toolCall.toolName,
+                    input: toolCall.input,
+                    output: toolCall.output,
+                  });
+                }
+
+                replyBody = `${onboardingIntroMessage(converted.nome)}\n\n${onboardingReply.body}`;
+                if (onboardingReply.interactiveButtons) {
+                  interactiveButtons = {
+                    ...onboardingReply.interactiveButtons,
+                    bodyText: replyBody,
+                  };
+                }
+                allowGeneration = false;
+              } else {
+                replyBody = onboardingIntroMessage(converted.nome);
+              }
             } else {
               if (reply.status !== leadStatus && resolved.leadId) {
                 await deps.repository.updateLeadStatus({
@@ -1547,13 +1639,16 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               // responde grounded; a enlatada vira fallback).
               generationMode = reply.conversationalGenerationMode ?? "rewrite";
 
-              // CV3: fallback nível 2 -> botões interativos. Determinístico:
-              // desliga a geração (o clique já resolve o intent) e sinaliza o
-              // envio de botões abaixo. `replyBody` (texto do menu) fica como
-              // degradação quando o transporte não suporta botões.
+              // Botões interativos. No menu de fallback (CV3) o corpo é fixo e
+              // a geração desliga; nos momentos de decisão do funil (QTR-35
+              // P1-8, decisão c) o corpo é conteúdo CV1 e a geração segue
+              // ligada — o texto aprovado substitui o bodyText mais abaixo.
+              // `replyBody` fica como degradação sem suporte a botões.
               if (reply.interactiveButtons) {
                 interactiveButtons = reply.interactiveButtons;
-                allowGeneration = false;
+                if (!reply.interactiveButtons.generationEligible) {
+                  allowGeneration = false;
+                }
               }
             }
 
@@ -1744,6 +1839,14 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               // reescrita; cadastro/confirmação/campo faltante ficam determinísticos.
               allowGeneration = onboardingReply.allowConversationalGeneration === true;
               generationMode = onboardingReply.conversationalGenerationMode ?? "rewrite";
+            }
+
+            // QTR-35 P1-8: card de confirmação com botões "Confirmar" /
+            // "Corrigir". Determinístico — geração desligada; `replyBody`
+            // (texto do card) degrada quando o transporte não suporta botões.
+            if (onboardingReply.interactiveButtons) {
+              interactiveButtons = onboardingReply.interactiveButtons;
+              allowGeneration = false;
             }
           } else if (
             effectiveAgentMode === "cliente_final_lembrete" &&
@@ -2093,6 +2196,13 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           }
 
           replyBody = generation.finalBody;
+
+          // QTR-35 P1-8 (decisão c): quando o corpo dos botões é conteúdo CV1,
+          // o texto que saiu da camada de geração (aprovado ou a enlatada de
+          // fallback) vira o corpo da mensagem interativa.
+          if (interactiveButtons?.generationEligible) {
+            interactiveButtons = { ...interactiveButtons, bodyText: replyBody };
+          }
 
           // CV3: envio como botões interativos quando o agente pediu (fallback
           // nível 2) e o transporte suporta; senão degrada para texto. O corpo

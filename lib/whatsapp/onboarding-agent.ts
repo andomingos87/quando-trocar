@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import { whatsappLink } from "../config";
 import { parseBrazilianDate } from "./date-parse";
 import { normalizeText, normalizeWhatsappPhone } from "./sales-agent";
+import { ONBOARDING_CONFIRM_BUTTONS } from "./sales-buttons";
+import { extractRegistrationPhone, hasRegistrationSignal } from "./registration-signal";
 import type {
   ConversationAgentMode,
   ConversationContext,
@@ -20,8 +22,6 @@ type MissingField = NonNullable<ConversationContext["missing_field"]>;
 
 const WEEKDAY_PATTERN = /\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b/;
 const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
-const SERVICE_PATTERN =
-  /\b(troca|oleo|óleo|revisao|revisão|filtro|pastilha|freio|alinhamento|balanceamento|servico|serviço|amortecedor)\b/;
 const NEUTRAL_PATTERN = /^(ok|okay|obrigado|obrigada|valeu|beleza|bom dia|boa tarde|boa noite|certo)$/;
 const PROMPT_INJECTION_PATTERN =
   /\b(ignore|ignora|instrucoes|instruções|prompt|sistema|system|developer|delete|apague|drop table|sql|senha|token|segredo)\b/;
@@ -97,21 +97,8 @@ function isQuestionLike(message: string) {
   return message.includes("?") || /^(qual|como|porque|por que|quando|onde|quem)\b/.test(normalized);
 }
 
-function hasRegistrationSignal(message: string) {
-  const normalized = normalizeText(message);
-  const commaCount = (message.match(/,/g) ?? []).length;
-  const hasPhone = extractPhone(message) !== null;
-  const hasService = SERVICE_PATTERN.test(normalized);
-
-  return (commaCount >= 2 && (hasPhone || hasService)) || (hasPhone && hasService);
-}
-
 function extractPhone(message: string) {
-  const matches = [...message.matchAll(/(?:\+?\d[\d\s().-]{8,}\d)/g)]
-    .map((match) => match[0])
-    .filter((value) => value.replace(/\D/g, "").length >= 10);
-
-  return matches.at(-1) ?? null;
+  return extractRegistrationPhone(message);
 }
 
 function removePhone(message: string, phone: string | null) {
@@ -839,6 +826,43 @@ function confirmationReply(
         output: { draft: draft as Record<string, unknown> },
       },
     ],
+    // QTR-35 P1-8: o card oferece a decisão num toque. O id do botão vira a
+    // mensagem canônica "confirmar"/"corrigir" (payload), tratada pelo mesmo
+    // fluxo determinístico — estado idêntico com ou sem botões (ADR-0024).
+    interactiveButtons: {
+      bodyText: confirmationSummary(draft),
+      buttons: ONBOARDING_CONFIRM_BUTTONS,
+    },
+  };
+}
+
+// QTR-35 P1-8: entrada determinística no fluxo de correção. O botão "Corrigir"
+// (e um "nao"/"errado" seco) não precisa de LLM para cair na pergunta "o que
+// corrigir?" — antes qualquer não-"sim" pagava uma chamada de extração.
+const CORRECTION_ENTRY_PATTERN =
+  /^(corrigir|corrige|nao|errado|ta errado|nao ta certo|nao esta certo|tem erro)$/;
+
+function isCorrectionEntryMessage(message: string) {
+  return CORRECTION_ENTRY_PATTERN.test(normalizeText(message));
+}
+
+function correctionPromptReply(draft: ServiceDraft, message: string): OnboardingAgentReply {
+  return {
+    body: [
+      "Sem problema. Me diga o que corrigir.",
+      'Por exemplo: "o carro e Gol" ou "o nome e Flaviane Marsili".',
+      "Ou reenvie tudo: nome do cliente, carro, servico, data e WhatsApp.",
+    ].join("\n"),
+    context: confirmationContext(draft),
+    registerServiceInput: null,
+    nextAgentMode: null,
+    toolCalls: [
+      {
+        toolName: "confirmou_cadastro",
+        input: { message },
+        output: { confirmed: false, parsed: false },
+      },
+    ],
   };
 }
 
@@ -1334,6 +1358,12 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
       };
     }
 
+    // QTR-35 P1-8: "corrigir"/"nao"/"errado" secos (inclusive o botão
+    // "Corrigir" do card) entram no fluxo de correção sem gastar LLM.
+    if (isCorrectionEntryMessage(input.message)) {
+      return correctionPromptReply(draft, input.message);
+    }
+
     // Não foi um "sim": tratamos como correção. Re-extrai apenas via OpenAI
     // (parser determinístico por vírgula é perigoso em respostas curtas tipo
     // "o carro e Gol") e mescla os campos informados sobre o rascunho.
@@ -1356,23 +1386,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
       : false;
 
     if (!changed) {
-      return {
-        body: [
-          "Sem problema. Me diga o que corrigir.",
-          'Por exemplo: "o carro e Gol" ou "o nome e Flaviane Marsili".',
-          "Ou reenvie tudo: nome do cliente, carro, servico, data e WhatsApp.",
-        ].join("\n"),
-        context: confirmationContext(draft),
-        registerServiceInput: null,
-        nextAgentMode: null,
-        toolCalls: [
-          {
-            toolName: "confirmou_cadastro",
-            input: { message: input.message },
-            output: { confirmed: false, parsed: false },
-          },
-        ],
-      };
+      return correctionPromptReply(draft, input.message);
     }
 
     const missingField = missingFieldForDraft(merged);

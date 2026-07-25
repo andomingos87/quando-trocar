@@ -35,6 +35,8 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0025](./0025-portal-do-representante.md) | Portal do representante (login OTP, read-only escopado, sem PII) | accepted | 2026-07-18 |
 | [0026](./0026-concierge-moldura-gerada.md) | Moldura gerada no concierge do cliente final (revisão da ADR-0018) | accepted | 2026-07-18 |
 | [0027](./0027-extracao-de-cadastro-por-llm.md) | Extração de cadastro por LLM, com guarda de sanidade determinística | accepted | 2026-07-25 |
+| [0028](./0028-volante-de-gatilhos-de-intencao.md) | Volante seguro de gatilhos de intenção de vendas | accepted | 2026-07-25 |
+| [0029](./0029-sinal-de-cadastro-em-vendas.md) | Sinal de cadastro em vendas preserva o rascunho até a conversão | accepted | 2026-07-25 |
 
 ### Em aberto (drafts)
 

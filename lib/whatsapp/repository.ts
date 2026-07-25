@@ -11,9 +11,12 @@ import type {
   GeracaoLlmModo,
   InboundMediaType,
   LeadStatus,
+  PromotableSalesIntent,
   ParticipantType,
   RecentMessage,
   RegisterServiceInput,
+  SalesClassificationAudit,
+  SalesIntentTrigger,
   RegisteredService,
   SavedConversation,
   TipoServico,
@@ -88,6 +91,7 @@ export function mergeLeadForInbound(
 export class SupabaseWhatsappRepository implements WhatsappRepository {
   private faqCache: { value: FaqVendasRecord[]; loadedAt: number } | null = null;
   private configCache: { value: ConfiguracoesVendedor; loadedAt: number } | null = null;
+  private intentTriggersCache: { value: SalesIntentTrigger[]; loadedAt: number } | null = null;
 
   constructor(private readonly supabase: SupabaseClient) {}
 
@@ -119,6 +123,32 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       ordem: row.ordem,
     }));
     this.faqCache = { value, loadedAt: Date.now() };
+    return value;
+  }
+
+  async listActiveSalesIntentTriggers(): Promise<SalesIntentTrigger[]> {
+    if (
+      this.intentTriggersCache &&
+      Date.now() - this.intentTriggersCache.loadedAt < FAQ_CACHE_TTL_MS
+    ) {
+      return this.intentTriggersCache.value;
+    }
+
+    const result = (await this.supabase
+      .from("gatilhos_intencao_vendas")
+      .select("id,padrao,intent")
+      .eq("ativo", true)
+      .order("created_at", { ascending: true })) as SupabaseResult<
+      Array<{ id: string; padrao: string; intent: PromotableSalesIntent }>
+    >;
+
+    throwIfError(result);
+    const value = (result.data ?? []).map((row) => ({
+      id: row.id,
+      pattern: row.padrao,
+      intent: row.intent,
+    }));
+    this.intentTriggersCache = { value, loadedAt: Date.now() };
     return value;
   }
 
@@ -1305,6 +1335,26 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       motivo: input.motivo,
       geracao_modo: input.geracaoModo,
       prompt_version: input.promptVersion,
+    })) as SupabaseResult<null>;
+
+    throwIfError(result);
+  }
+
+  async saveSalesIntentDivergence(input: {
+    conversationId: string;
+    leadId: string | null;
+    message: string;
+    audit: SalesClassificationAudit;
+  }) {
+    const result = (await this.supabase.from("divergencias_intencao_vendas").insert({
+      conversa_id: input.conversationId,
+      lead_id: input.leadId,
+      mensagem: input.message.slice(0, 500),
+      intent_deterministico: input.audit.deterministicIntent,
+      confidence_deterministica: input.audit.deterministicConfidence,
+      intent_llm: input.audit.llmIntent,
+      confidence_llm: input.audit.llmConfidence,
+      intent_aplicado: input.audit.appliedIntent,
     })) as SupabaseResult<null>;
 
     throwIfError(result);
