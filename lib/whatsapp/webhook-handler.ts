@@ -2,9 +2,9 @@ import OpenAI from "openai";
 
 import { audioFallbackMessage } from "./audio-fallbacks";
 import {
+  buildServiceConfirmationParams,
   productLabelForConfirmation,
   renderServiceConfirmation,
-  serviceConfirmationParams,
   SERVICE_CONFIRMATION_PARAM_NAMES,
   SERVICE_CONFIRMATION_TEMPLATE,
 } from "./service-confirmation";
@@ -694,6 +694,9 @@ async function sendServiceConfirmation(input: {
   oficinaNome: string | null;
   clienteId: string;
   serviceInput: Omit<RegisterServiceInput, "oficinaId">;
+  // Conversa da OFICINA, usada só para auditar a recusa de envio: o dado ruim
+  // nasceu no turno dela, e nesse caminho não existe conversa do cliente final.
+  auditConversationId: string;
 }): Promise<boolean> {
   const { deps, oficinaId, clienteId, serviceInput } = input;
 
@@ -714,11 +717,34 @@ async function sendServiceConfirmation(input: {
     vehicleDescription: serviceInput.veiculo,
     productLabel: productLabelForConfirmation({
       tipoServico: serviceInput.tipoServico,
-      servico: serviceInput.servico,
     }),
   };
   const renderedBody = renderServiceConfirmation(confirmationArgs);
-  const params = serviceConfirmationParams(confirmationArgs);
+
+  // QTR-35 P0-2: última barreira antes do cliente final. Parâmetro que não
+  // sobrevive à sanitização aborta o envio — mandar texto sujo para o cliente
+  // da oficina é pior que não mandar nada (a oficina segue recebendo o ack).
+  const paramsResult = buildServiceConfirmationParams(confirmationArgs);
+  if (!paramsResult.ok) {
+    await deps.repository.saveAgentToolCall({
+      conversationId: input.auditConversationId,
+      leadId: null,
+      oficinaId,
+      clienteId,
+      toolName: "notify_cliente_confirmacao",
+      input: {
+        whatsapp: serviceInput.whatsappCliente,
+        template: SERVICE_CONFIRMATION_TEMPLATE.name,
+      },
+      output: {
+        sent: false,
+        skipped: "param_invalido",
+        param: paramsResult.invalidParam,
+      },
+    });
+    return false;
+  }
+  const params = paramsResult.params;
 
   // Botão "Chamar no WhatsApp" como CTA wa.me da oficina (ADR-0018). Gated por
   // env: só manda o parâmetro depois que o template na Meta tiver o botão de URL
@@ -1585,6 +1611,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 oficinaNome: resolved.oficinaNome,
                 clienteId: registered.clienteId,
                 serviceInput,
+                auditConversationId: resolved.conversationId,
               });
             }
 
