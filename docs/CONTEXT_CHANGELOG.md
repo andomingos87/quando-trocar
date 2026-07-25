@@ -35,8 +35,9 @@ Correção dos três itens P0 da [QTR-35](https://linear.app/biapps/issue/QTR-35
 
 ### Pendente
 
-- Aplicar a migration no banco e conferir `list_migrations` depois do deploy (lição `0002-deploy-corre-na-frente-das-migrations`). Até então o ack usa copy neutra, sem prometer data.
-- P1 (itens 4–8) e P2 (itens 9–12) da QTR-35 seguem abertos — entre eles o guard cross-tenant vetando o nome da própria oficina e o gancho de conversão para sinal de cadastro em modo vendas.
+- P1 (itens 4–8) e P2 (itens 9–12) da QTR-35 seguem abertos — entre eles o guard cross-tenant vetando o nome da própria oficina, o gancho de conversão para sinal de cadastro em modo vendas, e a divergência entre `renderServiceConfirmation` e o template aprovado na Meta.
+
+Migration aplicada no mesmo dia (`20260725184455_register_service_returns_scheduled_at`), conferida em `list_migrations`, com `get_advisors` sem achado novo.
 
 ## 2026-07-18 — Demais fases da camada conversacional (CV4–CV8, QTR-13 a QTR-17)
 

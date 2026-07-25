@@ -1,9 +1,12 @@
 # QTR-35 · P0 — extração por LLM, barreira de saída e data única
 
-**Status: implementado em 25/07/2026** (commits `836ce4a`, `a63c8db`, `b4e45c1` + docs).
-Pendência única: **a migration `20260725120000_register_service_returns_scheduled_at.sql`
-não foi aplicada** — depende de aprovação para rodar no banco (projeto único, teste = prod).
-Enquanto não for aplicada, o ack usa a copy neutra da janela de deploy (ver Etapa 3, item 3).
+**Status: implementado e migration aplicada em 25/07/2026.**
+Commits `836ce4a`, `a63c8db`, `b4e45c1` + docs. Migration registrada no banco como
+`20260725184455_register_service_returns_scheduled_at` (conferida em `list_migrations`);
+`get_advisors` sem achado novo (as ocorrências de `rls_enabled_no_policy` e
+`extension_in_public` são pré-existentes e intencionais — acesso service-role only).
+Verificado no banco: a função existe em assinatura única, devolve `scheduled_at` e
+`dias_lembrete`, e o ACL segue `postgres` + `service_role` (sem `anon`/`authenticated`).
 Decisões confirmadas na execução: data em `dd/mm/aaaa` e rótulo `revisão` fixo no código.
 
 Plano executável para os **três itens P0** da issue [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no).
@@ -245,7 +248,7 @@ deles com o produto melhor do que estava.
 - [x] A copy informa a mesma data de `lembretes.scheduled_at` (teste para 90/730/180 em `tests/whatsapp-route-phase2.test.ts`) e não promete lembrete quando não há consentimento.
 - [x] `docs/regras-de-negocio.md` atualizado (§3.2, §3.6, §4.1) + [ADR-0027](../adr/0027-extracao-de-cadastro-por-llm.md).
 - [x] `npm test` (776) e `npm run lint` verdes; `npx tsc --noEmit` limpo.
-- [ ] **Migration aplicada** e `list_migrations` conferido após o deploy (lição `0002-deploy-corre-na-frente-das-migrations`) — pendente de aprovação.
+- [x] **Migration aplicada** e `list_migrations` conferido (lição `0002-deploy-corre-na-frente-das-migrations`); `get_advisors` sem achado novo. Cadências confirmadas no banco para `data_servico = 2026-04-25`: `troca_oleo` → 2026-07-24, `revisao`/`outro` → 2026-10-22, `amortecedor` → 2028-04-24 — as mesmas datas que os testes fixam.
 
 ## Decisões tomadas na execução
 
