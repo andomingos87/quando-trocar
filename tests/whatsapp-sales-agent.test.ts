@@ -513,9 +513,10 @@ describe("whatsapp sales agent — post-test fixes (1-5)", () => {
 
   test("fix #5: fora_escopo on subsequent turns returns short variation", async () => {
     const agent = new WhatsappSalesAgent({ openai: null });
-    // Uma mensagem que cai em fora_escopo de verdade (nao "blz" — agora isso e confirmacao_neutra).
+    // Uma mensagem que cai em fora_escopo de verdade (nao "blz" — agora isso e
+    // confirmacao_neutra; e "manda ai" virou aceite no QTR-35 P1-4a).
     const reply = await agent.generateReply({
-      message: "manda ai entao kkk",
+      message: "to so olhando aqui",
       leadStatus: "em_conversa",
       context: { sales: { greeted: true, funcionamento_explained: true } },
       salesConfig: baseConfig,
@@ -525,6 +526,100 @@ describe("whatsapp sales agent — post-test fixes (1-5)", () => {
     expect(reply.body.toLowerCase()).toContain("nao entendi muito bem chefe");
     expect(reply.body).not.toContain("Funciona assim");
     expect(reply.body).not.toContain("Aqui e do Quando Trocar");
+  });
+});
+
+describe("whatsapp sales agent — QTR-35 P1-4: aceite ampliado e guard simetrico", () => {
+  test("variacoes reais de aceite classificam como quer_testar sem LLM", () => {
+    for (const message of [
+      "Quero fazer",
+      "quero sim",
+      "quero ativar",
+      "pode ativar",
+      "fechado",
+      "fechou chefe",
+      "manda ai",
+      "tô dentro",
+      "to dentro",
+      "vou querer sim",
+      "topa ai",
+    ]) {
+      const cls = classifySalesMessage(message, faqs);
+      expect(cls.intent, message).toBe("quer_testar");
+      expect(cls.confidence, message).toBeGreaterThanOrEqual(0.85);
+    }
+  });
+
+  test('"Quero fazer" nunca recebe copy de despedida (caso real da issue)', async () => {
+    // Mesmo que o classificador OpenAI rodasse e devolvesse sem_interesse, o
+    // deterministico agora resolve em 0.86 e o LLM nem e chamado.
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: {
+        responses: {
+          create: async () => {
+            throw new Error("nao deveria chamar OpenAI para aceite explicito");
+          },
+        },
+      } as never,
+    });
+
+    const reply = await agent.generateReply({
+      message: "Quero fazer",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).toBe("teste_aceito");
+    expect(reply.body.toLowerCase()).not.toContain("deixo registrado");
+    expect(reply.updatedContext?.sales?.awaiting_workshop_name).toBe(true);
+  });
+
+  test("guard simetrico: LLM sem_interesse sem recusa explicita nao vira despedida nem perdido", async () => {
+    const agent = new WhatsappSalesAgent({
+      classifierModel: "test-model",
+      openai: {
+        responses: {
+          create: async () => ({
+            output_text: JSON.stringify({
+              intent: "sem_interesse",
+              confidence: 0.95,
+              monthlyChanges: null,
+              averageTicket: null,
+            }),
+          }),
+        },
+      } as never,
+    });
+
+    // Mensagem ambigua SEM dor e SEM recusa explicita: deterministico da
+    // fora_escopo 0.6 -> LLM roda -> sem_interesse e rebaixado.
+    const reply = await agent.generateReply({
+      message: "hmm depende de muita coisa isso ai",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true, funcionamento_explained: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).not.toBe("perdido");
+    expect(reply.body.toLowerCase()).not.toContain("deixo registrado");
+    expect(reply.body.toLowerCase()).not.toContain("se mudar de ideia");
+  });
+
+  test("recusa explicita continua levando a perdido (guard nao afrouxa a regra 1)", async () => {
+    const agent = new WhatsappSalesAgent({ openai: null });
+    const reply = await agent.generateReply({
+      message: "nao quero mais, pode parar",
+      leadStatus: "em_conversa",
+      context: { sales: { greeted: true } },
+      salesConfig: baseConfig,
+      faqs,
+    });
+
+    expect(reply.status).toBe("perdido");
   });
 });
 
@@ -714,7 +809,8 @@ describe("whatsapp sales agent — Ciclo 4 (greeting subsequente + contador + va
     const agent = new WhatsappSalesAgent({ openai: null });
 
     const r1 = await agent.generateReply({
-      message: "manda ai kkk",
+      // "manda ai" virou aceite (QTR-35 P1-4a) — usa frase sem gatilho.
+      message: "sei la chefe",
       leadStatus: "em_conversa",
       context: { sales: { greeted: true, funcionamento_explained: true, consecutive_fallback: 1 } },
       salesConfig: baseConfig,

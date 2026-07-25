@@ -409,8 +409,13 @@ export function classifySalesMessage(
     return { intent: "pergunta_funcionamento", confidence: 0.86 };
   }
 
-  // 9. "quero testar"
-  if (/\b(quero testar|teste|proximo passo|vamos|tenho interesse|bora|topo)\b/.test(normalized)) {
+  // 9. Aceite — QTR-35 P1-4a: cobre as variações reais de aceite ("quero
+  //    fazer", "pode ativar", "fechou") que antes caíam no classificador LLM.
+  if (
+    /\b(quero testar|quero fazer|quero sim|quero ativar|pode ativar|teste|proximo passo|vamos|tenho interesse|bora|topo|topa|fechado|fechou|manda|to dentro|vou querer)\b/.test(
+      normalized,
+    )
+  ) {
     return { intent: "quer_testar", confidence: 0.86 };
   }
 
@@ -1011,18 +1016,22 @@ export class WhatsappSalesAgent {
     if (deterministic.confidence < 0.85) {
       const fromOpenAI = await this.classifyWithOpenAI(input.message);
       if (fromOpenAI) {
-        // Fix #1 (segunda camada): se LLM diz sem_interesse mas a mensagem
-        // tem dor sem ser explicit loss, sobrescreve pra pergunta_funcionamento.
+        // Guard simétrico (QTR-35 P1-4b, ADR-0001): estado terminal nunca vem
+        // do LLM. sem_interesse só vale com recusa explícita — que a regra 1
+        // determinística já teria pego. Com dor vira pergunta_funcionamento;
+        // sem dor mantém a classificação determinística (fora_escopo), que cai
+        // no fluxo de fallback — nunca em copy de despedida.
         if (
           fromOpenAI.intent === "sem_interesse" &&
-          detectPain(input.message) &&
           !isExplicitLossMessage(input.message)
         ) {
-          classification = {
-            intent: "pergunta_funcionamento",
-            confidence: 0.85,
-            painDetected: true,
-          };
+          classification = detectPain(input.message)
+            ? {
+                intent: "pergunta_funcionamento",
+                confidence: 0.85,
+                painDetected: true,
+              }
+            : deterministic;
         } else if (fromOpenAI.intent === "pergunta_faq") {
           // Se o LLM disser pergunta_faq, prefiro o match deterministico
           // (keyword) e, faltando, o semântico (CV5).

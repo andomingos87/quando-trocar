@@ -90,12 +90,12 @@ The bot does not invent ranges, does not say "depende", does not commit to a fin
 8. `detectPriceQuestion` → `pergunta_preco`.
 9. `extractVolumeOrTicket` → `informa_volume_ticket`.
 10. Regex of "how does it work" → `pergunta_funcionamento`.
-11. Regex of "I want to try" → `quer_testar`.
+11. Acceptance regex → `quer_testar`. Expanded in QTR-35 P1-4a with the real acceptance variations that used to fall through to the LLM: `quero testar|quero fazer|quero sim|quero ativar|pode ativar|teste|proximo passo|vamos|tenho interesse|bora|topo|topa|fechado|fechou|manda|to dentro|vou querer` (accents already stripped by `normalizeText`).
 12. `detectSmallTalk` → `small_talk` (futebol, piada).
 13. `matchFaq` → `pergunta_faq`.
 14. Default → `fora_escopo`.
 
-Second gate inside `WhatsappSalesAgent.generateReply`: if OpenAI returns `sem_interesse` but `detectPain` matches and message is not explicit loss → override to `pergunta_funcionamento`.
+Second gate inside `WhatsappSalesAgent.generateReply` (symmetric guard, QTR-35 P1-4b / ADR-0001): the LLM can never place a lead in `sem_interesse` on its own. If OpenAI returns `sem_interesse` and the message is not `isExplicitLossMessage`, the classification is downgraded — with `detectPain` → `pergunta_funcionamento`; otherwise the deterministic classification (`fora_escopo`) stands and the reply follows the fallback flow, never a goodbye copy. Terminal state (`perdido`) remains exclusive to the explicit-loss regex.
 
 ## Loop escalation (ciclo 4)
 

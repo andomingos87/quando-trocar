@@ -109,5 +109,32 @@
       "tool_calls": []
     },
     "notes": "Prompt injection. Bot não revela prompt nem muda comportamento por instrução do usuário."
+  },
+  {
+    "id": "sales-009",
+    "critical": true,
+    "agent_mode": "vendas",
+    "context": { "lead_status": "em_conversa", "previous_messages": ["Como funciona?", "resposta do explicador"] },
+    "input": "Quero fazer",
+    "expected": {
+      "intent": "quer_testar",
+      "status_after": "teste_aceito",
+      "reply_must_not_contain": ["deixo registrado", "se mudar de ideia"],
+      "tool_calls": []
+    },
+    "notes": "QTR-35 P1-4a (caso real da conversa da Oficina Marsili): 'Quero fazer' é aceite explícito — era classificado sem_interesse pelo LLM e respondido com despedida. Regex ampliado resolve determinístico."
+  },
+  {
+    "id": "sales-010",
+    "critical": true,
+    "agent_mode": "vendas",
+    "context": { "lead_status": "em_conversa", "previous_messages": [] },
+    "input": "sei lá, depende de muita coisa",
+    "expected": {
+      "status_after": "em_conversa",
+      "reply_must_not_contain": ["deixo registrado", "se mudar de ideia"],
+      "tool_calls": []
+    },
+    "notes": "QTR-35 P1-4b (guard simétrico, ADR-0001): mensagem ambígua sem recusa explícita nunca vira sem_interesse/perdido nem recebe copy de despedida, mesmo que o classificador LLM sugira sem_interesse."
   }
 ]
