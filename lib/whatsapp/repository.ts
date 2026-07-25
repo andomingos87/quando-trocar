@@ -1146,6 +1146,8 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       veiculo_id: string;
       servico_id: string;
       lembrete_id: string | null;
+      scheduled_at: string | null;
+      dias_lembrete: number;
     }>;
 
     throwIfError(result);
@@ -1155,6 +1157,8 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       veiculoId: result.data!.veiculo_id,
       servicoId: result.data!.servico_id,
       lembreteId: result.data!.lembrete_id,
+      scheduledAt: result.data!.scheduled_at ?? null,
+      diasLembrete: result.data!.dias_lembrete,
     };
   }
 

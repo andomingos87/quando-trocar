@@ -258,6 +258,17 @@ export type RegisteredService = {
   veiculoId: string;
   servicoId: string;
   lembreteId: string | null;
+  /**
+   * Quando o lembrete foi agendado, direto do RPC (`lembretes.scheduled_at`).
+   * `null` quando não há consentimento — nesse caso não existe lembrete e o bot
+   * não pode prometer aviso. Fonte ÚNICA da data na copy para a oficina: antes
+   * a copy usava `oficinas.dias_lembrete_padrao` enquanto o RPC agendava por
+   * `tipos_servico_default.dias_lembrete`, e o bot prometia 90 dias tendo
+   * agendado 730 (QTR-35 P0-3).
+   */
+  scheduledAt: string | null;
+  /** Cadência efetiva aplicada pelo RPC, em dias. */
+  diasLembrete: number;
 };
 
 export type InboundMediaType =

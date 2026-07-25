@@ -573,3 +573,40 @@ describe("OpenAiReplyGenerator — prompts do modo respond", () => {
     expect(system).not.toContain("teste gratis");
   });
 });
+
+describe("maybeGenerateConversationalReply — literais obrigatórios (QTR-35)", () => {
+  const ACK =
+    "Cliente cadastrado. Vou lembrar o Joao em 24/07/2026 pra voltar com você.";
+
+  it("envia a gerada quando ela preserva a data", async () => {
+    const { generator } = makeGenerator(
+      "Prontinho chefe! Aviso o Joao em 24/07/2026 pra ele voltar.",
+    );
+    const result = await maybeGenerateConversationalReply({
+      ...baseArgs({ deterministicReply: ACK, agentMode: "operacao", intent: null }),
+      mode: "on",
+      generator,
+      requiredLiterals: ["24/07/2026"],
+    });
+
+    expect(result.finalBody).toContain("24/07/2026");
+    expect(result.audit?.output.approved).toBe(true);
+  });
+
+  it("cai na enlatada quando a reescrita perde a data do lembrete", async () => {
+    const { generator } = makeGenerator(
+      "Prontinho chefe! Vou lembrar o Joao no momento certo.",
+    );
+    const result = await maybeGenerateConversationalReply({
+      ...baseArgs({ deterministicReply: ACK, agentMode: "operacao", intent: null }),
+      mode: "on",
+      generator,
+      requiredLiterals: ["24/07/2026"],
+    });
+
+    expect(result.finalBody).toBe(ACK);
+    expect(result.audit?.output.approved).toBe(false);
+    expect(result.audit?.output.rejectionReason).toBe("literal_ausente");
+    expect(result.audit?.output.usedFallback).toBe(true);
+  });
+});

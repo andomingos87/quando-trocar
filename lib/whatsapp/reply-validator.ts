@@ -283,6 +283,26 @@ function checkHandoffLinkPresent(
   return hasAllowed ? { ok: true } : { ok: false, reason: "sem_ponte_oficina" };
 }
 
+// QTR-35 P0-3: dado literal que a reescrita não pode perder nem alterar. O modo
+// `rewrite` é proibido de inventar conteúdo, mas nada impedia o LLM de OMITIR ou
+// arredondar um dado — e o ack de cadastro carrega a data do lembrete, que é o
+// que a oficina usa para conferir o agendamento. Comparação insensível a espaço
+// para tolerar reformatação inofensiva ("23/07/2028" dentro de outra frase).
+function checkRequiredLiterals(
+  generated: string,
+  requiredLiterals: string[],
+): ReplyValidationResult {
+  const haystack = generated.replace(/\s+/g, " ");
+  for (const literal of requiredLiterals) {
+    const needle = literal.replace(/\s+/g, " ").trim();
+    if (!needle) continue;
+    if (!haystack.includes(needle)) {
+      return { ok: false, reason: "literal_ausente" };
+    }
+  }
+  return { ok: true };
+}
+
 export function validateGeneratedReply(input: {
   generated: string;
   precoPartida: number;
@@ -291,6 +311,8 @@ export function validateGeneratedReply(input: {
   maxLength?: number;
   // CV8: exige a presença da ponte wa.me da oficina (concierge do cliente final).
   requireHandoffLink?: boolean;
+  // QTR-35: substrings que a saída gerada tem obrigatoriamente que preservar.
+  requiredLiterals?: string[];
 }): ReplyValidationResult {
   const generated = input.generated ?? "";
   const maxLength = input.maxLength ?? DEFAULT_MAX_LENGTH;
@@ -320,6 +342,11 @@ export function validateGeneratedReply(input: {
   if (input.requireHandoffLink) {
     const bridge = checkHandoffLinkPresent(generated, input.allowedLinks);
     if (!bridge.ok) return bridge;
+  }
+
+  if (input.requiredLiterals?.length) {
+    const literals = checkRequiredLiterals(generated, input.requiredLiterals);
+    if (!literals.ok) return literals;
   }
 
   return { ok: true };

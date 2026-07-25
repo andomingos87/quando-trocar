@@ -333,3 +333,57 @@ describe("validateGeneratedReply — tamanho e vazio", () => {
     expect(validate("   ")).toEqual({ ok: false, reason: "vazio" });
   });
 });
+
+describe("validateGeneratedReply — literais obrigatórios (QTR-35 P0-3)", () => {
+  const ACK =
+    "Cliente cadastrado. Vou lembrar o Joao em 24/07/2026 pra voltar com você.";
+
+  it("aprova quando a reescrita preserva a data agendada", () => {
+    expect(
+      validateGeneratedReply({
+        ...BASE,
+        generated: "Prontinho chefe! Aviso o Joao em 24/07/2026 pra ele voltar.",
+        requiredLiterals: ["24/07/2026"],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("reprova quando a reescrita some com a data", () => {
+    // O modo rewrite é proibido de INVENTAR conteúdo, mas nada impedia o LLM de
+    // OMITIR o dado — e a data é o que a oficina usa pra conferir o agendamento.
+    expect(
+      validateGeneratedReply({
+        ...BASE,
+        generated: "Prontinho chefe! Vou lembrar o Joao no momento certo.",
+        requiredLiterals: ["24/07/2026"],
+      }),
+    ).toEqual({ ok: false, reason: "literal_ausente" });
+  });
+
+  it("reprova quando a reescrita troca a data", () => {
+    expect(
+      validateGeneratedReply({
+        ...BASE,
+        generated: "Prontinho chefe! Aviso o Joao em 24/04/2028.",
+        requiredLiterals: ["24/07/2026"],
+      }),
+    ).toEqual({ ok: false, reason: "literal_ausente" });
+  });
+
+  it("tolera reformatação de espaço em branco", () => {
+    expect(
+      validateGeneratedReply({
+        ...BASE,
+        generated: "Cliente cadastrado.\n\nVou lembrar o Joao em 24/07/2026.",
+        requiredLiterals: ["lembrar o Joao em 24/07/2026"],
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("sem requiredLiterals nada muda", () => {
+    expect(validateGeneratedReply({ ...BASE, generated: ACK })).toEqual({ ok: true });
+    expect(
+      validateGeneratedReply({ ...BASE, generated: ACK, requiredLiterals: [] }),
+    ).toEqual({ ok: true });
+  });
+});

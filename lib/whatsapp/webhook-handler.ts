@@ -76,6 +76,7 @@ import type {
   OnboardingAgent,
   OperacaoReadOnlyQuery,
   RecentMessage,
+  RegisteredService,
   RegisterServiceInput,
   ReminderAgent,
   ReplyGenerationMode,
@@ -371,6 +372,42 @@ function localDateSaoPaulo() {
   const part = (type: string) => parts.find((item) => item.type === type)?.value;
 
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+// `lembretes.scheduled_at` (timestamptz) → `dd/mm/aaaa`, para a copy do ack de
+// cadastro (QTR-35 P0-3). Data, e não "em N dias": a oficina confere na hora e
+// um erro de ordem de grandeza (90 vs. 730 dias) salta aos olhos. `null` quando
+// não há lembrete agendado.
+//
+// Formatado em UTC de propósito. O RPC monta a data com
+// `p_data_servico::timestamptz + make_interval(days => ...)` e a sessão do
+// Postgres roda em UTC, então `scheduled_at` é meia-noite UTC do dia de
+// calendário pretendido. Formatar em America/Sao_Paulo (UTC-3) devolveria
+// sistematicamente o dia ANTERIOR — trocaria um erro de meses por um de um dia.
+export function formatDateBRFromIso(iso: string | null): string | null {
+  if (!iso) return null;
+  // PostgREST devolve `2026-07-24T00:00:00+00:00`, mas o texto cru do Postgres
+  // usa espaço e offset curto (`2026-07-24 00:00:00+00`) — forma que
+  // `new Date()` recusa. Normalizamos as duas para não perder a data por causa
+  // da serialização da camada.
+  const normalized = iso
+    .trim()
+    .replace(" ", "T")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  const value = new Date(normalized);
+  if (Number.isNaN(value.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  const day = part("day");
+  const month = part("month");
+  const year = part("year");
+  if (!day || !month || !year) return null;
+  return `${day}/${month}/${year}`;
 }
 
 // Hora local (0-23) no fuso America/Sao_Paulo — usada pela saudação temporal do
@@ -1324,6 +1361,11 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           // CV8 (ADR-0026): geração do concierge do cliente final exige a ponte
           // wa.me na saída; e o wa.me da própria oficina entra na allowlist.
           let requireHandoffLink = false;
+          // QTR-35 P0-3: literais que a reescrita não pode perder nem alterar
+          // (hoje: a data do lembrete no ack de cadastro). Sem isto o "rewrite"
+          // podia sumir com a data — o validador checava preço, promessa, link e
+          // cross-tenant, nada que exigisse o dado literal.
+          let requiredLiterals: string[] | undefined;
           const extraAllowedLinks: string[] = [];
           const extraAllowedNames: string[] = [];
           // Fallback nível 2 de vendas (CV3): quando setado, o envio usa botões
@@ -1581,6 +1623,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             }
 
             let confirmationSent = false;
+            // Resultado do RPC: carrega o `scheduled_at` que a copy do ack tem
+            // de informar (QTR-35 P0-3).
+            let registeredService: RegisteredService | null = null;
             if (onboardingReply.registerServiceInput) {
               if (!resolved.oficinaId || !deps.repository.registerServiceWithReminder) {
                 throw new Error("Missing workshop context for service registration");
@@ -1591,6 +1636,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 oficinaId: resolved.oficinaId,
                 ...serviceInput,
               });
+              registeredService = registered;
 
               await deps.repository.saveAgentToolCall({
                 conversationId: resolved.conversationId,
@@ -1628,13 +1674,33 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
 
             if (onboardingReply.registerServiceInput) {
               const nomeCliente = onboardingReply.registerServiceInput.nomeCliente;
-              const dias = resolved.diasLembretePadrao ?? 90;
-              replyBody = `Cliente cadastrado. Vou lembrar o ${nomeCliente} em ${dias} dias pra voltar com você.`;
+              // QTR-35 P0-3: a data vem do RPC, que é quem agenda. Antes a copy
+              // usava `oficinas.dias_lembrete_padrao` enquanto o RPC agendava
+              // pela cadência do TIPO — o bot prometeu 90 dias e gravou 730.
+              // Informar a data (e não "em N dias") deixa o erro conferível pela
+              // oficina na hora.
+              const scheduledDate = formatDateBRFromIso(
+                registeredService?.scheduledAt ?? null,
+              );
+              if (scheduledDate) {
+                replyBody = `Cliente cadastrado. Vou lembrar o ${nomeCliente} em ${scheduledDate} pra voltar com você.`;
+                requiredLiterals = [scheduledDate];
+              } else if (registeredService?.lembreteId) {
+                // Existe lembrete mas o RPC não devolveu a data: acontece na
+                // janela em que o código já subiu e a migration ainda não foi
+                // aplicada (lição 0002 — o deploy corre na frente). Não
+                // inventamos data nem negamos o lembrete.
+                replyBody = `Cliente cadastrado. Vou lembrar o ${nomeCliente} quando estiver na hora de voltar.`;
+              } else {
+                // Sem consentimento o RPC não cria lembrete: não prometemos
+                // aviso nenhum (regras §7.1).
+                replyBody = `Cliente cadastrado. Como não tem autorização de WhatsApp, não vou mandar lembrete pro ${nomeCliente}.`;
+              }
               if (confirmationSent) {
                 replyBody += ` Já avisei o ${nomeCliente} que o serviço foi registrado.`;
               }
-              // CV6: moldura gerada no ack. Nome/dias já estão no texto → o
-              // rewrite preserva os dados literais (ADR-0017).
+              // CV6: moldura gerada no ack. `requiredLiterals` garante que o
+              // rewrite não some com a data nem a troque (ADR-0017).
               allowGeneration = true;
               generationMode = "rewrite";
             } else if (onboardingReply.readOnlyQuery) {
@@ -1943,6 +2009,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             generationMode,
             userMessage: inbound.body,
             requireHandoffLink,
+            requiredLiterals,
             knowledge:
               generationMode === "respond"
                 ? effectiveAgentMode === "vendas"
