@@ -296,6 +296,169 @@ describe("webhook — camada de geração conversacional (CV1)", () => {
   });
 });
 
+// --- QTR-35 P1-5: cross-tenant não pode vetar o nome do próprio turno --------
+// Reproduz os dois vetos reais da conversa da Oficina Marsili (24/07/2026):
+// a resposta boa era reprovada por cross_tenant exatamente no momento da
+// conversão, porque `resolved.oficinaNome` (snapshot do início do turno) ainda
+// era null. O nome capturado no turno e o que o interlocutor escreveu entram
+// na allowlist; nome inventado pelo LLM continua vetado.
+
+describe("webhook — allowlist do cross-tenant no turno (QTR-35 P1-5)", () => {
+  test("nome capturado na memoria de vendas do turno e aprovado", async () => {
+    const repository = salesRepository("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const gerada = "A Oficina Marsili ta registrada chefe. Bora ativar seu teste?";
+    const { generator } = makeGenerator(gerada);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: {
+        generateReply: vi.fn(async () => ({
+          body: "Show chefe! Vou cadastrar a Oficina Marsili em teste por aqui mesmo.",
+          status: "teste_aceito" as const,
+          toolCalls: [],
+          updatedContext: {
+            sales: { workshop_name: "Oficina Marsili", awaiting_workshop_name: false },
+          },
+        })),
+      },
+      replyGenerator: generator,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("pode cadastrar"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: gerada,
+    });
+    expect(replyGenerationCall(repository)?.output).toMatchObject({
+      approved: true,
+      usedFallback: false,
+    });
+  });
+
+  test("nome presente na mensagem que o lead acabou de enviar e aprovado", async () => {
+    const repository = salesRepository("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const gerada = "Anotei chefe: Oficina Marsili. Quer que eu ja ative seu teste?";
+    const { generator } = makeGenerator(gerada);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: salesAgent(),
+      replyGenerator: generator,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(
+        inboundPayload("e a Oficina Marsili aqui do centro"),
+        env.WHATSAPP_APP_SECRET,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: gerada,
+    });
+    expect(replyGenerationCall(repository)?.output).toMatchObject({
+      approved: true,
+      usedFallback: false,
+    });
+  });
+
+  test("turno da conversao: o nome recem-persistido e aprovado", async () => {
+    const repository = salesRepository("on", {
+      convertLeadToOficina: vi.fn(async () => ({
+        oficinaId: "oficina-nova",
+        nome: "Oficina Marsili",
+        diasLembretePadrao: 90,
+      })),
+    });
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const gerada =
+      "Fechou chefe! A Oficina Marsili ja ta cadastrada. Me manda a primeira troca: nome do cliente, carro, servico e WhatsApp.";
+    const { generator } = makeGenerator(gerada);
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: {
+        generateReply: vi.fn(async () => ({
+          body: "Show chefe! Vou cadastrar a Oficina Marsili em teste por aqui mesmo.",
+          status: "teste_aceito" as const,
+          toolCalls: [],
+          convertToOficina: true,
+          nomeOficina: "Oficina Marsili",
+          updatedContext: { sales: { workshop_name: "Oficina Marsili" } },
+        })),
+      },
+      replyGenerator: generator,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("Oficina Marsili"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: gerada,
+    });
+    expect(replyGenerationCall(repository)?.output).toMatchObject({
+      approved: true,
+      usedFallback: false,
+    });
+  });
+
+  test("nome que so existe na saida do LLM continua vetado por cross_tenant", async () => {
+    const repository = salesRepository("on");
+    const whatsapp = {
+      sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+    };
+    const { generator } = makeGenerator(
+      "A Oficina do Ze ja usa o produto e adora, chefe!",
+    );
+
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp,
+      agent: salesAgent(),
+      replyGenerator: generator,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("quanto custa"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(whatsapp.sendTextMessage).toHaveBeenCalledWith({
+      to: "+5541999421180",
+      body: ENLATADA,
+    });
+    expect(replyGenerationCall(repository)?.output).toMatchObject({
+      approved: false,
+      rejectionReason: "cross_tenant",
+      usedFallback: true,
+    });
+  });
+});
+
 // --- Modo respond na operação (ADR-0022) -------------------------------------
 // Prova o wiring do webhook: a categoria `pergunta` do agente de operação
 // dispara o gerador em modo respond (com userMessage + knowledge) e o fallback

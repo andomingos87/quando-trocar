@@ -1426,6 +1426,20 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               preMatchedFaqId: semanticFaq?.id ?? null,
             });
 
+            // QTR-35 P1-5: o nome da oficina capturado neste turno (ou guardado
+            // na memoria de vendas em turnos anteriores, ainda como lead) entra
+            // na allowlist do validador — `resolved.oficinaNome` e snapshot do
+            // inicio do turno e ainda e null aqui. Sem isso, a resposta que
+            // cita o nome que o proprio lead informou era vetada por
+            // cross_tenant no pior momento (a conversao).
+            for (const turnWorkshopName of [
+              reply.nomeOficina,
+              reply.updatedContext?.sales?.workshop_name,
+              resolved.context.sales?.workshop_name,
+            ]) {
+              if (turnWorkshopName) extraAllowedNames.push(turnWorkshopName);
+            }
+
             if (
               reply.handoffRequired &&
               deps.repository.markConversationHandoff
@@ -1493,6 +1507,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 responsavel: inbound.contactName,
                 nomeOficina: reply.nomeOficina ?? null,
               });
+              // QTR-35 P1-5: a oficina acabou de nascer neste turno — o nome
+              // persistido entra na allowlist do validador.
+              extraAllowedNames.push(converted.nome);
 
               await deps.repository.saveAgentToolCall({
                 conversationId: resolved.conversationId,
@@ -1982,9 +1999,15 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           }
           // CV8: wa.me da própria oficina (concierge) entra na allowlist.
           allowedLinks.push(...extraAllowedLinks);
-          const allowedNames = [resolved.oficinaNome, ...extraAllowedNames].filter(
-            (name): name is string => Boolean(name),
-          );
+          // QTR-35 P1-5: o que o proprio interlocutor escreveu neste turno nao
+          // e vazamento cross-tenant — a mensagem inbound entra na allowlist
+          // (checkCrossTenant compara por inclusao normalizada). O guard segue
+          // reprovando nome que so existe na saida do LLM.
+          const allowedNames = [
+            resolved.oficinaNome,
+            ...extraAllowedNames,
+            inbound.body,
+          ].filter((name): name is string => Boolean(name));
 
           const handoffComercialLink = salesConfig?.whatsappHandoffComercial
             ? whatsappLink({ phone: salesConfig.whatsappHandoffComercial })
