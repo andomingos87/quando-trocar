@@ -1,6 +1,6 @@
 # QTR-35 · P2 — dado, card e auditoria
 
-**Status: plano proposto (aguardando aprovação para execução).**
+**Status: implementado localmente; aguardando gates finais e revisão.**
 
 Plano executável para os itens **9–12** da issue
 [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no).
@@ -43,6 +43,13 @@ cliente toca a confirmação ─────> [12] contrato Meta e handoff são 
 | 11 | `webhook-handler.ts` + `outbound_messages` | Ao enviar reply buttons, `body` recebe só o texto principal. Os títulos/ids das opções não ficam em uma forma auditável. |
 | 12 | `service-confirmation.ts:renderServiceConfirmation` | A cópia auditada diverge do texto aprovado na Meta: fala em "tocar no botão abaixo", enquanto o template aprovado manda responder por ali. |
 | 12 | `cliente-final-concierge.ts` | A documentação/código assumem CTA URL, mas o template real usa quick reply. "Chamar no whatsapp" chega como texto e cai em `mensagem_indefinida`. |
+
+## Resultado da implementação
+
+- **Item 9:** `captureLeadWorkshopIdentity` grava `nome_oficina` no lead no turno da captura e completa `nome_responsavel` a partir de `nome` apenas quando necessário; a conversão lê esses campos como fonte canônica.
+- **Item 10:** o contexto do card carrega `changed_fields`/`suspect_fields`, correções múltiplas são destacadas e a guarda roda novamente no aceite.
+- **Item 11:** a tool call de status registra o payload aplicado; o outbox de interativos registra corpo, id e título de cada opção.
+- **Item 12:** `SERVICE_CONFIRMATION_APPROVED_BODY` é a fonte do body auditado; o CTA quick-reply `chamar_oficina` encaminha para o `wa.me` da própria oficina.
 
 ## Decisões do plano
 

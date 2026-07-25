@@ -24,6 +24,8 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
   cadastro (ADR-0005). E a ultima barreira antes da mensagem que o cliente da oficina le:
   nenhum texto livre da oficina pode virar parametro de template (ADR-0027). A confirmacao da
   OFICINA antes de gravar (o "sim" sobre o card) vive no `onboarding-agent.ts` (ADR-0017).
+  O body auditado espelha o aprovado na Meta e o quick-reply "Chamar no whatsapp" e tratado
+  pelo concierge como handoff para o wa.me (ADR-0018/QTR-35).
 - `reminder-worker.ts` — consome a fila e dispara lembretes via template.
 - `repository.ts` — toda a persistencia Supabase do bot.
 - `whatsapp-client.ts` — envio pela Cloud API.

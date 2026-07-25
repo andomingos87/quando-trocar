@@ -19,6 +19,21 @@ Não registrar:
 
 ---
 
+## 2026-07-25 — Dado, card e auditoria (QTR-35 P2)
+
+Implementa os itens 9–12 da [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no), conforme [`qtr-35-p2-dado-card-auditoria.md`](./backlog-whatsapp-bot/qtr-35-p2-dado-card-auditoria.md).
+
+### Decidido
+
+- A identidade capturada da oficina é persistida no lead no mesmo turno e lida dali na conversão; `nome` só completa `nome_responsavel` quando ainda vazio.
+- O card mostra campos alterados, alerta campos reprovados pela guarda e revalida o draft no aceite; correções múltiplas continuam em uma única mensagem.
+- Auditoria de `update_lead` registra o status aplicado e mensagens interativas registram corpo, ids e títulos das opções.
+- O body auditado de `confirmacao_servico` espelha a copy aprovada; o quick-reply "Chamar no whatsapp" responde com o `wa.me` da oficina. Botão URL fica para submissão futura na Meta.
+
+### Operação
+
+- Não há migration nem Edge Function nova nesta entrega. Validar `npm test` e `npm run lint` antes de publicar.
+
 ## 2026-07-25 — Intenção de compra, conversão guiada e volante seguro (QTR-35 P1)
 
 Fecha localmente os itens 4–8 da [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no). Plano e evidência de origem em [`qtr-35-p1-intencao-e-conversao.md`](./backlog-whatsapp-bot/qtr-35-p1-intencao-e-conversao.md). A migration do volante permanece pendente de aplicação remota.

@@ -265,8 +265,12 @@ describe("whatsapp webhook handlers", () => {
     expect(repository.saveAgentToolCall).toHaveBeenCalledWith(
       expect.objectContaining({
         toolName: "update_lead",
-        input: { status: "em_conversa" },
-        output: { status: "interessado" },
+        input: { status: "interessado" },
+        output: {
+          applied: true,
+          previousStatus: "em_conversa",
+          currentStatus: "interessado",
+        },
       }),
     );
   });

@@ -231,16 +231,23 @@ export type ServiceDraft = {
   marca_peca?: MarcaAmortecedor | null;
 };
 
+export type ServiceDraftField =
+  | "nome_cliente"
+  | "whatsapp_cliente"
+  | "veiculo"
+  | "servico"
+  | "data_servico"
+  | "marca_peca";
+
 export type ConversationContext = {
   pending_action?: "registrar_primeira_troca";
-  missing_field?:
-    | "nome_cliente"
-    | "whatsapp_cliente"
-    | "veiculo"
-    | "servico"
-    | "data_servico"
-    | "marca_peca";
+  missing_field?: ServiceDraftField;
   service_draft?: ServiceDraft;
+  /** Feedback do último card: torna visível o que mudou e o que a guarda rejeitou. */
+  service_draft_feedback?: {
+    changed_fields?: ServiceDraftField[];
+    suspect_fields?: ServiceDraftField[];
+  };
   /**
    * Cadastro com todos os campos preenchidos aguardando a oficina confirmar
    * antes de gravar o serviço e disparar o template ao cliente final. Rede de
@@ -497,6 +504,14 @@ export type WhatsappRepository = {
     oficinaId: string;
     nome: string;
     diasLembretePadrao: number;
+  }>;
+  /** Persiste a identidade da oficina no lead no mesmo turno em que ela é capturada. */
+  captureLeadWorkshopIdentity?(input: {
+    leadId: string;
+    nomeOficina: string;
+  }): Promise<{
+    nomeOficina: string;
+    nomeResponsavel: string | null;
   }>;
   // Atualiza apenas o nome de uma oficina já cadastrada. Usado no backfill de
   // oficinas que ficaram com o placeholder "Oficina sem nome".
@@ -938,6 +953,7 @@ export type ReminderAgent = {
 export type ClienteFinalConciergeIntent =
   | "agradecimento"
   | "quem_e"
+  | "chamar_oficina"
   | "opt_out"
   | "numero_errado"
   | "nao_reconhece"

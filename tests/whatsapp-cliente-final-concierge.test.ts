@@ -35,6 +35,7 @@ describe("classifyConciergeMessage", () => {
     expect(classifyConciergeMessage("não quero receber mais")).toBe("opt_out");
     expect(classifyConciergeMessage("número errado")).toBe("numero_errado");
     expect(classifyConciergeMessage("não reconheço esse serviço")).toBe("nao_reconhece");
+    expect(classifyConciergeMessage("Chamar no whatsapp")).toBe("chamar_oficina");
     expect(classifyConciergeMessage("asdfghjk")).toBe("mensagem_indefinida");
   });
 });
@@ -61,6 +62,14 @@ describe("WhatsappClienteFinalConciergeAgent", () => {
     expect(r.handoffRequired).toBe(true);
     expect(r.handoffReason).toBe("pedido_cliente_final");
     expect(r.replyBody).toContain("Auto Peças Anderson");
+    expect(r.replyBody).toContain("https://wa.me/5541999990000");
+  });
+
+  test("CTA quick-reply da confirmação devolve o wa.me da oficina", () => {
+    const r = reply("Chamar no whatsapp");
+    expect(r.intent).toBe("chamar_oficina");
+    expect(r.handoffRequired).toBe(true);
+    expect(r.handoffReason).toBe("cta_confirmacao");
     expect(r.replyBody).toContain("https://wa.me/5541999990000");
   });
 

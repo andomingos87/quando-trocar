@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest";
 
 import {
   SERVICE_CONFIRMATION_PARAM_NAMES,
+  SERVICE_CONFIRMATION_APPROVED_BODY,
   buildServiceConfirmationParams,
   productLabelForConfirmation,
+  renderServiceConfirmation,
   sanitizeTemplateParam,
 } from "@/lib/whatsapp/service-confirmation";
 import type { TipoServico } from "@/lib/whatsapp/types";
@@ -127,5 +129,26 @@ describe("buildServiceConfirmationParams", () => {
     for (const param of result.params) {
       expect(param).not.toMatch(/[\r\n\t]/);
     }
+  });
+});
+
+describe("renderServiceConfirmation", () => {
+  test("espelha o body aprovado na Meta e não inventa uma copy de CTA", () => {
+    const rendered = renderServiceConfirmation({
+      customerName: "Leonardo Viana",
+      productLabel: "amortecedor",
+      vehicleDescription: "BMW",
+      workshopName: "Oficina Marsili",
+    });
+
+    expect(rendered).toBe(
+      SERVICE_CONFIRMATION_APPROVED_BODY
+        .replaceAll("{{nome}}", "Leonardo Viana")
+        .replaceAll("{{produto}}", "amortecedor")
+        .replaceAll("{{carro}}", "BMW")
+        .replaceAll("{{oficina}}", "Oficina Marsili"),
+    );
+    expect(rendered).not.toContain("Precisa falar com");
+    expect(rendered).not.toContain("botão abaixo");
   });
 });

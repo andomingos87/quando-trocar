@@ -167,6 +167,53 @@ describe("whatsapp webhook phase 2", () => {
     });
   });
 
+  test("persiste nome da oficina no lead antes de converter", async () => {
+    const captureLeadWorkshopIdentity = vi.fn(async () => ({
+      nomeOficina: "Oficina Marsili",
+      nomeResponsavel: "Oficina Teste",
+    }));
+    const repository = phase2Repository({ captureLeadWorkshopIdentity });
+    const agent = {
+      generateReply: vi.fn(async () => ({
+        body: "Show chefe!",
+        status: "teste_aceito" as const,
+        convertToOficina: true,
+        nomeOficina: "Oficina Marsili",
+        toolCalls: [
+          {
+            toolName: "capture_workshop_name",
+            input: { message: "Oficina Marsili" },
+            output: { nome: "Oficina Marsili" },
+          },
+        ],
+      })),
+    };
+    const handlers = createWhatsappWebhookHandlers({
+      env,
+      repository,
+      whatsapp: {
+        sendTextMessage: vi.fn(async () => ({ whatsappMessageId: "wamid.out-1" })),
+      },
+      agent,
+    });
+
+    const response = await handlers.POST(
+      signedRequest(inboundPayload("Oficina Marsili"), env.WHATSAPP_APP_SECRET),
+    );
+
+    expect(response.status).toBe(200);
+    expect(captureLeadWorkshopIdentity).toHaveBeenCalledWith({
+      leadId: "lead-id",
+      nomeOficina: "Oficina Marsili",
+    });
+    expect(repository.saveAgentToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "capture_workshop_name",
+        output: expect.objectContaining({ persisted: true, nome_oficina: "Oficina Marsili" }),
+      }),
+    );
+  });
+
   test("personalizes the conversion confirmation with the workshop name", async () => {
     const repository = phase2Repository({
       convertLeadToOficina: vi.fn(async () => ({
@@ -578,7 +625,7 @@ describe("whatsapp webhook phase 2", () => {
     });
   });
 
-  test("envia o botão wa.me da oficina na confirmação quando o flag está ativo (ADR-0018)", async () => {
+  test("não envia parâmetro de botão URL: CTA aprovado é quick-reply (ADR-0018)", async () => {
     vi.stubEnv("WHATSAPP_CONFIRMACAO_BUTTON_WA_ME", "true");
     try {
       const getOficinaById = vi.fn(async () => ({
@@ -636,9 +683,9 @@ describe("whatsapp webhook phase 2", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(getOficinaById).toHaveBeenCalledWith({ oficinaId: "oficina-id" });
+      expect(getOficinaById).not.toHaveBeenCalled();
       expect(whatsapp.sendTemplateMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ urlButtonParameter: "5541999421180" }),
+        expect.not.objectContaining({ urlButtonParameter: expect.anything() }),
       );
     } finally {
       vi.unstubAllEnvs();

@@ -15,6 +15,7 @@ import type {
   RegisterServiceInput,
   ReplyGenerationMode,
   ServiceDraft,
+  ServiceDraftField,
   TipoServico,
 } from "./types";
 
@@ -630,6 +631,23 @@ function questionForMissingField(field: MissingField) {
   return "Anotei amortecedor. Qual a marca da peca? (Cofap, Monroe, Nakata, Perfect, outra)";
 }
 
+function missingFieldReply(
+  draft: ServiceDraft,
+  missingField: MissingField,
+  feedback?: { changedFields?: ServiceDraftField[]; suspectFields?: ServiceDraftField[] },
+): OnboardingAgentReply {
+  const warning = feedback?.suspectFields?.length
+    ? `${feedback.suspectFields.map(sanityWarning).join("\n")}\n\n`
+    : "";
+  return {
+    body: `${warning}${questionForMissingField(missingField)}`,
+    context: draftContext(draft, missingField, feedback),
+    registerServiceInput: null,
+    nextAgentMode: null,
+    toolCalls: [],
+  };
+}
+
 function draftToRegisterInput(
   draft: ServiceDraft,
 ): Omit<RegisterServiceInput, "oficinaId"> {
@@ -650,11 +668,25 @@ function draftToRegisterInput(
   };
 }
 
-function draftContext(draft: ServiceDraft, missingField: MissingField): ConversationContext {
+function draftContext(
+  draft: ServiceDraft,
+  missingField: MissingField,
+  feedback?: {
+    changedFields?: ServiceDraftField[];
+    suspectFields?: ServiceDraftField[];
+  },
+): ConversationContext {
   return {
     pending_action: "registrar_primeira_troca",
     missing_field: missingField,
     service_draft: draft,
+    service_draft_feedback:
+      feedback && (feedback.changedFields?.length || feedback.suspectFields?.length)
+        ? {
+            changed_fields: feedback.changedFields,
+            suspect_fields: feedback.suspectFields,
+          }
+        : undefined,
   };
 }
 
@@ -786,9 +818,37 @@ function serviceSummaryLine(draft: ServiceDraft): string {
   return label;
 }
 
-function confirmationSummary(draft: ServiceDraft): string {
+const SERVICE_DRAFT_FIELD_LABELS: Record<ServiceDraftField, string> = {
+  nome_cliente: "Cliente",
+  whatsapp_cliente: "WhatsApp",
+  veiculo: "Carro",
+  servico: "Serviço",
+  data_servico: "Data",
+  marca_peca: "Marca da peça",
+};
+
+function fieldLabel(field: ServiceDraftField): string {
+  return SERVICE_DRAFT_FIELD_LABELS[field];
+}
+
+function sanityWarning(field: ServiceDraftField): string {
+  return `⚠️ Não consegui validar o campo *${fieldLabel(field)}*. Ele foi retirado do card para não cadastrar um dado incorreto.`;
+}
+
+function confirmationSummary(
+  draft: ServiceDraft,
+  feedback?: { changedFields?: ServiceDraftField[] },
+): string {
+  const changed = feedback?.changedFields?.filter(Boolean) ?? [];
   return [
     "Confere os dados antes de eu registrar:",
+    ...(changed.length
+      ? [
+          `✅ Atualizado agora: ${changed
+            .map((field) => `*${fieldLabel(field)}*`)
+            .join(", ")}`,
+        ]
+      : []),
     "",
     `• Cliente: ${draft.nome_cliente ?? "-"}`,
     `• Carro: ${draft.veiculo ?? "-"}`,
@@ -800,21 +860,32 @@ function confirmationSummary(draft: ServiceDraft): string {
   ].join("\n");
 }
 
-function confirmationContext(draft: ServiceDraft): ConversationContext {
+function confirmationContext(
+  draft: ServiceDraft,
+  feedback?: { changedFields?: ServiceDraftField[]; suspectFields?: ServiceDraftField[] },
+): ConversationContext {
   return {
     pending_action: "registrar_primeira_troca",
     awaiting_confirmation: true,
     service_draft: draft,
+    service_draft_feedback:
+      feedback && (feedback.changedFields?.length || feedback.suspectFields?.length)
+        ? {
+            changed_fields: feedback.changedFields,
+            suspect_fields: feedback.suspectFields,
+          }
+        : undefined,
   };
 }
 
 function confirmationReply(
   draft: ServiceDraft,
   sourceMediaType?: InboundMediaType | null,
+  feedback?: { changedFields?: ServiceDraftField[]; suspectFields?: ServiceDraftField[] },
 ): OnboardingAgentReply {
   return {
-    body: confirmationSummary(draft),
-    context: confirmationContext(draft),
+    body: confirmationSummary(draft, feedback),
+    context: confirmationContext(draft, feedback),
     registerServiceInput: null,
     nextAgentMode: null,
     toolCalls: [
@@ -830,7 +901,7 @@ function confirmationReply(
     // mensagem canônica "confirmar"/"corrigir" (payload), tratada pelo mesmo
     // fluxo determinístico — estado idêntico com ou sem botões (ADR-0024).
     interactiveButtons: {
-      bodyText: confirmationSummary(draft),
+      bodyText: confirmationSummary(draft, feedback),
       buttons: ONBOARDING_CONFIRM_BUTTONS,
     },
   };
@@ -846,14 +917,22 @@ function isCorrectionEntryMessage(message: string) {
   return CORRECTION_ENTRY_PATTERN.test(normalizeText(message));
 }
 
-function correctionPromptReply(draft: ServiceDraft, message: string): OnboardingAgentReply {
+function correctionPromptReply(
+  draft: ServiceDraft,
+  message: string,
+  feedback?: { changedFields?: ServiceDraftField[]; suspectFields?: ServiceDraftField[] },
+): OnboardingAgentReply {
+  const warning = feedback?.suspectFields?.length
+    ? `${feedback.suspectFields.map(sanityWarning).join("\n")}\n\n`
+    : "";
   return {
     body: [
+      warning,
       "Sem problema. Me diga o que corrigir.",
       'Por exemplo: "o carro e Gol" ou "o nome e Flaviane Marsili".',
       "Ou reenvie tudo: nome do cliente, carro, servico, data e WhatsApp.",
     ].join("\n"),
-    context: confirmationContext(draft),
+    context: confirmationContext(draft, feedback),
     registerServiceInput: null,
     nextAgentMode: null,
     toolCalls: [
@@ -1301,11 +1380,14 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     const missingField = missingFieldForDraft(draft);
 
     if (missingField) {
+      const previousChangedFields = input.context.service_draft_feedback?.changed_fields;
+      const feedback = {
+        changedFields: previousChangedFields,
+        suspectFields,
+      };
+      const response = missingFieldReply(draft, missingField, feedback);
       return {
-        body: questionForMissingField(missingField),
-        context: draftContext(draft, missingField),
-        registerServiceInput: null,
-        nextAgentMode: null,
+        ...response,
         toolCalls: suspectFields.length
           ? [
               {
@@ -1330,7 +1412,9 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     // Todos os campos presentes: NÃO grava ainda. Mostra o resumo e espera a
     // oficina confirmar — é a rede de segurança que o ADR-0015 assumia mas que
     // não existia no fluxo (correção manual antes do template irreversível).
-    return confirmationReply(draft, input.sourceMediaType);
+    return confirmationReply(draft, input.sourceMediaType, {
+      changedFields: input.context.service_draft_feedback?.changed_fields,
+    });
   }
 
   private async handleConfirmation(input: {
@@ -1343,10 +1427,21 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     const draft = input.context.service_draft as ServiceDraft;
 
     if (isAffirmativeConfirmation(input.message)) {
+      // Revalida o card no instante do aceite. Contexto persistido pode ter
+      // sido produzido antes de uma mudança de guarda; nenhum campo suspeito
+      // pode atravessar esta última barreira até o RPC.
+      const { draft: saneDraft, suspectFields } = pruneSuspectFields(
+        draft,
+        input.today,
+      );
+      const missingField = missingFieldForDraft(saneDraft);
+      if (missingField) {
+        return missingFieldReply(saneDraft, missingField, { suspectFields });
+      }
       return {
         body: "",
         context: {},
-        registerServiceInput: draftToRegisterInput(draft),
+        registerServiceInput: draftToRegisterInput(saneDraft),
         nextAgentMode: input.mode === "onboarding" ? "operacao" : null,
         toolCalls: [
           {
@@ -1361,7 +1456,10 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     // QTR-35 P1-8: "corrigir"/"nao"/"errado" secos (inclusive o botão
     // "Corrigir" do card) entram no fluxo de correção sem gastar LLM.
     if (isCorrectionEntryMessage(input.message)) {
-      return correctionPromptReply(draft, input.message);
+      return correctionPromptReply(draft, input.message, {
+        changedFields: input.context.service_draft_feedback?.changed_fields,
+        suspectFields: input.context.service_draft_feedback?.suspect_fields,
+      });
     }
 
     // Não foi um "sim": tratamos como correção. Re-extrai apenas via OpenAI
@@ -1374,40 +1472,67 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     );
     // A correção passa pela mesma guarda de sanidade da extração: um "carro é
     // ele tem uma BMW" não pode entrar no rascunho por essa porta (QTR-35 P0-1).
-    const prunedCorrection = correction
-      ? pruneSuspectFields(correction, input.today).draft
+    const prunedCorrectionResult = correction
+      ? pruneSuspectFields(correction, input.today)
       : null;
+    const prunedCorrection = prunedCorrectionResult?.draft ?? null;
     const merged = prunedCorrection
       ? mergeDraftCorrection(draft, prunedCorrection)
       : draft;
 
-    const changed = prunedCorrection
-      ? JSON.stringify(merged) !== JSON.stringify(draft)
-      : false;
+    const correctionFields: ServiceDraftField[] = [
+      "nome_cliente",
+      "whatsapp_cliente",
+      "veiculo",
+      "servico",
+      "data_servico",
+      "marca_peca",
+    ];
+    const changedFields = prunedCorrection
+      ? correctionFields.filter(
+          (field) =>
+            prunedCorrection[field] !== undefined &&
+            merged[field] !== draft[field],
+        )
+      : [];
+    const changed = changedFields.length > 0;
+    const suspectFields = prunedCorrectionResult?.suspectFields ?? [];
 
     if (!changed) {
-      return correctionPromptReply(draft, input.message);
+      return correctionPromptReply(draft, input.message, { suspectFields });
     }
 
     const missingField = missingFieldForDraft(merged);
+    if (suspectFields.length) {
+      return correctionPromptReply(merged, input.message, {
+        changedFields,
+        suspectFields,
+      });
+    }
     if (missingField) {
+      const fieldToAsk = missingField;
+      const response = missingFieldReply(merged, fieldToAsk, {
+        changedFields,
+      });
       return {
-        body: questionForMissingField(missingField),
-        context: draftContext(merged, missingField),
-        registerServiceInput: null,
-        nextAgentMode: null,
+        ...response,
         toolCalls: [
           {
             toolName: "confirmou_cadastro",
             input: { message: input.message },
-            output: { confirmed: false, parsed: true, missing_field: missingField },
+            output: {
+              confirmed: false,
+              parsed: true,
+              missing_field: fieldToAsk,
+              campos_suspeitos: suspectFields,
+            },
           },
         ],
       };
     }
 
     // Correção aplicada e rascunho ainda completo → reapresenta pra reconfirmar.
-    return confirmationReply(merged, input.sourceMediaType);
+    return confirmationReply(merged, input.sourceMediaType, { changedFields });
   }
 
   private async extractCorrection(

@@ -1217,6 +1217,52 @@ describe("QTR-35 P1-8 — card de confirmacao com botoes Confirmar/Corrigir", ()
     expect(result.body).toContain("Me diga o que corrigir");
   });
 
+  test("aceita correção múltipla e destaca os campos alterados no card", async () => {
+    const agent = new WhatsappOnboardingAgent({
+      openai: openaiExtractionStub({
+        nome_cliente: "Leonardo Viana",
+        veiculo: "BMW",
+      }) as never,
+    });
+    const result = await agent.generateReply({
+      message: "nome é Leonardo Viana e o carro é BMW",
+      mode: "onboarding",
+      context: confirmationDraftContext,
+      today: "2026-04-25",
+    });
+
+    expect(result.registerServiceInput).toBeNull();
+    expect(result.body).toContain("Atualizado agora");
+    expect(result.body).toContain("*Cliente*");
+    expect(result.body).toContain("*Carro*");
+    expect(result.body).toContain("Leonardo Viana");
+    expect(result.body).toContain("BMW");
+    expect(result.context.service_draft_feedback?.changed_fields).toEqual([
+      "nome_cliente",
+      "veiculo",
+    ]);
+  });
+
+  test("revalida a guarda no toque de confirmar e avisa campo suspeito", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+    const result = await agent.generateReply({
+      message: "sim",
+      mode: "onboarding",
+      context: {
+        ...confirmationDraftContext,
+        service_draft: {
+          ...confirmationDraftContext.service_draft,
+          servico: "ele acabou de trocar um amortecedor da Perfect",
+        },
+      },
+      today: "2026-04-25",
+    });
+
+    expect(result.registerServiceInput).toBeNull();
+    expect(result.body).toContain("Não consegui validar");
+    expect(result.body).toContain("Serviço");
+  });
+
   test('"nao" e "ta errado" secos tambem entram na correcao deterministicamente', async () => {
     const agent = new WhatsappOnboardingAgent({
       openai: {

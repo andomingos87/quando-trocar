@@ -952,6 +952,16 @@ describe("webhook — CV3 botões interativos no fallback nível 2 (vendas)", ()
     // Botão é determinístico: gerador não roda (allowGeneration = false).
     expect(state.calls).toBe(0);
     expect(replyGenerationCall(repository)).toBeUndefined();
+    expect(repository.createOutboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("Opções oferecidas:"),
+      }),
+    );
+    expect(repository.createOutboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("[sales_fb_preco] Quanto custa"),
+      }),
+    );
   });
 
   test("transporte sem botões: degrada para o texto do menu", async () => {

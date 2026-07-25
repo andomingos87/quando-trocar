@@ -3,7 +3,7 @@
 - **Status**: accepted (parcialmente revisada — ver nota)
 - **Data**: 2026-06-14
 - **Decisores**: Anderson Domingos
-- **Revisada por**: [ADR-0026](./0026-concierge-moldura-gerada.md) — a decisão de concierge **100% determinístico** foi revista na fase CV8: os intents seguros (`quem_e`, `agradecimento`, `mensagem_indefinida`) passam a aceitar moldura gerada (rewrite) com validador + `requireHandoffLink`. Todo o resto desta ADR (roteamento, botão `wa.me`, intents/handoff) permanece válido.
+- **Revisada por**: [ADR-0026](./0026-concierge-moldura-gerada.md) e QTR-35 P2 — os intents seguros continuam aceitando moldura gerada com validador; o CTA aprovado atualmente é quick-reply e o código trata `chamar_oficina` antes do fallback. A evolução para URL segue pendente de aprovação Meta.
 - **Fonte**: teste real (cliente "Rafael", confirmação de troca de óleo, 2026-06-14) — print mostrando resposta confusa do bot
 - **Relaciona-se com**: [ADR-0002](./0002-roteamento-via-agent-mode.md) (roteamento via agent_mode), [ADR-0009](./0009-confirmacao-vs-pre-agendamento.md) (handoff de agendamento), [ADR-0012](./0012-politica-de-preco.md) (bot não cota preço)
 
@@ -18,7 +18,7 @@ No teste de 2026-06-14, o cliente "Rafael" recebeu a confirmação e **tocou no 
 
 ## Decisão
 
-**1. Botão da confirmação → conversa com a oficina.** O botão "Chamar no WhatsApp" do template `confirmacao_servico` passa a ser um **CTA de URL `https://wa.me/{{1}}`**, com `{{1}}` = WhatsApp da oficina (preenchido no envio). O cliente fala direto com a oficina; o botão não devolve mensagem ao bot. (Edição do template é feita no WhatsApp Manager; o código passa o parâmetro.)
+**1. Botão da confirmação → conversa com a oficina.** O template `confirmacao_servico` aprovado usa um **quick-reply** intitulado "Chamar no whatsapp". O payload chega ao concierge como intent `chamar_oficina`, que responde com o `https://wa.me/<telefone>` da oficina e marca handoff. Um botão URL dinâmico é evolução futura e depende de nova submissão à Meta.
 
 **2. Concierge leve para texto solto.** O cliente final que responde à confirmação **antes de existir lembrete** é reconhecido como `cliente_final` (não vendas) e atendido por um agente concierge determinístico (`cliente-final-concierge.ts`):
 - agradecimento / "quem é vocês" → resposta curta on-brand + link da oficina;

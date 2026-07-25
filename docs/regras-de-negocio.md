@@ -249,7 +249,7 @@ Uma oficina vira `cliente_ativo` quando:
 
 Dados mínimos coletados no fluxo: `nome_oficina`, `whatsapp_principal`.
 
-**Captura do nome da oficina (obrigatória):** quando o lead aceita testar (`quer_testar`), o bot **não converte na hora** — primeiro pergunta o nome da oficina ("Boa chefe! Antes de ativar seu teste, como chama a sua oficina?") e marca `sales.awaiting_workshop_name = true`. Na resposta, `extractWorkshopName()` limpa frases de embrulho ("minha oficina se chama X", "é a X", "o nome é X") e valida que não é saudação/ack/pergunta/preço, só dígitos ou uma afirmação pura (`sim`, `pode`, `fechado`, `ok`…). Se a resposta não parecer um nome, o bot repergunta. Se o lead desistir (`isExplicitLossMessage`), vira `perdido`. Com o nome válido, o agente devolve `convertToOficina = true` e `nomeOficina = <nome>`, e a tool call `capture_workshop_name` é registrada. O nome capturado fica em `sales.workshop_name`.
+**Captura do nome da oficina (obrigatória):** quando o lead aceita testar (`quer_testar`), o bot **não converte na hora** — primeiro pergunta o nome da oficina ("Boa chefe! Antes de ativar seu teste, como chama a sua oficina?") e marca `sales.awaiting_workshop_name = true`. Na resposta, `extractWorkshopName()` limpa frases de embrulho ("minha oficina se chama X", "é a X", "o nome é X") e valida que não é saudação/ack/pergunta/preço, só dígitos ou uma afirmação pura (`sim`, `pode`, `fechado`, `ok`…). Se a resposta não parecer um nome, o bot repergunta. Se o lead desistir (`isExplicitLossMessage`), vira `perdido`. Com o nome válido, o agente devolve `convertToOficina = true` e `nomeOficina = <nome>`, a tool call `capture_workshop_name` é registrada e o webhook persiste `leads_oficina.nome_oficina` no mesmo turno. Se `nome_responsavel` ainda estiver vazio, o valor existente em `leads_oficina.nome` é promovido para esse campo. O nome capturado fica em `sales.workshop_name`.
 
 **Gancho de cadastro ainda em vendas (QTR-35 P1):** se a mensagem já combina sinal de cadastro (telefone + serviço, ou lista com campos), ela é avaliada **antes** de volume/ticket e não cai em FAQ/ROI. O bot guarda `pending_registration` (texto, origem e data São Paulo do turno), pede o nome da oficina e ativa o teste. Na conversão, o webhook recupera o texto antes de `convertLeadToOficina` limpar o contexto e o entrega ao onboarding com a data original — preserva o significado de "hoje". O onboarding mostra card ou pede o campo faltante; **não** grava `servicos`/`lembretes` até o "sim" da oficina.
 
@@ -257,7 +257,7 @@ Dados mínimos coletados no fluxo: `nome_oficina`, `whatsapp_principal`.
 
 ### 2.2 Ações no banco na conversão
 - Cria registro em `oficinas` com `status = ativa`, `plano = teste`, `origem = landing_whatsapp`.
-- `nome` = o nome capturado no fluxo (`AgentReply.nomeOficina`). Se vier vazio, grava o placeholder `"Oficina sem nome"` (sentinela `OFICINA_SEM_NOME` em `lib/whatsapp/repository.ts`), que dispara o backfill na próxima interação (ver §2.7).
+- `nome` = `leads_oficina.nome_oficina` persistido na captura; `AgentReply.nomeOficina` só é fallback para leads legados. Se vier vazio, grava o placeholder `"Oficina sem nome"` (sentinela `OFICINA_SEM_NOME` em `lib/whatsapp/repository.ts`), que dispara o backfill na próxima interação (ver §2.7). `responsavel` prioriza `leads_oficina.nome_responsavel`, depois `leads_oficina.nome` e só então o nome de perfil recebido no turno.
 - `leads_oficina.status = convertido`, preenche `converted_at` e `oficina_id`.
 - Conversa transita: `participant_type = oficina_cliente`, `agent_mode = onboarding`.
 - Mensagem de boas-vindas é **personalizada com o nome** ("Pronto, a *Auto Center Silva* esta cadastrada."); cai no genérico ("sua oficina") só quando o nome é o placeholder.
@@ -403,7 +403,7 @@ Quando todos os campos obrigatórios estão preenchidos, o bot **não grava dire
 - **Resumo**: lista cliente, carro, serviço (com marca do amortecedor quando houver), data e WhatsApp; pede "Responda *sim* pra confirmar, ou me diga o que corrigir". Registra a tool call `solicitou_confirmacao_cadastro`.
 - **Atalhos de botão**: `Confirmar` é a mesma afirmação canônica; `Corrigir`/`não`/`errado` secos pedem diretamente o campo a corrigir, sem tentar extrair uma alteração vazia por LLM.
 - **Afirmação** (`sim`, `isso`, `pode cadastrar`, `ok`, `beleza`… — só quando **todos** os tokens da resposta são afirmativos, pra "sim, mas o carro é Gol" não confirmar por engano): aí sim chama a RPC e dispara a confirmação ao cliente. Tool call `confirmou_cadastro` com `confirmed=true`.
-- **Correção** (qualquer resposta não-afirmativa): re-extrai os campos informados **via LLM** (o parser por vírgula é perigoso em respostas curtas) e mescla sobre o draft, reapresentando o resumo para novo "sim". Se nada foi entendido, pede explicitamente o que corrigir. Em nenhum caso grava ou dispara template enquanto não houver afirmação. Tool call `confirmou_cadastro` com `confirmed=false`.
+- **Correção** (qualquer resposta não-afirmativa): re-extrai os campos informados **via LLM** (o parser por vírgula é perigoso em respostas curtas), aceita múltiplos campos na mesma mensagem e mescla sobre o draft. O card destaca os campos alterados. Se a guarda de sanidade reprovar um campo, ele é explicitamente sinalizado e volta a ser solicitado; o aceite revalida o draft imediatamente antes da RPC. Em nenhum caso grava ou dispara template enquanto não houver afirmação. Tool call `confirmou_cadastro` com `confirmed=false`.
 
 Após a afirmação, a RPC `register_service_with_reminder` cria atomicamente:
 - `clientes_finais` (ou reusa se já existe por `(oficina_id, whatsapp)`)
@@ -431,7 +431,7 @@ Logo após o cadastro do serviço (RPC bem-sucedida), o bot envia uma **confirma
 - **Não bloqueante**: qualquer falha de envio (template não aprovado, erro do provedor) é registrada (`outbound_messages` em `failed` + `agent_tool_calls.notify_cliente_confirmacao`) mas **não** derruba a resposta de confirmação para a oficina.
 - **Reflexo na resposta à oficina**: quando a confirmação é enviada, o bot acrescenta "Já avisei o {cliente} que o serviço foi registrado." à mensagem de cadastro.
 - A conversa do cliente final é criada/reusada em `conversas` (`participant_type = cliente_final`, `agent_mode = cliente_final_lembrete`).
-- **Botão "Chamar no WhatsApp"** (ADR-0018): o template tem um botão **CTA de URL `https://wa.me/{{1}}`**, com `{{1}}` = WhatsApp da oficina (passado no envio). O cliente fala direto com a oficina; o botão **não** devolve mensagem ao bot. A copy do corpo direciona a esse botão.
+- **Body aprovado e CTA** (ADR-0018): `outbound_messages.body` espelha o texto aprovado na Meta: "Oi {{nome}}! Aqui é da Quando Trocar 😃 / Registramos a troca de {{produto}} do seu carro: {{carro}} / No local: {{oficina}} / Vamos te avisar quando estiver perto da próxima troca. Se precisar de algo, é só responder por aqui." O botão **"Chamar no whatsapp" é quick-reply**: seu toque chega como intent `chamar_oficina` e devolve o `wa.me` da oficina. A migração futura para botão URL depende de nova aprovação Meta e está fora deste recorte.
 
 - Fonte: [ADR-0005](./adr/0005-templates-meta-vs-mensagem-livre.md), [ADR-0018](./adr/0018-cliente-final-concierge-pre-lembrete.md), `lib/whatsapp/service-confirmation.ts`, `sendServiceConfirmation()` em `lib/whatsapp/webhook-handler.ts`.
 
@@ -779,6 +779,7 @@ Quando `oficinas.status != 'ativa'`, o scheduler **não enfileira** lembretes de
 - Toda mutação no painel admin registra em `admin_audit_log`: `admin_id`, `ação`, `entidade`, `entidade_id`, `payload` (diff antes/depois), `ip`, `created_at`.
 - Helper backend `withAdminAudit(...)` envolve a transação.
 - Admin com entradas em `admin_audit_log` **não pode ser excluído** — só `ativo = false`. Preserva trilha.
+- O bot também preserva a trilha operacional: `update_lead` registra o status aplicado e o anterior; `outbound_messages.body` de mensagens interativas contém o corpo enviado e a lista ordenada de ids/títulos dos botões. A resposta rejeitada por `cross_tenant` permanece registrada em `reply_generation`.
 
 - Fonte: [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
 

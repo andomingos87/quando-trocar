@@ -1077,22 +1077,35 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     nomeOficina: string | null;
   }) {
     const now = new Date().toISOString();
-    const nome = input.nomeOficina?.trim() || OFICINA_SEM_NOME;
 
     // ADR-0019: a oficina herda o representante atribuido ao lead.
     const leadRepResult = (await this.supabase
       .from("leads_oficina")
-      .select("representante_id")
+      .select("representante_id,nome,nome_oficina,nome_responsavel")
       .eq("id", input.leadId)
-      .maybeSingle()) as SupabaseResult<{ representante_id: string | null }>;
+      .maybeSingle()) as SupabaseResult<{
+      representante_id: string | null;
+      nome: string | null;
+      nome_oficina: string | null;
+      nome_responsavel: string | null;
+    }>;
+    throwIfError(leadRepResult);
+    const lead = leadRepResult.data;
+    const nome =
+      lead?.nome_oficina?.trim() || input.nomeOficina?.trim() || OFICINA_SEM_NOME;
     const representanteId = leadRepResult.data?.representante_id ?? null;
+    const responsavel =
+      lead?.nome_responsavel?.trim() ||
+      lead?.nome?.trim() ||
+      input.responsavel?.trim() ||
+      null;
 
     const oficinaResult = (await this.supabase
       .from("oficinas")
       .upsert(
         {
           nome,
-          responsavel: input.responsavel,
+          responsavel,
           whatsapp_principal: input.whatsapp,
           status: "ativa",
           plano: "teste",
@@ -1145,6 +1158,44 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       nome: oficinaResult.data!.nome,
       diasLembretePadrao: oficinaResult.data!.dias_lembrete_padrao,
     };
+  }
+
+  async captureLeadWorkshopIdentity(input: {
+    leadId: string;
+    nomeOficina: string;
+  }) {
+    const nomeOficina = input.nomeOficina.trim();
+    if (!nomeOficina) {
+      throw new Error("Workshop name cannot be empty");
+    }
+
+    const current = (await this.supabase
+      .from("leads_oficina")
+      .select("nome,nome_oficina,nome_responsavel")
+      .eq("id", input.leadId)
+      .maybeSingle()) as SupabaseResult<{
+      nome: string | null;
+      nome_oficina: string | null;
+      nome_responsavel: string | null;
+    }>;
+    throwIfError(current);
+    if (!current.data) throw new Error("Lead not found");
+
+    const nomeResponsavel =
+      current.data.nome_responsavel?.trim() || current.data.nome?.trim() || null;
+    const result = (await this.supabase
+      .from("leads_oficina")
+      .update({
+        nome_oficina: nomeOficina,
+        ...(current.data.nome_responsavel?.trim()
+          ? {}
+          : { nome_responsavel: nomeResponsavel }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.leadId)) as SupabaseResult<null>;
+    throwIfError(result);
+
+    return { nomeOficina, nomeResponsavel };
   }
 
   async updateOficinaNome(input: { oficinaId: string; nome: string }) {

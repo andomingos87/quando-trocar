@@ -52,6 +52,7 @@ import {
   formatUpcomingReminders,
 } from "./operacao-queries";
 import { splitLongMessage } from "./message-split";
+import { renderInteractiveAuditBody } from "./interactive-audit";
 import { siteConfig, whatsappLink } from "../config";
 import {
   extractInboundMessages,
@@ -773,7 +774,6 @@ async function sendServiceConfirmation(input: {
       tipoServico: serviceInput.tipoServico,
     }),
   };
-  const renderedBody = renderServiceConfirmation(confirmationArgs);
 
   // QTR-35 P0-2: última barreira antes do cliente final. Parâmetro que não
   // sobrevive à sanitização aborta o envio — mandar texto sujo para o cliente
@@ -799,22 +799,14 @@ async function sendServiceConfirmation(input: {
     return false;
   }
   const params = paramsResult.params;
-
-  // Botão "Chamar no WhatsApp" como CTA wa.me da oficina (ADR-0018). Gated por
-  // env: só manda o parâmetro depois que o template na Meta tiver o botão de URL
-  // `https://wa.me/{{1}}`. Enviar o componente antes da edição do template
-  // quebraria o send (mismatch). O `{{1}}` é o número da oficina (só dígitos).
-  let urlButtonParameter: string | undefined;
-  if (
-    process.env.WHATSAPP_CONFIRMACAO_BUTTON_WA_ME === "true" &&
-    deps.repository.getOficinaById
-  ) {
-    const oficina = await deps.repository.getOficinaById({ oficinaId });
-    const digits = oficina?.whatsappPrincipal?.replace(/\D/g, "");
-    if (digits && digits.length >= 10) {
-      urlButtonParameter = digits;
-    }
-  }
+  // O body de auditoria usa os mesmos valores já sanitizados enviados à Meta,
+  // evitando divergência entre o que o cliente recebeu e o que o painel exibe.
+  const renderedBody = renderServiceConfirmation({
+    customerName: params[0],
+    productLabel: params[1],
+    vehicleDescription: params[2],
+    workshopName: params[3],
+  });
 
   let conversationId: string;
   try {
@@ -848,7 +840,6 @@ async function sendServiceConfirmation(input: {
       languageCode: SERVICE_CONFIRMATION_TEMPLATE.language,
       bodyParameters: params,
       bodyParameterNames: [...SERVICE_CONFIRMATION_PARAM_NAMES],
-      urlButtonParameter,
     });
     await deps.repository.markOutboundSent({
       outboundMessageId: outbox.id,
@@ -1454,6 +1445,10 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               receivedAt: localDateSaoPaulo(inbound.timestamp ?? undefined),
               intentTriggers,
             });
+            let capturedLeadIdentity: {
+              nomeOficina: string;
+              nomeResponsavel: string | null;
+            } | null = null;
 
             if (reply.classificationAudit && deps.repository.saveSalesIntentDivergence) {
               try {
@@ -1480,6 +1475,24 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               resolved.context.sales?.workshop_name,
             ]) {
               if (turnWorkshopName) extraAllowedNames.push(turnWorkshopName);
+            }
+
+            // QTR-35 P2-9: o nome capturado precisa sobreviver ao lead e não
+            // apenas à memória/contexto da conversa. Fazemos a escrita no
+            // mesmo turno, antes da conversão, para que o RPC leia
+            // `nome_oficina` como fonte canônica e o painel não perca a
+            // identidade da oficina/responsável.
+            if (
+              reply.nomeOficina &&
+              resolved.leadId &&
+              deps.repository.captureLeadWorkshopIdentity
+            ) {
+              capturedLeadIdentity =
+                await deps.repository.captureLeadWorkshopIdentity({
+                  leadId: resolved.leadId,
+                  nomeOficina: reply.nomeOficina,
+                });
+              extraAllowedNames.push(capturedLeadIdentity.nomeOficina);
             }
 
             if (
@@ -1629,8 +1642,12 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                   oficinaId: resolved.oficinaId,
                   clienteId: resolved.clienteId,
                   toolName: "update_lead",
-                  input: { status: leadStatus },
-                  output: { status: reply.status },
+                  input: { status: reply.status },
+                  output: {
+                    applied: true,
+                    previousStatus: leadStatus,
+                    currentStatus: reply.status,
+                  },
                 });
               }
 
@@ -1660,6 +1677,15 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             }
 
             for (const toolCall of reply.toolCalls) {
+              const toolOutput =
+                toolCall.toolName === "capture_workshop_name" && capturedLeadIdentity
+                  ? {
+                      ...toolCall.output,
+                      persisted: true,
+                      nome_oficina: capturedLeadIdentity.nomeOficina,
+                      nome_responsavel: capturedLeadIdentity.nomeResponsavel,
+                    }
+                  : toolCall.output;
               await deps.repository.saveAgentToolCall({
                 conversationId: resolved.conversationId,
                 leadId: resolved.leadId,
@@ -1667,7 +1693,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
                 clienteId: resolved.clienteId,
                 toolName: toolCall.toolName,
                 input: toolCall.input,
-                output: toolCall.output,
+                output: toolOutput,
               });
             }
           } else if (
@@ -2211,13 +2237,16 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
             interactiveButtons !== null &&
             typeof deps.whatsapp.sendInteractiveButtons === "function";
           const sentBody = sendAsButtons ? interactiveButtons!.bodyText : replyBody;
+          const auditBody = sendAsButtons
+            ? renderInteractiveAuditBody(sentBody, interactiveButtons!.buttons)
+            : sentBody;
 
           const outbox = await deps.repository.createOutboundMessage({
             conversationId: resolved.conversationId,
             leadId: resolved.leadId,
             oficinaId: resolved.oficinaId,
             to: inbound.normalizedFrom,
-            body: sentBody,
+            body: auditBody,
           });
 
           try {

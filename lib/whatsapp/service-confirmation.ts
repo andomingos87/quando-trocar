@@ -20,6 +20,16 @@ export const SERVICE_CONFIRMATION_TEMPLATE = {
   language: process.env.WHATSAPP_CONFIRMACAO_TEMPLATE_LANGUAGE ?? "pt_BR",
 };
 
+// Fonte única do texto aprovado na Meta. O botão "Chamar no whatsapp" é um
+// quick-reply do template e não pertence ao body persistido; o toque volta
+// como intent dedicado no concierge do cliente final.
+export const SERVICE_CONFIRMATION_APPROVED_BODY = [
+  "Oi {{nome}}! Aqui é da Quando Trocar 😃",
+  "Registramos a troca de {{produto}} do seu carro: {{carro}}",
+  "No local: {{oficina}}",
+  "Vamos te avisar quando estiver perto da próxima troca. Se precisar de algo, é só responder por aqui.",
+].join("\n");
+
 // Nomes das variáveis do template, na ordem de `buildServiceConfirmationParams`.
 export const SERVICE_CONFIRMATION_PARAM_NAMES = [
   "nome",
@@ -121,12 +131,14 @@ export function buildServiceConfirmationParams(
 export function renderServiceConfirmation(
   input: ServiceConfirmationInput,
 ): string {
-  return [
-    `Oi ${input.customerName}! Aqui é da Quando Trocar 😃`,
-    "",
-    `Registramos a troca de ${input.productLabel} do seu carro: ${input.vehicleDescription}`,
-    `No local: ${input.workshopName}`,
-    "",
-    `Vamos te avisar quando estiver perto da próxima troca. Precisa falar com a ${input.workshopName}? É só tocar no botão abaixo. 👇`,
-  ].join("\n");
+  const values: Record<string, string> = {
+    "{{nome}}": input.customerName,
+    "{{produto}}": input.productLabel,
+    "{{carro}}": input.vehicleDescription,
+    "{{oficina}}": input.workshopName,
+  };
+  return Object.entries(values).reduce(
+    (body, [placeholder, value]) => body.split(placeholder).join(value),
+    SERVICE_CONFIRMATION_APPROVED_BODY,
+  );
 }
