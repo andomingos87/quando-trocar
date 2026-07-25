@@ -58,9 +58,8 @@ export async function POST(request: Request, ctx: Ctx) {
       templateName,
       languageCode: "pt_BR",
       bodyParameters: convite.payload.bodyParameters,
-      // Template criado com variaveis NOMEADAS ({{nome}}, {{link}}) — a Meta
-      // rejeita envio posicional contra template nomeado.
-      bodyParameterNames: convite.payload.bodyParameterNames,
+      // O template de convite aprovado usa placeholders posicionais {{1}} e
+      // {{2}}. Portanto, nao passamos `parameter_name` nesta mensagem.
     });
   } catch (err) {
     console.error("representante/convidar template send failed", err);

@@ -9,24 +9,16 @@ export type ConviteRepresentanteSource = {
   ativo: boolean;
 };
 
-/**
- * Nomes das variaveis do template `convite_representante` (variaveis NOMEADAS
- * na Meta: `{{nome}}`, `{{link}}`). A ordem casa com `bodyParameters`.
- */
-export const CONVITE_REP_PARAM_NAMES = ["nome", "link"] as const;
-
 export type ConviteRepresentantePayload = {
   /** Numero destino no formato armazenado (E.164). */
   to: string;
   /** URL do portal (`/representante`) que redireciona para o login por OTP. */
   portalUrl: string;
   /**
-   * Valores do template `convite_representante`, na ordem de
-   * `CONVITE_REP_PARAM_NAMES`: `{{nome}}` = primeiro nome, `{{link}}` = portal.
+   * Valores do template na ordem posicional: `{{1}}` = primeiro nome,
+   * `{{2}}` = link do portal.
    */
   bodyParameters: [string, string];
-  /** Nomes correspondentes (template nomeado — a Meta casa por nome, nao posicao). */
-  bodyParameterNames: [string, string];
 };
 
 export type ConviteRepresentanteResult =
@@ -74,7 +66,6 @@ export function buildConviteRepresentante(input: {
       to,
       portalUrl,
       bodyParameters: [primeiroNome(rep.nome), portalUrl],
-      bodyParameterNames: [...CONVITE_REP_PARAM_NAMES],
     },
   };
 }

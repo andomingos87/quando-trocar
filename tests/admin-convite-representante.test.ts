@@ -40,9 +40,8 @@ describe("buildConviteRepresentante", () => {
       "Carlos",
       "https://quandotrocar.com.br/representante",
     ]);
-    // Template nomeado: os nomes casam com {{nome}}/{{link}} na Meta e
-    // alinham 1:1 com os valores.
-    expect(result.payload.bodyParameterNames).toEqual(["nome", "link"]);
+    // Template Meta usa placeholders posicionais: {{1}} = nome e {{2}} = link.
+    expect(result.payload).not.toHaveProperty("bodyParameterNames");
   });
 
   it("usa apenas o primeiro nome no corpo do template", () => {

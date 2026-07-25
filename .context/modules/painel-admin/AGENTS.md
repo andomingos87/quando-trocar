@@ -46,7 +46,8 @@ unico "representantes" (cada arquivo tem um dono so, regra Aurea). Fio condutor:
 - **Cadastro/CRUD do rep** → **este modulo** [[painel-admin]] (`lib/admin/representantes.ts`, `/admin/representantes`).
   Inclui o **convite por WhatsApp** (botao na lista): `app/api/admin/representantes/[id]/convidar`
   + `lib/admin/convite-representante.ts` (builder puro) disparam o template `WHATSAPP_TEMPLATE_CONVITE_REP_NAME`
-  com o link do portal; auditoria `representante.convite_enviado`, so para rep ativo (regras §18.8, [[ADR-0025]]).
+  com os parametros posicionais `{{1}}` (nome) e `{{2}}` (link do portal); auditoria
+  `representante.convite_enviado`, so para rep ativo (regras §18.8, [[ADR-0025]]).
 - **Motor de comissao** (geracao no webhook, config, payout) → [[billing]] (`lib/admin/comissoes.ts`, `configuracoes-comissao`, `/admin/comissoes`).
 - **Portal do rep** (login OTP, dados escopados read-only, telas, conteudo) → [[portal-representante]] (`app/representante/**`, `app/api/representante/**`, `lib/representante/**`).
 
