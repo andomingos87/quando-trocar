@@ -765,6 +765,12 @@ export type OnboardingAgent = {
      * da categoria `pergunta` (ADR-0022). Ausente/null → enlatada sem link.
      */
     handoffComercial?: string | null;
+    /**
+     * Origem da mensagem (`inbound.mediaType`). Quando `audio`, `message` é a
+     * transcrição do Whisper: o extrator não aplica o parser posicional por
+     * vírgula, porque em fala natural a vírgula não separa campos (QTR-35 P0-1).
+     */
+    sourceMediaType?: InboundMediaType | null;
   }): Promise<OnboardingAgentReply>;
 };
 

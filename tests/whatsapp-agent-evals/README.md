@@ -51,12 +51,15 @@ Cada arquivo é um array de casos. Schema de um caso:
 | `agent_mode` | sim | Modo resolvido determinísticamente. Deve casar com union em `lib/whatsapp/types.ts`. |
 | `context` | sim | Estado pré-existente do lead/conversa. O runner injeta isso no fluxo. |
 | `input` | sim | Mensagem literal do usuário (PT-BR, anonimizada). |
+| `source_media_type` | opcional | Origem da mensagem (`text` default, `audio` quando `input` é transcrição). Muda o caminho de extração no onboarding: em `audio` o parser posicional por vírgula não roda (QTR-35 P0-1). |
+| `today` | opcional | Data de referência (`YYYY-MM-DD`) para resolver data relativa no `input`. Sem ela o runner usa a data corrente. |
 | `expected.intent` | quando aplicável | Intent classificado (union de `lib/whatsapp/types.ts`). |
 | `expected.status_after` | quando aplicável | `lead.status` após processamento (validado por regra determinística, não pelo LLM). |
 | `expected.reply_must_contain` | opcional | Substrings obrigatórias na resposta. Use o mínimo necessário — over-fit em frase incidental é regressão futura. |
 | `expected.reply_must_not_contain` | opcional | Substrings proibidas. Use para invariantes: cotação numérica, promessa de agendamento, etc. |
 | `expected.tool_calls` | opcional | Tool calls esperadas (ex: `handoff_wame`, `roi_calculation`). Match por `tool_name`. |
 | `expected.convert_to_oficina` | opcional | `true` para casos que disparam conversão de lead. |
+| `expected.service_draft` | opcional | Campos que o rascunho em `conversas.context` deve ter após o turno. Match parcial. Usado para fixar extração de cadastro. |
 | `notes` | recomendado | Por que este caso existe. Cite ADR/incidente se aplicável. |
 
 ## Regras de cobertura

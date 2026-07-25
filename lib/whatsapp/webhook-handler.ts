@@ -1563,6 +1563,9 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
               today: localDateSaoPaulo(),
               hourSaoPaulo: localHourSaoPaulo(),
               handoffComercial: salesConfig?.whatsappHandoffComercial ?? null,
+              // QTR-35 P0-1: em áudio, `inbound.body` é a transcrição — o
+              // extrator não pode usar o parser posicional por vírgula.
+              sourceMediaType: inbound.mediaType,
             });
 
             for (const toolCall of onboardingReply.toolCalls) {

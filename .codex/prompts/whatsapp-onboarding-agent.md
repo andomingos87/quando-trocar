@@ -47,19 +47,21 @@ Example without brand: `"Maria, Onix 2020, amortecedor, ontem, 11988887777"` →
 
 ## Required Behavior
 
-- Parse deterministic comma-based messages first.
-- Use OpenAI only when the message has registration signals but deterministic parsing is incomplete.
+- **Extract with the LLM first** (QTR-35 P0-1). The comma-based positional parser is the *fallback*, used only when OpenAI is unavailable (no key, API error, timeout), and **never** on audio-derived text: in natural speech comma position is noise, so the parser turned `"Ó, o nome dele é Leonardo, …"` into `nome = "Ó"` and `veiculo = "Nome Dele É Leonardo"`.
+- The extraction prompt carries the real data contract (`nome_cliente`, `whatsapp_cliente`, `veiculo`, `servico`, `data_servico`, `tipo_servico`, `marca_peca`, `valor`, `consentimento_whatsapp`), today's date, and a note when the text is a transcription. `servico` must be a short normalized description (≤ 5 words, no conjugated verb), never the whole sentence.
+- Merge LLM output over the fallback draft **without overwriting a good field with an empty one** (`mergeDrafts`) — a partial extraction must not erase what was already captured.
+- **Sanity guard after extraction, before accepting the draft** (`suspectDraftFields`): a suspicious `nome_cliente` / `veiculo` / `servico` / `data_servico` is dropped and asked again instead of being confirmed and persisted. Audited as `extracao_suspeita`.
 - Keep a partial `service_draft` in `conversas.context` when data is missing.
 - Ask only for the first missing required field.
 - When the missing field answer arrives, merge it into the existing draft.
-- Normalize `nome_cliente` (`normalizeNomeCliente`) and `veiculo` (`normalizeVeiculo`) at capture across all three paths (deterministic, follow-up, LLM). For `veiculo`, store only the make/model (+ year/color), never the conversational phrase — e.g. `"o carro dele é um UP"` → `UP`, preserving model casing (`UP`, `HB20`, `S10` intact). This value goes straight into the customer-facing `confirmacao_servico` template (`{{carro}}`).
+- Normalize `nome_cliente` (`normalizeNomeCliente`), `veiculo` (`normalizeVeiculo`) and `servico` (`normalizeServico`) at capture across all three paths (deterministic, follow-up, LLM). For `veiculo`, store only the make/model (+ year/color), never the conversational phrase — e.g. `"o carro dele é um UP"` → `UP`, preserving model casing (`UP`, `HB20`, `S10` intact). This value goes straight into the customer-facing `confirmacao_servico` template (`{{carro}}`).
 - After a successful first registration in `onboarding`, transition to `operacao`.
 - In `operacao`, keep registering services without restarting the onboarding flow.
 - Return `registerServiceInput` only when all required fields are valid.
 
 ## Date parsing (`data_servico`)
 
-Datas são resolvidas deterministicamente por `parseBrazilianDate` (`lib/whatsapp/date-parse.ts`) — o LLM não inventa data. Cobertura ampla:
+Datas são resolvidas deterministicamente por `parseBrazilianDate` (`lib/whatsapp/date-parse.ts`) — o LLM não inventa data. **Mesmo com o LLM como extrator primário, a data determinística prevalece**: o modelo não tem referência temporal confiável para "na data de hoje", e a data errada vira lembrete agendado no ano errado. A data devolvida pelo LLM só é aceita quando o parser não encontrou nada e passa pela janela de sanidade (±366 dias). Cobertura ampla:
 
 - Relativos: `hoje`, `ontem`, `anteontem`, `amanhã`, `depois de amanhã`.
 - Contagem: `daqui 3 dias`, `daqui a uma semana`, `em 2 dias`, `5 dias atrás`, `há 2 dias`.

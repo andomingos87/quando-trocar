@@ -148,5 +148,28 @@
       "reply_must_not_contain": ["cadastrado", "registrado"]
     },
     "notes": "Regressão do incidente Whisper (veículo capturado como 'Não houve loucura'): na confirmação a oficina nega/corrige → o agente NÃO grava nem dispara o template ao cliente; reapresenta o resumo corrigido para novo 'sim'. Rede de segurança do ADR-0017."
+  },
+  {
+    "id": "onb-010",
+    "critical": true,
+    "agent_mode": "operacao",
+    "context": { "service_draft": {} },
+    "source_media_type": "audio",
+    "today": "2026-07-24",
+    "input": "Ó, o nome dele é Leonardo, ele tem, ele acabou de trocar um amortecedor da Perfect, ele tem uma BMW e na data de hoje.",
+    "expected": {
+      "tool_calls": [{ "tool_name": "solicitou_confirmacao_cadastro" }],
+      "register_service_input": null,
+      "reply_must_contain": ["Leonardo", "BMW", "24/07/2026"],
+      "reply_must_not_contain": ["Ó", "acabou", "ele tem"],
+      "service_draft": {
+        "nome_cliente": "Leonardo",
+        "veiculo": "BMW",
+        "tipo_servico": "amortecedor",
+        "marca_peca": "perfect",
+        "data_servico": "2026-07-24"
+      }
+    },
+    "notes": "QTR-35 P0-1. Transcrição LITERAL do áudio da Oficina Marsili (conversa 31ad24dc-f0b1-439c-852f-e11ac98cc6d0, 24/07/2026). O Whisper acertou 100%; o parser posicional é que gravou nome='Ó', veiculo='Nome Dele É Leonardo' e servico=a frase inteira. Extração passa a ser por LLM; o parser por vírgula não roda em áudio; a guarda de sanidade recusa campo com muleta de fala. `servico` deve ser descrição curta (≤ 60 chars, sem verbo conjugado). A data vem do parser determinístico, não do LLM."
   }
 ]

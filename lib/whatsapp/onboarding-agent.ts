@@ -6,6 +6,7 @@ import { normalizeText, normalizeWhatsappPhone } from "./sales-agent";
 import type {
   ConversationAgentMode,
   ConversationContext,
+  InboundMediaType,
   MarcaAmortecedor,
   OnboardingAgent,
   OnboardingAgentReply,
@@ -280,6 +281,218 @@ export function normalizeVeiculo(raw: string | null | undefined): string | null 
   return tokens.map(capitalizeVehicleToken).join(" ");
 }
 
+// A oficina descreve o serviço falando ("ele acabou de trocar um amortecedor da
+// Perfect"). Guardamos só a descrição curta ("amortecedor da Perfect"): esse
+// texto vai para `servicos.tipo`/`descricao` e alimenta os relatórios do admin.
+// Aparamos o embrulho de fala nas PONTAS, nunca o miolo — "troca de oleo" e
+// "amortecedor dianteiro" ficam intactos.
+const SERVICO_STRIP_PATTERNS: ReadonlyArray<RegExp> = [
+  // sujeito de fala
+  /^(?:eu|ele|ela|eles|elas|a\s+gente|n[oó]s)\s+/i,
+  // aspecto verbal ("acabou de", "acabei de", "terminei de")
+  /^(?:acab\w+|termin\w+)\s+(?:de\s+)?/i,
+  // verbo conjugado de execução (o infinitivo e o substantivo "troca de" ficam:
+  // são descrição legítima)
+  /^(?:troquei|trocou|trocamos|trocaram|fiz|fez|fizemos|fizeram|coloquei|colocou|colocamos|instalei|instalou|instalamos|revisei|revisou)\s+/i,
+  /^trocar\s+(?:o|a|os|as|um|uma)?\s*/i,
+  // rótulo de serviço
+  /^(?:servi[cç]os?)\b(?:\s+(?:de|foi))?\s*/i,
+  // artigos / determinantes / preposições soltas
+  /^(?:o|a|os|as|um|uma|uns|umas|no|na)\s+/i,
+  // cópula / conector
+  /^(?:é|eh|foi|seria)\s+/i,
+  // pontuação residual nas pontas
+  /^[\s:,.\-]+/,
+];
+
+export function normalizeServico(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let value = raw.replace(/\s+/g, " ").trim();
+  if (!value) return null;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pattern of SERVICO_STRIP_PATTERNS) {
+      const next = value.replace(pattern, "");
+      if (next !== value) {
+        value = next.trim();
+        changed = true;
+      }
+    }
+  }
+
+  value = value.replace(/[\s:,.\-]+$/g, "").trim();
+  if (!value) return null;
+
+  // Conector órfão nas pontas ("acabou de" → "de"): os padrões acima exigem
+  // espaço seguinte, então sobra token solto no fim da frase.
+  const tokens = value.split(/\s+/).filter(Boolean);
+  const isConnector = (token: string) =>
+    SERVICO_EDGE_STOPWORDS.has(token.toLocaleLowerCase("pt-BR"));
+  while (tokens.length && isConnector(tokens[0])) tokens.shift();
+  while (tokens.length && isConnector(tokens[tokens.length - 1])) tokens.pop();
+  if (!tokens.length) return null;
+
+  return tokens.join(" ");
+}
+
+const SERVICO_EDGE_STOPWORDS = new Set([
+  "de", "do", "da", "dos", "das", "e", "o", "a", "os", "as", "em", "no", "na",
+  "um", "uma", "que", "com",
+]);
+
+// --- Guarda de sanidade determinística (QTR-35 P0-1) ------------------------
+// Roda DEPOIS da extração (LLM ou parser) e ANTES de o rascunho ser aceito.
+// Campo suspeito não é confirmado nem persistido: volta a contar como campo
+// faltante e o bot pergunta. É a rede que faltava quando o áudio
+// "Ó, o nome dele é Leonardo, ele acabou de trocar um amortecedor da Perfect,
+// ele tem uma BMW e na data de hoje" gravou nome = "Ó",
+// veiculo = "Nome Dele É Leonardo" e servico = a frase inteira.
+
+// Muletas de fala que a transcrição joga no começo da frase e que o parser
+// posicional captura como se fossem o nome do cliente.
+const SUSPECT_FILLER_TOKENS = new Set([
+  "o", "a", "e", "eh", "oi", "ola", "ah", "ahn", "han", "hein", "ne",
+  "entao", "olha", "escuta", "ele", "ela", "eles", "elas", "esse", "essa",
+  "isso", "aqui", "ali", "tipo", "assim", "bom", "cara", "chefe", "nome",
+  "cliente", "senhor", "senhora",
+]);
+
+// Palavra que só aparece num nome/veículo quando um campo vazou para o outro
+// ou quando a frase inteira entrou no campo.
+const SUSPECT_CROSS_FIELD_PATTERN =
+  /\b(nome|ele|ela|dele|dela|acabou|acabei|trocou|troquei|trocar|data|hoje|ontem|amanha|cliente)\b/;
+
+// Verbo conjugado de fala sobrando: sinal de que ficou frase, não descrição.
+const SUSPECT_SERVICE_VERB_PATTERN =
+  /\b(acabou|acabei|troquei|trocou|trocamos|trocaram|fiz|fez|fizemos|tem|tinha|veio|chegou|estava|era)\b/;
+
+const SERVICO_MAX_LENGTH = 60;
+const VEICULO_MAX_LENGTH = 40;
+const VEICULO_MAX_TOKENS = 6;
+// Janela de sanidade da data. Larga de propósito: o parser determinístico é a
+// autoridade e, quando a mensagem não traz o ano, ele assume o ano corrente —
+// então uma data legítima pode cair a até ~364 dias de distância ("31/12" dito
+// em janeiro, "05/05" dito em dezembro). O alvo aqui é o erro de ORDEM DE
+// GRANDEZA que só um extrator não-determinístico comete (devolver 2028 para
+// "na data de hoje"), que é o que faria o lembrete ser agendado anos à frente.
+const DATA_SERVICO_MAX_DIAS_PASSADO = 366;
+const DATA_SERVICO_MAX_DIAS_FUTURO = 366;
+
+function isSaneServiceDate(iso: string, today: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const value = Date.parse(`${iso}T00:00:00Z`);
+  const reference = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(value) || Number.isNaN(reference)) return false;
+  const dias = (value - reference) / 86_400_000;
+  return dias >= -DATA_SERVICO_MAX_DIAS_PASSADO && dias <= DATA_SERVICO_MAX_DIAS_FUTURO;
+}
+
+// Campos do rascunho que não passam a guarda. Exportada para teste e para o
+// log de qualidade da extração.
+export function suspectDraftFields(
+  draft: ServiceDraft,
+  today: string,
+): MissingField[] {
+  const suspect: MissingField[] = [];
+
+  if (draft.nome_cliente !== undefined) {
+    const value = draft.nome_cliente.trim();
+    const normalized = normalizeText(value);
+    const tokens = normalized.split(" ").filter(Boolean);
+    if (
+      value.length < 2 ||
+      tokens.length === 0 ||
+      tokens.every((token) => SUSPECT_FILLER_TOKENS.has(token)) ||
+      SUSPECT_CROSS_FIELD_PATTERN.test(normalized)
+    ) {
+      suspect.push("nome_cliente");
+    }
+  }
+
+  if (draft.veiculo !== undefined) {
+    const value = draft.veiculo.trim();
+    const tokens = value.split(/\s+/).filter(Boolean);
+    if (
+      value.length < 2 ||
+      value.length > VEICULO_MAX_LENGTH ||
+      tokens.length > VEICULO_MAX_TOKENS ||
+      SUSPECT_CROSS_FIELD_PATTERN.test(normalizeText(value))
+    ) {
+      suspect.push("veiculo");
+    }
+  }
+
+  if (draft.servico !== undefined) {
+    const value = draft.servico.trim();
+    if (
+      value.length < 3 ||
+      value.length > SERVICO_MAX_LENGTH ||
+      SUSPECT_SERVICE_VERB_PATTERN.test(normalizeText(value))
+    ) {
+      suspect.push("servico");
+    }
+  }
+
+  if (draft.data_servico !== undefined && !isSaneServiceDate(draft.data_servico, today)) {
+    suspect.push("data_servico");
+  }
+
+  return suspect;
+}
+
+// Remove do rascunho os campos que a guarda reprovou, para que
+// `missingFieldForDraft` volte a pedi-los.
+function pruneSuspectFields(
+  draft: ServiceDraft,
+  today: string,
+): { draft: ServiceDraft; suspectFields: MissingField[] } {
+  const suspectFields = suspectDraftFields(draft, today);
+  if (suspectFields.length === 0) return { draft, suspectFields };
+
+  const next: ServiceDraft = { ...draft };
+  for (const field of suspectFields) {
+    delete next[field];
+  }
+  // Sem serviço confiável, o tipo derivado dele também cai — senão um
+  // `tipo_servico = amortecedor` alucinado sobreviveria a um serviço corrigido
+  // para "troca de oleo" e agendaria o lembrete com a cadência errada.
+  // `marca_peca` fica: veio da mensagem original e só é usada se o tipo voltar
+  // a ser amortecedor.
+  if (suspectFields.includes("servico")) {
+    delete next.tipo_servico;
+  }
+
+  return { draft: next, suspectFields };
+}
+
+// Campos que NÃO dependem da posição na frase: telefone, data, marca da peça e
+// consentimento. São seguros em texto falado, ao contrário do split por vírgula
+// — e a DATA em especial só é resolvível aqui, porque o LLM não tem referência
+// temporal confiável para "na data de hoje" (QTR-35 P0-1).
+function parseNonPositional(message: string, today: string): ServiceDraft {
+  const draft: ServiceDraft = {
+    valor: null,
+    consentimento_whatsapp: !hasNegativeConsent(message),
+  };
+
+  const phone = extractPhone(message);
+  if (phone) draft.whatsapp_cliente = normalizeWhatsappPhone(phone);
+
+  const parsedDate = extractDate(message, today);
+  if (parsedDate.date) draft.data_servico = parsedDate.date;
+
+  const marca = extractMarcaFromMessage(message);
+  if (marca) draft.marca_peca = marca;
+
+  return draft;
+}
+
+// Parser posicional por vírgula (`Nome, Carro, Servico, Data, Telefone`). Só
+// funciona para quem digita seguindo o exemplo do bot — em fala natural a
+// posição da vírgula é aleatória. Desde o QTR-35 é FALLBACK do LLM e nunca roda
+// em transcrição de áudio.
 function parseDeterministic(message: string, today: string): ServiceDraft {
   const phone = extractPhone(message);
   const withoutPhone = removePhone(message, phone);
@@ -289,11 +502,10 @@ function parseDeterministic(message: string, today: string): ServiceDraft {
     .filter(Boolean);
   const serviceSource = parts.slice(2).join(", ") || parts[2] || "";
   const parsedDate = extractDate(message, today);
-  const service = cleanServiceText(serviceSource, parsedDate.matchedText);
-  const draft: ServiceDraft = {
-    valor: null,
-    consentimento_whatsapp: !hasNegativeConsent(message),
-  };
+  const service = normalizeServico(
+    cleanServiceText(serviceSource, parsedDate.matchedText),
+  );
+  const draft: ServiceDraft = parseNonPositional(message, today);
 
   if (parts[0]) {
     const nome = normalizeNomeCliente(parts[0]);
@@ -304,19 +516,40 @@ function parseDeterministic(message: string, today: string): ServiceDraft {
     if (veiculo) draft.veiculo = veiculo;
   }
   if (service) draft.servico = service;
-  if (phone) draft.whatsapp_cliente = normalizeWhatsappPhone(phone);
-  if (parsedDate.date) draft.data_servico = parsedDate.date;
 
   if (service) {
-    const tipo = detectTipoServico(service);
-    draft.tipo_servico = tipo;
-    if (tipo === "amortecedor") {
-      const marca = extractMarcaFromMessage(message);
-      if (marca) draft.marca_peca = marca;
-    }
+    draft.tipo_servico = detectTipoServico(service);
   }
 
   return draft;
+}
+
+// Mescla `override` sobre `base` SEM apagar campo bom. Spread cru não serve:
+// `{ ...base, ...{ veiculo: undefined } }` zera `veiculo`, e
+// `parseOpenAIExtraction` devolve `undefined` para todo campo que o modelo não
+// encontrou — ou seja, uma extração parcial apagava o que o parser tinha
+// acertado (QTR-35 P0-1).
+function mergeDrafts(base: ServiceDraft, override: ServiceDraft | null): ServiceDraft {
+  const merged: ServiceDraft = { ...base };
+  if (!override) return merged;
+
+  if (override.nome_cliente) merged.nome_cliente = override.nome_cliente;
+  if (override.whatsapp_cliente) merged.whatsapp_cliente = override.whatsapp_cliente;
+  if (override.veiculo) merged.veiculo = override.veiculo;
+  if (override.servico) merged.servico = override.servico;
+  if (override.data_servico) merged.data_servico = override.data_servico;
+  if (override.tipo_servico) merged.tipo_servico = override.tipo_servico;
+  if (override.marca_peca) merged.marca_peca = override.marca_peca;
+  if (override.valor !== undefined && override.valor !== null) {
+    merged.valor = override.valor;
+  }
+  // Consentimento só se move na direção segura: se qualquer extrator entendeu
+  // que o cliente não autorizou, não manda template (regras §7.1).
+  if (override.consentimento_whatsapp === false) {
+    merged.consentimento_whatsapp = false;
+  }
+
+  return merged;
 }
 
 function applyFollowUp(
@@ -351,8 +584,13 @@ function applyFollowUp(
   }
 
   if (context.missing_field === "servico") {
-    const service = cleanServiceText(message);
-    if (!isNeutralMessage(message) && !isQuestionLike(message) && service.length >= 3) {
+    const service = normalizeServico(cleanServiceText(message));
+    if (
+      !isNeutralMessage(message) &&
+      !isQuestionLike(message) &&
+      service &&
+      service.length >= 3
+    ) {
       draft.servico = service;
     }
   }
@@ -433,6 +671,43 @@ function draftContext(draft: ServiceDraft, missingField: MissingField): Conversa
   };
 }
 
+// Prompt do extrator primário (QTR-35 P0-1). O contrato de dados aqui é o que
+// precisamos preencher de fato — mesma lista de campos do schema `strict` e das
+// colunas que o RPC grava. Espelhado em
+// `.codex/prompts/whatsapp-onboarding-agent.md`.
+function extractionSystemPrompt(options: {
+  today: string;
+  fromSpeech: boolean;
+}): string {
+  const lines = [
+    "Você extrai dados de cadastro de troca de uma oficina mecânica brasileira a partir de uma mensagem de WhatsApp.",
+    `Data de hoje: ${options.today} (America/Sao_Paulo).`,
+    "Responda apenas o JSON do schema solicitado, sem comentário.",
+    "",
+    "Regras por campo:",
+    "- nome_cliente: só o nome da pessoa. Sem muleta de fala (\"ó\", \"então\", \"olha\"), sem pronome, sem rótulo (\"o nome dele é\").",
+    "- whatsapp_cliente: o telefone do cliente se a mensagem trouxer; senão null.",
+    "- veiculo: SOMENTE marca/modelo (+ ano/cor se houver), nunca a frase. \"ele tem uma BMW\" → \"BMW\".",
+    "- servico: descrição CURTA e normalizada do que foi feito, no máximo 5 palavras e sem verbo conjugado. \"ele acabou de trocar um amortecedor da Perfect\" → \"troca de amortecedor\".",
+    "- data_servico: YYYY-MM-DD, resolvendo referência relativa contra a data de hoje; null se a mensagem não disser.",
+    "- tipo_servico: um de troca_oleo | amortecedor | revisao | outro.",
+    "- marca_peca: só quando tipo_servico = amortecedor; um de perfect | monroe | cofap | nakata | outra; senão null.",
+    "- valor: número em reais se a mensagem disser; senão null.",
+    "- consentimento_whatsapp: false só quando a mensagem disser que o cliente não autorizou receber mensagem; senão true.",
+    "",
+    "Campo que a mensagem não informa é null. Não invente e não reaproveite o valor de um campo em outro.",
+  ];
+
+  if (options.fromSpeech) {
+    lines.push(
+      "",
+      "A mensagem é transcrição de áudio: espere muleta de fala, repetição, frase quebrada e vírgula fora de lugar. A posição das vírgulas não separa campos — entenda o sentido.",
+    );
+  }
+
+  return lines.join("\n");
+}
+
 function parseOpenAIExtraction(text: string): ServiceDraft | null {
   try {
     const parsed = JSON.parse(text) as {
@@ -466,7 +741,7 @@ function parseOpenAIExtraction(text: string): ServiceDraft | null {
         ? normalizeWhatsappPhone(parsed.data.whatsapp_cliente)
         : undefined,
       veiculo: normalizeVeiculo(parsed.data.veiculo) ?? undefined,
-      servico: parsed.data.servico ?? undefined,
+      servico: normalizeServico(parsed.data.servico) ?? undefined,
       data_servico: parsed.data.data_servico ?? undefined,
       valor: parsed.data.valor ?? null,
       consentimento_whatsapp: parsed.data.consentimento_whatsapp ?? true,
@@ -546,7 +821,10 @@ function confirmationContext(draft: ServiceDraft): ConversationContext {
   };
 }
 
-function confirmationReply(draft: ServiceDraft): OnboardingAgentReply {
+function confirmationReply(
+  draft: ServiceDraft,
+  sourceMediaType?: InboundMediaType | null,
+): OnboardingAgentReply {
   return {
     body: confirmationSummary(draft),
     context: confirmationContext(draft),
@@ -555,7 +833,9 @@ function confirmationReply(draft: ServiceDraft): OnboardingAgentReply {
     toolCalls: [
       {
         toolName: "solicitou_confirmacao_cadastro",
-        input: {},
+        // `source_media_type` fecha o log de qualidade da extração: dá para
+        // medir acerto por origem (digitado vs. transcrição de áudio).
+        input: { source_media_type: sourceMediaType ?? "text" },
         output: { draft: draft as Record<string, unknown> },
       },
     ],
@@ -950,6 +1230,9 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     today: string;
     hourSaoPaulo?: number;
     handoffComercial?: string | null;
+    // Origem da mensagem. `audio` significa que `message` é transcrição: o
+    // parser posicional por vírgula não pode rodar (QTR-35 P0-1).
+    sourceMediaType?: InboundMediaType | null;
   }): Promise<OnboardingAgentReply> {
     if (isPromptInjectionAttempt(input.message)) {
       return blockedPromptInjectionReply(input.message);
@@ -979,10 +1262,18 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
       );
     }
 
-    const draft =
+    const extracted =
       input.context.missing_field && input.context.service_draft
         ? applyFollowUp(input.context, input.message, input.today)
-        : await this.extractDraft(input.message, input.today);
+        : await this.extractDraft({
+            message: input.message,
+            today: input.today,
+            fromSpeech: input.sourceMediaType === "audio",
+          });
+
+    // Guarda de sanidade: campo suspeito sai do rascunho e volta a ser
+    // perguntado, em vez de ser confirmado e persistido (QTR-35 P0-1).
+    const { draft, suspectFields } = pruneSuspectFields(extracted, input.today);
     const missingField = missingFieldForDraft(draft);
 
     if (missingField) {
@@ -991,14 +1282,31 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
         context: draftContext(draft, missingField),
         registerServiceInput: null,
         nextAgentMode: null,
-        toolCalls: [],
+        toolCalls: suspectFields.length
+          ? [
+              {
+                toolName: "extracao_suspeita",
+                input: {
+                  message: input.message,
+                  source_media_type: input.sourceMediaType ?? "text",
+                },
+                output: {
+                  campos_suspeitos: suspectFields,
+                  descartados: suspectFields.map((field) => ({
+                    campo: field,
+                    valor: extracted[field] ?? null,
+                  })),
+                },
+              },
+            ]
+          : [],
       };
     }
 
     // Todos os campos presentes: NÃO grava ainda. Mostra o resumo e espera a
     // oficina confirmar — é a rede de segurança que o ADR-0015 assumia mas que
     // não existia no fluxo (correção manual antes do template irreversível).
-    return confirmationReply(draft);
+    return confirmationReply(draft, input.sourceMediaType);
   }
 
   private async handleConfirmation(input: {
@@ -1006,6 +1314,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     mode: Extract<ConversationAgentMode, "onboarding" | "operacao">;
     context: ConversationContext;
     today: string;
+    sourceMediaType?: InboundMediaType | null;
   }): Promise<OnboardingAgentReply> {
     const draft = input.context.service_draft as ServiceDraft;
 
@@ -1028,10 +1337,23 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     // Não foi um "sim": tratamos como correção. Re-extrai apenas via OpenAI
     // (parser determinístico por vírgula é perigoso em respostas curtas tipo
     // "o carro e Gol") e mescla os campos informados sobre o rascunho.
-    const correction = await this.extractCorrection(input.message, input.today);
-    const merged = correction ? mergeDraftCorrection(draft, correction) : draft;
+    const correction = await this.extractCorrection(
+      input.message,
+      input.today,
+      input.sourceMediaType === "audio",
+    );
+    // A correção passa pela mesma guarda de sanidade da extração: um "carro é
+    // ele tem uma BMW" não pode entrar no rascunho por essa porta (QTR-35 P0-1).
+    const prunedCorrection = correction
+      ? pruneSuspectFields(correction, input.today).draft
+      : null;
+    const merged = prunedCorrection
+      ? mergeDraftCorrection(draft, prunedCorrection)
+      : draft;
 
-    const changed = correction ? JSON.stringify(merged) !== JSON.stringify(draft) : false;
+    const changed = prunedCorrection
+      ? JSON.stringify(merged) !== JSON.stringify(draft)
+      : false;
 
     if (!changed) {
       return {
@@ -1071,41 +1393,65 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
     }
 
     // Correção aplicada e rascunho ainda completo → reapresenta pra reconfirmar.
-    return confirmationReply(merged);
+    return confirmationReply(merged, input.sourceMediaType);
   }
 
   private async extractCorrection(
     message: string,
     today: string,
+    fromSpeech: boolean,
   ): Promise<ServiceDraft | null> {
-    const ai = await this.extractWithOpenAI(message);
+    const ai = await this.extractWithOpenAI(message, { today, fromSpeech });
     if (ai) return ai;
     // Sem OpenAI (ou falha): tenta o parser determinístico só quando a mensagem
     // tem cara de cadastro completo reenviado (várias vírgulas / telefone), pra
-    // não interpretar uma frase solta como nome/veículo errado.
-    if (hasRegistrationSignal(message)) {
+    // não interpretar uma frase solta como nome/veículo errado. Nunca em fala.
+    if (!fromSpeech && hasRegistrationSignal(message)) {
       return parseDeterministic(message, today);
     }
     return null;
   }
 
-  private async extractDraft(message: string, today: string): Promise<ServiceDraft> {
-    const deterministic = parseDeterministic(message, today);
+  // QTR-35 P0-1: o LLM é o extrator PRIMÁRIO. Antes o parser posicional rodava
+  // primeiro e, quando os quatro campos "vinham preenchidos", retornava sem
+  // nunca chamar o LLM. Transcrição de áudio é toda vírgula: o parser sempre
+  // "tinha sucesso" e sempre curto-circuitava o LLM — exatamente no caso em que
+  // ele era indispensável.
+  private async extractDraft(input: {
+    message: string;
+    today: string;
+    fromSpeech: boolean;
+  }): Promise<ServiceDraft> {
+    const { message, today, fromSpeech } = input;
 
-    if (
-      deterministic.nome_cliente &&
-      deterministic.veiculo &&
-      deterministic.servico &&
-      (deterministic.whatsapp_cliente || deterministic.data_servico)
-    ) {
-      return deterministic;
+    const ai = await this.extractWithOpenAI(message, { today, fromSpeech });
+
+    // Fallback (sem OPENAI_API_KEY, erro de API, timeout): parser posicional,
+    // e só em texto digitado — em fala natural o split por vírgula é ruído
+    // ("Ó" viraria o nome do cliente). Em fala usamos apenas os campos
+    // independentes de posição.
+    const base = fromSpeech
+      ? parseNonPositional(message, today)
+      : parseDeterministic(message, today);
+
+    const draft = mergeDrafts(base, ai);
+
+    // Autoridade da data é determinística: `parseBrazilianDate` resolve "hoje",
+    // "ontem", "quarta que vem" contra `today`; o LLM não tem como.
+    const deterministicDate = extractDate(message, today).date;
+    if (deterministicDate) draft.data_servico = deterministicDate;
+
+    if (draft.servico && !draft.tipo_servico) {
+      draft.tipo_servico = detectTipoServico(draft.servico);
     }
 
-    const aiDraft = hasRegistrationSignal(message) ? await this.extractWithOpenAI(message) : null;
-    return { ...deterministic, ...(aiDraft ?? {}) };
+    return draft;
   }
 
-  private async extractWithOpenAI(message: string): Promise<ServiceDraft | null> {
+  private async extractWithOpenAI(
+    message: string,
+    options: { today: string; fromSpeech: boolean },
+  ): Promise<ServiceDraft | null> {
     if (!this.openai) return null;
 
     try {
@@ -1114,8 +1460,7 @@ export class WhatsappOnboardingAgent implements OnboardingAgent {
         input: [
           {
             role: "system",
-            content:
-              "Extraia dados de cadastro de troca de oficina. Responda apenas JSON compacto no schema solicitado. No campo veiculo devolva SOMENTE marca/modelo (e ano/cor se houver), nunca a frase inteira — ex.: 'o carro dele é um UP' → 'UP'.",
+            content: extractionSystemPrompt(options),
           },
           { role: "user", content: message },
         ],

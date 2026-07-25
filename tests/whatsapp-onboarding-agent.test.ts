@@ -3,7 +3,9 @@ import { describe, expect, test, vi } from "vitest";
 import {
   WhatsappOnboardingAgent,
   normalizeNomeCliente,
+  normalizeServico,
   normalizeVeiculo,
+  suspectDraftFields,
 } from "@/lib/whatsapp/onboarding-agent";
 import type { ConversationContext } from "@/lib/whatsapp/types";
 
@@ -770,5 +772,377 @@ describe("WhatsappOnboardingAgent", () => {
       tipoServico: "outro",
       marcaPeca: null,
     });
+  });
+});
+
+// --- QTR-35 P0-1: extração por LLM + guarda de sanidade ---------------------
+
+// Transcrição LITERAL do áudio da Oficina Marsili em 24/07/2026 (conversa
+// 31ad24dc-f0b1-439c-852f-e11ac98cc6d0). O Whisper acertou 100%; quem corrompeu
+// o dado foi o parser posicional, que quebrou a fala nas vírgulas e gravou
+// nome = "Ó", veiculo = "Nome Dele É Leonardo" e servico = a frase inteira.
+const AUDIO_MARSILI =
+  "Ó, o nome dele é Leonardo, ele tem, ele acabou de trocar um amortecedor da Perfect, ele tem uma BMW e na data de hoje.";
+
+function openaiExtractionStub(data: Record<string, unknown>) {
+  return {
+    responses: {
+      create: vi.fn(async () => ({
+        output_text: JSON.stringify({
+          intent: "registrar_troca",
+          confidence: 0.9,
+          missing_fields: [],
+          data: {
+            nome_cliente: null,
+            whatsapp_cliente: null,
+            veiculo: null,
+            servico: null,
+            data_servico: null,
+            valor: null,
+            consentimento_whatsapp: null,
+            tipo_servico: null,
+            marca_peca: null,
+            ...data,
+          },
+        }),
+      })),
+    },
+  };
+}
+
+describe("normalizeServico", () => {
+  test("apara o embrulho de fala guardando só a descrição", () => {
+    expect(normalizeServico("ele acabou de trocar um amortecedor da Perfect")).toBe(
+      "amortecedor da Perfect",
+    );
+    expect(normalizeServico("eu troquei o oleo")).toBe("oleo");
+    expect(normalizeServico("servico de alinhamento")).toBe("alinhamento");
+    expect(normalizeServico("foi revisao completa")).toBe("revisao completa");
+  });
+
+  test("não mexe numa descrição já limpa", () => {
+    expect(normalizeServico("troca de oleo")).toBe("troca de oleo");
+    expect(normalizeServico("amortecedor dianteiro")).toBe("amortecedor dianteiro");
+    expect(normalizeServico("troca de amortecedor")).toBe("troca de amortecedor");
+  });
+
+  test("devolve null quando sobra só embrulho", () => {
+    expect(normalizeServico("ele acabou de")).toBeNull();
+    expect(normalizeServico("   ")).toBeNull();
+    expect(normalizeServico(null)).toBeNull();
+  });
+});
+
+describe("suspectDraftFields", () => {
+  const today = "2026-07-24";
+
+  test("pega exatamente os campos que o caso real corrompeu", () => {
+    expect(
+      suspectDraftFields(
+        {
+          nome_cliente: "Ó",
+          veiculo: "Nome Dele É Leonardo",
+          servico:
+            "ele tem, ele acabou de trocar um amortecedor da Perfect, ele tem uma BMW e na data de .",
+        },
+        today,
+      ),
+    ).toEqual(["nome_cliente", "veiculo", "servico"]);
+  });
+
+  test("aprova rascunho limpo", () => {
+    expect(
+      suspectDraftFields(
+        {
+          nome_cliente: "Leonardo Viana",
+          veiculo: "BMW",
+          servico: "troca de amortecedor",
+          data_servico: today,
+          whatsapp_cliente: "+5511930055552",
+        },
+        today,
+      ),
+    ).toEqual([]);
+  });
+
+  test("nome: muleta de fala e contaminação de campo reprovam; nome curto real passa", () => {
+    expect(suspectDraftFields({ nome_cliente: "Então" }, today)).toEqual([
+      "nome_cliente",
+    ]);
+    expect(suspectDraftFields({ nome_cliente: "O Cliente" }, today)).toEqual([
+      "nome_cliente",
+    ]);
+    expect(suspectDraftFields({ nome_cliente: "Nome Dele" }, today)).toEqual([
+      "nome_cliente",
+    ]);
+    expect(suspectDraftFields({ nome_cliente: "Zé" }, today)).toEqual([]);
+    expect(suspectDraftFields({ nome_cliente: "Elenice" }, today)).toEqual([]);
+  });
+
+  test("veículo: frase, comprimento e contaminação reprovam; modelos reais passam", () => {
+    expect(suspectDraftFields({ veiculo: "ele tem uma BMW" }, today)).toEqual([
+      "veiculo",
+    ]);
+    expect(
+      suspectDraftFields({ veiculo: "BMW e na data de hoje que ele trouxe" }, today),
+    ).toEqual(["veiculo"]);
+    for (const veiculo of ["BMW", "UP", "HB20 Prata", "Civic 2018", "Gol G5 de Luxo"]) {
+      expect(suspectDraftFields({ veiculo }, today), veiculo).toEqual([]);
+    }
+  });
+
+  test("serviço: frase longa e verbo conjugado reprovam; descrição curta passa", () => {
+    expect(suspectDraftFields({ servico: "ele acabou de trocar tudo" }, today)).toEqual(
+      ["servico"],
+    );
+    expect(suspectDraftFields({ servico: "a".repeat(61) }, today)).toEqual(["servico"]);
+    for (const servico of [
+      "troca de oleo",
+      "amortecedor da Perfect",
+      "revisao completa",
+      "alinhamento e balanceamento",
+    ]) {
+      expect(suspectDraftFields({ servico }, today), servico).toEqual([]);
+    }
+  });
+
+  test("data: erro de ordem de grandeza reprova, data plausível passa", () => {
+    // O `scheduled_at` que o caso real gravou por outro caminho: 2 anos à frente.
+    expect(suspectDraftFields({ data_servico: "2028-07-23" }, today)).toEqual([
+      "data_servico",
+    ]);
+    expect(suspectDraftFields({ data_servico: "hoje" }, today)).toEqual([
+      "data_servico",
+    ]);
+    expect(suspectDraftFields({ data_servico: "2026-07-24" }, today)).toEqual([]);
+    expect(suspectDraftFields({ data_servico: "2026-12-31" }, today)).toEqual([]);
+    expect(suspectDraftFields({ data_servico: "2025-08-01" }, today)).toEqual([]);
+  });
+});
+
+describe("WhatsappOnboardingAgent — extração do áudio real (QTR-35)", () => {
+  test("o LLM é o extrator primário e o áudio da Marsili vira dado limpo", async () => {
+    const openai = openaiExtractionStub({
+      nome_cliente: "Leonardo",
+      veiculo: "BMW",
+      servico: "troca de amortecedor",
+      tipo_servico: "amortecedor",
+      marca_peca: "perfect",
+      whatsapp_cliente: "+5511930055552",
+      // O modelo NÃO devolve a data: "na data de hoje" é resolvido pelo parser
+      // determinístico, que é a autoridade (o LLM não tem referência temporal).
+      data_servico: null,
+    });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+
+    const result = await agent.generateReply({
+      message: AUDIO_MARSILI,
+      mode: "operacao",
+      context: {},
+      today: "2026-07-24",
+      sourceMediaType: "audio",
+    });
+
+    expect(openai.responses.create).toHaveBeenCalledTimes(1);
+    expect(result.context.awaiting_confirmation).toBe(true);
+    expect(result.context.service_draft).toEqual({
+      nome_cliente: "Leonardo",
+      whatsapp_cliente: "+5511930055552",
+      veiculo: "BMW",
+      servico: "troca de amortecedor",
+      data_servico: "2026-07-24",
+      valor: null,
+      consentimento_whatsapp: true,
+      tipo_servico: "amortecedor",
+      marca_peca: "perfect",
+    });
+    // Nada da fala crua sobrevive no card de confirmação.
+    expect(result.body).not.toContain("Ó");
+    expect(result.body).not.toContain("acabou");
+    expect(result.body).toContain("Leonardo");
+    expect(result.body).toContain("BMW");
+  });
+
+  test("o cadastro persistido não carrega nada da fala crua", async () => {
+    const openai = openaiExtractionStub({
+      nome_cliente: "Leonardo",
+      veiculo: "BMW",
+      servico: "troca de amortecedor",
+      tipo_servico: "amortecedor",
+      marca_peca: "perfect",
+      whatsapp_cliente: "+5511930055552",
+    });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+    const first = await agent.generateReply({
+      message: AUDIO_MARSILI,
+      mode: "operacao",
+      context: {},
+      today: "2026-07-24",
+      sourceMediaType: "audio",
+    });
+    const second = await agent.generateReply({
+      message: "sim",
+      mode: "operacao",
+      context: first.context,
+      today: "2026-07-24",
+    });
+
+    expect(second.registerServiceInput).toEqual({
+      nomeCliente: "Leonardo",
+      whatsappCliente: "+5511930055552",
+      veiculo: "BMW",
+      servico: "troca de amortecedor",
+      dataServico: "2026-07-24",
+      valor: null,
+      consentimentoWhatsapp: true,
+      tipoServico: "amortecedor",
+      marcaPeca: "perfect",
+    });
+  });
+
+  test("sem OpenAI, a fala NÃO virá cadastro corrompido — o bot pergunta", async () => {
+    const agent = new WhatsappOnboardingAgent({ openai: null });
+
+    const result = await agent.generateReply({
+      message: AUDIO_MARSILI,
+      mode: "operacao",
+      context: {},
+      today: "2026-07-24",
+      sourceMediaType: "audio",
+    });
+
+    expect(result.registerServiceInput).toBeNull();
+    expect(result.context.awaiting_confirmation).not.toBe(true);
+    expect(result.context.service_draft?.nome_cliente).toBeUndefined();
+    expect(result.context.service_draft?.veiculo).toBeUndefined();
+    expect(result.context.service_draft?.servico).toBeUndefined();
+    // A data e a marca (independentes de posição) continuam sendo aproveitadas.
+    expect(result.context.service_draft?.data_servico).toBe("2026-07-24");
+    expect(result.context.service_draft?.marca_peca).toBe("perfect");
+    expect(result.context.missing_field).toBe("nome_cliente");
+  });
+
+  test("em áudio o parser posicional não roda nem como base", async () => {
+    // O LLM devolve só o nome: se o parser posicional tivesse rodado, veiculo
+    // viria de `parts[1]` ("o nome dele é Leonardo") e serviço da fala inteira.
+    const openai = openaiExtractionStub({ nome_cliente: "Leonardo" });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+
+    const result = await agent.generateReply({
+      message: AUDIO_MARSILI,
+      mode: "operacao",
+      context: {},
+      today: "2026-07-24",
+      sourceMediaType: "audio",
+    });
+
+    expect(result.context.service_draft?.nome_cliente).toBe("Leonardo");
+    expect(result.context.service_draft?.veiculo).toBeUndefined();
+    expect(result.context.service_draft?.servico).toBeUndefined();
+  });
+
+  test("campo suspeito do LLM é descartado e auditado em extracao_suspeita", async () => {
+    const openai = openaiExtractionStub({
+      nome_cliente: "Ó",
+      veiculo: "Nome Dele É Leonardo",
+      servico: "ele acabou de trocar um amortecedor da Perfect, ele tem uma BMW",
+    });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+
+    const result = await agent.generateReply({
+      message: AUDIO_MARSILI,
+      mode: "operacao",
+      context: {},
+      today: "2026-07-24",
+      sourceMediaType: "audio",
+    });
+
+    expect(result.context.service_draft?.nome_cliente).toBeUndefined();
+    expect(result.context.service_draft?.veiculo).toBeUndefined();
+    expect(result.context.service_draft?.servico).toBeUndefined();
+    expect(result.context.service_draft?.tipo_servico).toBeUndefined();
+    expect(result.context.missing_field).toBe("nome_cliente");
+    expect(result.toolCalls[0]?.toolName).toBe("extracao_suspeita");
+    expect(result.toolCalls[0]?.output).toMatchObject({
+      campos_suspeitos: ["nome_cliente", "veiculo", "servico"],
+    });
+    expect(result.toolCalls[0]?.input).toMatchObject({ source_media_type: "audio" });
+  });
+
+  test("extração parcial do LLM não apaga campo que o parser acertou", async () => {
+    // Mensagem digitada no formato do exemplo; o LLM só devolve o nome.
+    const openai = openaiExtractionStub({ nome_cliente: "Joao Silva" });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+
+    const result = await agent.generateReply({
+      message: "Joao, Civic 2018, troca de oleo, hoje, 41999990000",
+      mode: "operacao",
+      context: {},
+      today: "2026-04-25",
+    });
+
+    expect(result.context.service_draft).toMatchObject({
+      nome_cliente: "Joao Silva",
+      veiculo: "Civic 2018",
+      servico: "troca de oleo",
+      data_servico: "2026-04-25",
+      whatsapp_cliente: "+5541999990000",
+    });
+  });
+
+  test("data alucinada pelo LLM perde para o parser determinístico", async () => {
+    const openai = openaiExtractionStub({
+      nome_cliente: "Leonardo",
+      veiculo: "BMW",
+      servico: "troca de amortecedor",
+      tipo_servico: "amortecedor",
+      marca_peca: "perfect",
+      whatsapp_cliente: "+5511930055552",
+      data_servico: "2028-07-23",
+    });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+
+    const result = await agent.generateReply({
+      message: AUDIO_MARSILI,
+      mode: "operacao",
+      context: {},
+      today: "2026-07-24",
+      sourceMediaType: "audio",
+    });
+
+    expect(result.context.service_draft?.data_servico).toBe("2026-07-24");
+  });
+
+  test("correção durante a confirmação também passa pela guarda", async () => {
+    const openai = openaiExtractionStub({ veiculo: "ele tem uma BMW e o nome dele" });
+    const agent = new WhatsappOnboardingAgent({ openai: openai as never });
+    const draftContext: ConversationContext = {
+      pending_action: "registrar_primeira_troca",
+      awaiting_confirmation: true,
+      service_draft: {
+        nome_cliente: "Leonardo Viana",
+        whatsapp_cliente: "+5511930055552",
+        veiculo: "BMW",
+        servico: "troca de amortecedor",
+        data_servico: "2026-07-24",
+        valor: null,
+        consentimento_whatsapp: true,
+        tipo_servico: "amortecedor",
+        marca_peca: "perfect",
+      },
+    };
+
+    const result = await agent.generateReply({
+      message: "o carro dele, ele tem uma BMW e o nome dele",
+      mode: "operacao",
+      context: draftContext,
+      today: "2026-07-24",
+    });
+
+    // A correção suspeita é descartada: o veículo anterior fica de pé e nada
+    // é gravado.
+    expect(result.registerServiceInput).toBeNull();
+    expect(result.context.service_draft?.veiculo).toBe("BMW");
+    expect(result.body).toContain("Me diga o que corrigir");
   });
 });
