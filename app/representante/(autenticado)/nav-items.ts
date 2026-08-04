@@ -1,6 +1,7 @@
 import {
   BookOpen,
   LayoutDashboard,
+  Link2,
   type LucideIcon,
   Megaphone,
   Store,
@@ -25,7 +26,8 @@ export const REP_NAV: RepNavItem[] = [
   { href: "/representante/clientes", label: "Clientes", icon: Store, primary: true },
   { href: "/representante/leads", label: "Leads", icon: UserPlus, primary: true },
   { href: "/representante/comissoes", label: "Comissões", icon: Wallet, primary: true },
-  { href: "/representante/playbook", label: "Playbook", icon: BookOpen, primary: true },
+  { href: "/representante/meu-link", label: "Meu link", icon: Link2, primary: true },
+  { href: "/representante/playbook", label: "Playbook", icon: BookOpen },
   { href: "/representante/novidades", label: "Novidades", icon: Megaphone },
   { href: "/representante/perfil", label: "Perfil", icon: User },
 ];

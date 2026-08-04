@@ -438,6 +438,7 @@ export type WhatsappRepository = {
     origem: LeadOrigin;
     status: LeadStatus;
     representanteCodigo?: string | null;
+    representanteClickToken?: string | null;
     referral?: WhatsappReferral | null;
   }): Promise<SavedLead>;
   upsertConversation(input: {

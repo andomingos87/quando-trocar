@@ -38,6 +38,20 @@ describe("landing offer", () => {
     );
   });
 
+  test("carrega o sufixo de indicacao do representante quando existe (§18.9)", () => {
+    // O sufixo e o que o bot le de volta (extractRepresentanteCodigo). Sem
+    // indicacao ativa, a mensagem fica identica a de antes.
+    expect(buildLandingWhatsappMessage("landing_hero", "#REP-CARLOS.K7F2QX")).toBe(
+      "Olá! Quero começar meus 14 dias grátis no Quando Trocar para minha oficina.\nOrigem: landing_hero\n#REP-CARLOS.K7F2QX",
+    );
+    expect(buildLandingWhatsappMessage("landing_hero", null)).toBe(
+      buildLandingWhatsappMessage("landing_hero"),
+    );
+    expect(buildLandingWhatsappLink("landing_hero", "+5511988887777", "#REP-CARLOS.K7F2QX")).toContain(
+      encodeURIComponent("#REP-CARLOS.K7F2QX"),
+    );
+  });
+
   test("builds a sanitized WhatsApp URL with the encoded message", () => {
     const link = buildLandingWhatsappLink("landing_oferta", "+55 (11) 98888-7777");
 

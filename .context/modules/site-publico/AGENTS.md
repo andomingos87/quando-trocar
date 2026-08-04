@@ -8,6 +8,7 @@ de retencao via WhatsApp para oficinas e roda o prototipo de validacao (demo).
 **Pertence a este modulo:**
 - Landing e raiz publica de `app/` (paginas nao-admin, nao-api).
 - `app/demo/` — demo interativa.
+- `app/r/[codigo]/` — rota do link de indicacao do representante; `middleware.ts` (normaliza `?ref=`).
 - `app/privacidade/`, `app/termos/`, `app/exclusao-dados/` — paginas legais.
 - `components/demo/`, `components/ui/` (componentes compartilhados de UI publica).
 - `lib/demo-data.ts`, `lib/demo-store.ts`, `lib/chat-scripts.ts`.
@@ -47,12 +48,18 @@ cobranca (modulo [[billing]]), schema (modulo [[database]]).
 - Todo CTA primario da landing abre o WhatsApp em nova aba com origem valida (`landing_nav`,
   `landing_hero`, `landing_como_funciona`, `landing_oferta`, `landing_floating_mobile` ou
   `landing_cta_final`). A origem e telemetria textual de MVP, nao uma plataforma de analytics.
+- **Indicacao do representante (ADR-0030, regras §18.9):** os CTAs carregam o sufixo
+  `#REP-<CODIGO>.<CLICK_TOKEN>` quando existe cookie `qt_ref` valido. Quem le o cookie e o
+  SERVER (`components/landing-cta.tsx` e `app/page.tsx`) — o cookie e httpOnly de proposito.
+  Client component (ex.: `FloatingCta`) recebe o sufixo por prop, nunca le cookie.
+  Por isso a home e `force-dynamic`. A regra de janela/atribuicao pertence ao modulo
+  [[portal-representante]]; aqui fica so o transporte do sufixo.
 - A configuracao publica descreve a oferta; ela nao executa expiracao, pagamento ou transicao
   de `agent_mode`. Essas automacoes pertencem aos modulos de bot e billing.
 
 ## Testes
-- `tests/landing-offer.test.ts` cobre contrato comercial, origens, links, fallback da demo e
-  regra do CTA flutuante. Rodar tambem `npm run build` ao mexer em rotas/boundary server-client.
+- `tests/landing-offer.test.ts` cobre contrato comercial, origens, links (inclusive o sufixo de
+  indicacao), fallback da demo e regra do CTA flutuante. Rodar tambem `npm run build` ao mexer em rotas/boundary server-client.
 
 ## Referencias
 - Prototipo de validacao: `docs/product/PRD-landing-prototype.md`

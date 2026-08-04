@@ -72,6 +72,7 @@ O usuário decide. Não atualize por conta própria nem ignore por conta própri
 - [17. Áudio e transcrição](#17-áudio-e-transcrição)
 - [18. Representantes e comissão](#18-representantes-e-comissão)
   - [18.7 Portal do representante](#187-portal-do-representante)
+  - [18.9 Link de indicação do site (janela de 30 dias)](#189-link-de-indicação-do-site-janela-de-30-dias)
 
 ---
 
@@ -1070,8 +1071,11 @@ Fonte canônica: [ADR-0019](./adr/0019-representantes-e-comissao.md) (supersede 
 ### 18.2 Atribuição de lead a representante
 - O representante divulga link `wa.me` cuja primeira mensagem carrega `#REP-<codigo>` (ex.: `Oi quero testar o Quando Trocar #REP-CARLOS`).
 - `extractRepresentanteCodigo()` (determinístico, sem LLM — ADR-0001) extrai o código e o **remove** da mensagem antes de `detectLeadOrigin()` (o match da frase-gatilho é exato) e antes do agente vendedor processar o texto.
-- `upsertLead` resolve o código para `leads_oficina.representante_id` **apenas se** o lead ainda não tem representante e o representante está ativo e não deletado. Código desconhecido/inativo → ignorado em silêncio (lead entra sem atribuição).
-- Fonte: `lib/whatsapp/sales-agent.ts`, `lib/whatsapp/conversation-router.ts`, `lib/whatsapp/repository.ts`.
+- O representante também divulga **link do site** (`/r/<codigo>`), que embute `#REP-<codigo>.<click_token>` no CTA — ver §18.9.
+- `upsertLead` resolve o código para `leads_oficina.representante_id` **apenas se** o lead está **atribuível** (`podeAtribuirRepresentante`) e o representante está ativo e não deletado. Código desconhecido/inativo → ignorado em silêncio (lead entra sem atribuição).
+- **Atribuível** = lead sem representante, **ou** lead parado há ≥ 90 dias (`REATRIBUICAO_INATIVIDADE_DIAS`, contados do maior entre `representante_atribuido_em` e `last_message_at`) cujo status **não** avançou no funil. Status `qualificado`, `interessado`, `teste_aceito` e `convertido` **nunca** trocam de dono automaticamente — só por ação do admin (`representante_atribuido_via = 'manual'`). Lead legado sem `representante_atribuido_em` é conservado com o rep atual.
+- Cada atribuição grava `representante_atribuido_em`, `representante_atribuido_via` (`wa_prefill` | `site_link` | `manual`) e, quando veio do site, `representante_click_token`.
+- Fonte: `lib/whatsapp/sales-agent.ts`, `lib/whatsapp/conversation-router.ts`, `lib/whatsapp/repository.ts`, migration `20260803140000_indicacao_link_representante.sql`.
 
 ### 18.3 Atribuição da oficina
 - Na conversão (bot `convertLeadToOficina` ou admin RPC `convert_lead_to_oficina_manual`), `representante_id` do lead é copiado para `oficinas.representante_id`.
@@ -1117,6 +1121,19 @@ Fonte canônica: [ADR-0025](./adr/0025-portal-do-representante.md) (estende a AD
 - **Só representante ativo** pode ser convidado — inativo não loga no portal; a rota recusa (409) e o botão fica desabilitado. Sem template configurado → 503 (não envia).
 - Ação iniciada por admin humano (ADR-0001), auditada como `representante.convite_enviado`. O convite **não** cria sessão nem muda estado do representante — é só a mensagem.
 - Fonte: `app/api/admin/representantes/[id]/convidar/route.ts`, `lib/admin/convite-representante.ts`, `components/admin/representantes-client.tsx`.
+
+### 18.9 Link de indicação do site (janela de 30 dias)
+Fonte canônica: [ADR-0030](./adr/0030-link-de-indicacao-do-representante.md) (estende a ADR-0019). Módulos `portal-representante` (dados + tela) e `site-publico` (rota + CTAs).
+
+- **Link do representante:** `https://<site>/r/<CODIGO>`. Qualquer URL do site com `?ref=<CODIGO>` é redirecionada pelo middleware para `/r/<CODIGO>?next=<caminho>` — a validação, o registro do clique e a gravação do cookie ficam em um lugar só.
+- **O que a rota `/r` faz:** valida o código (rep `ativo = true`, `deleted_at is null`), registra o clique em `representante_link_cliques` (com `click_token` único) e grava o cookie **`qt_ref`** (httpOnly, `SameSite=Lax`, HMAC-SHA256 com `REP_SESSION_SECRET`, `Max-Age` 30 dias). Depois, 302 para o destino — sem `?ref` na URL final. Código inválido ou inexistente → 302 limpo, sem cookie e **sem revelar se o código existe** (não enumera representantes).
+- **Janela de 30 dias, first-touch sticky:** enquanto o cookie for válido, abrir o link de **outro** representante **não** troca a indicação. O clique do segundo rep é registrado com `atribuiu = false` (ele vê o esforço no portal, mas o lead não é dele). Reabrir o próprio link renova a janela. A validade é conferida pelo timestamp **dentro** da assinatura, não só pelo `Max-Age` do navegador.
+- **Como a indicação vira atribuição:** os CTAs da landing acrescentam `#REP-<CODIGO>.<CLICK_TOKEN>` ao texto do `wa.me`. Daí em diante vale o caminho já existente do §18.2 (`extractRepresentanteCodigo` → `upsertLead`) — **não existe** um segundo motor de atribuição. O `.` separa código e token porque `-` é caractere válido dentro do código. Link sem token (wa.me antigo do rep) continua funcionando.
+- **Limites conhecidos e aceitos:** o cookie é por navegador — trocar de aparelho, navegador ou usar janela anônima perde a indicação; cookie bloqueado também. Quem fala com o bot por outro caminho (número salvo, anúncio) não é atribuído.
+- **LGPD:** `representante_link_cliques` guarda IP e user-agent **apenas como hash** (SHA-256 com sal do ambiente) e nenhum dado pessoal do visitante — que é anônimo neste ponto do funil.
+- **Degradação:** sem `REP_SESSION_SECRET` no ambiente, a indicação simplesmente não funciona (clique registrado, cookie não gravado) — a landing pública **nunca** quebra por isso.
+- **Tela do rep:** `/representante/meu-link` mostra o link, botão copiar, envio por WhatsApp e os contadores (cliques, últimos 30 dias, cliques válidos, leads pelo link). Read-only, escopado por `representante_id` da sessão.
+- Fonte: `app/r/[codigo]/route.ts`, `middleware.ts`, `lib/representante/indicacao.ts`, `lib/representante/indicacao-cliques.ts`, `components/landing-cta.tsx`, `lib/landing-offer.ts`, `app/representante/(autenticado)/meu-link/`, migration `20260803140000_indicacao_link_representante.sql`.
 
 ---
 

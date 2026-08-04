@@ -35,16 +35,24 @@ export function isLandingCtaSource(value: string): value is LandingCtaSource {
   return (LANDING_CTA_SOURCES as readonly string[]).includes(value);
 }
 
-export function buildLandingWhatsappMessage(source: LandingCtaSource) {
-  return `Olá! Quero começar meus ${LANDING_OFFER.trialDays} dias grátis no Quando Trocar para minha oficina.\nOrigem: ${source}`;
+// Sufixo de indicacao do representante (ADR-0019). Vem do cookie `qt_ref`
+// (lib/representante/indicacao.ts) e e lido de volta por
+// extractRepresentanteCodigo no bot. Formato: "#REP-<CODIGO>.<CLICK_TOKEN>".
+export function buildLandingWhatsappMessage(
+  source: LandingCtaSource,
+  repSufixo?: string | null,
+) {
+  const base = `Olá! Quero começar meus ${LANDING_OFFER.trialDays} dias grátis no Quando Trocar para minha oficina.\nOrigem: ${source}`;
+  return repSufixo ? `${base}\n${repSufixo}` : base;
 }
 
 export function buildLandingWhatsappLink(
   source: LandingCtaSource,
   phone?: string,
+  repSufixo?: string | null,
 ) {
   return whatsappLink({
-    message: buildLandingWhatsappMessage(source),
+    message: buildLandingWhatsappMessage(source, repSufixo),
     phone,
   });
 }

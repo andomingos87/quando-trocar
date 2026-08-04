@@ -19,6 +19,18 @@ Não registrar:
 
 ---
 
+## 2026-08-03 — Link de indicação do representante (janela de 30 dias)
+
+O representante passa a compartilhar link do **site** (`/r/<CODIGO>`), não só o `wa.me`. Cookie assinado `qt_ref` de 30 dias, first-touch sticky: dentro da janela, o lead continua do primeiro rep mesmo que abra o link de outro. Os CTAs da landing injetam `#REP-<CODIGO>.<CLICK_TOKEN>` no `wa.me`, reaproveitando o motor de atribuição existente (nenhum motor novo).
+
+No mesmo movimento, a atribuição do lead deixou de ser permanente: passa a ter `representante_atribuido_em`/`_via`/`_click_token` e libera lead **parado há 90 dias** que não avançou no funil. Lead `qualificado`/`interessado`/`teste_aceito`/`convertido` nunca troca de dono automaticamente.
+
+- Decisão: [ADR-0030](./adr/0030-link-de-indicacao-do-representante.md) (estende a ADR-0019), regras [§18.9](./regras-de-negocio.md) e §18.2 atualizada.
+- Migration: `20260803140000_indicacao_link_representante.sql` (tabela `representante_link_cliques` + colunas de atribuição, com backfill).
+- Nova tela no portal: `/representante/meu-link`. Novo `middleware.ts` (normaliza `?ref=`).
+
+---
+
 ## 2026-08-03 — Analytics de anúncios (Meta Ads via Windsor.ai)
 
 Nova tela `/admin/analytics-ads`: liga gasto/resultado do Meta Ads ao funil real do CRM (lead → qualificado → convertido), respondendo "esse anúncio gerou venda de verdade?".

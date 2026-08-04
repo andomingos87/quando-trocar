@@ -84,6 +84,7 @@ export async function resolveWhatsappConversation(input: {
       origem: detectLeadOrigin(representante.cleaned, landingPhrases),
       status: "em_conversa",
       representanteCodigo: representante.codigo,
+      representanteClickToken: representante.clickToken,
       referral: input.referral,
     });
     const conversation = await input.repository.upsertConversation({
@@ -237,6 +238,7 @@ export async function resolveWhatsappConversation(input: {
     origem: detectLeadOrigin(representante.cleaned, landingPhrases),
     status: "em_conversa",
     representanteCodigo: representante.codigo,
+    representanteClickToken: representante.clickToken,
     referral: input.referral,
   });
   const conversation = await input.repository.upsertSalesLeadConversation({

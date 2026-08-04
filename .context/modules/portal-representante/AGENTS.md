@@ -11,8 +11,8 @@ atribuidos, extrato de comissoes, playbook de vendas e novidades. Fonte: [[ADR-0
 **Pertence a este modulo:**
 - `app/representante/` — UI (login/OTP `entrar` e area autenticada `(autenticado)`).
 - `app/api/representante/**` — APIs do portal (hoje so `auth/{request-otp,verify-otp,logout}`).
-- `lib/representante/` — sessao, OTP, guard, camada de dados escopada e conteudo estatico
-  (`content/playbook.ts`, `content/novidades.ts`).
+- `lib/representante/` — sessao, OTP, guard, camada de dados escopada, indicacao (cookie + cliques)
+  e conteudo estatico (`content/playbook.ts`, `content/novidades.ts`).
 
 **NAO pertence:** painel interno da equipe (modulo [[painel-admin]]), cobranca/comissao — motor e
 mutacao (modulo [[billing]]: `lib/admin/comissoes.ts`), bot conversacional (modulo [[whatsapp-bot]]),
@@ -25,6 +25,10 @@ site publico (modulo [[site-publico]]), migrations (modulo [[database]]).
 - Dados (todos `server-only`, todos recebendo `representanteId` da sessao):
   `carteira.ts` (oficinas + agregados sem PII), `leads.ts` (funil atribuido), `comissoes.ts`
   (wrapper sobre `listComissoes` do admin + resumo do mes), `dashboard.ts` (resumo).
+- Indicacao (ADR-0030, regras §18.9): `indicacao.ts` (cookie `qt_ref` assinado por HMAC com
+  `REP_SESSION_SECRET`, janela de 30 dias, `formatRepSufixo`), `indicacao-cliques.ts` (resolucao do
+  codigo, registro de clique, resumo do portal). A rota publica que usa isso e
+  `app/r/[codigo]/route.ts` (modulo [[site-publico]]).
 - Conteudo: `content/playbook.ts`, `content/novidades.ts` (constantes, publicadas por deploy).
 - UI: `app/representante/(autenticado)/**` (paginas + shell mobile-first).
 
@@ -39,11 +43,22 @@ site publico (modulo [[site-publico]]), migrations (modulo [[database]]).
 - **LGPD — sem PII de cliente final:** nenhuma tela/endpoint retorna nome ou WhatsApp de cliente
   final. Contato da propria oficina (responsavel, WhatsApp da oficina) e o contato comercial legitimo
   do rep e pode aparecer.
-- **Read-only:** portal nunca muda estado (comissao paga/cancelada continua so no admin).
+- **Read-only:** portal nunca muda estado (comissao paga/cancelada continua so no admin). A UNICA
+  escrita do modulo e o log de clique em `representante_link_cliques` — telemetria de link, nao
+  estado de negocio; falha nele nunca derruba a navegacao do visitante.
+- **Indicacao nao pode quebrar a landing:** `readIndicacao()` roda em toda visita a home. Sem
+  `REP_SESSION_SECRET`, a indicacao desliga (retorna null) em vez de lancar — diferente de
+  `session.ts`, onde a ausencia do segredo DEVE falhar.
+- **First-touch sticky na janela:** com cookie valido, o link de outro rep nao sobrescreve; o
+  clique e gravado com `atribuiu = false`. No banco, `podeAtribuirRepresentante`
+  (`lib/whatsapp/repository.ts`, modulo [[whatsapp-bot]]) so libera lead parado ha 90 dias que nao
+  avancou no funil.
 - OTP herda o hardening do admin: rate-limit, hash HMAC-SHA256, expiracao 5 min, max 5 tentativas,
   resposta generica (sem enumeracao de usuario). Reaproveita o template Meta `WHATSAPP_TEMPLATE_OTP_NAME`.
 
 ## Testes
+- `tests/representante-indicacao.test.ts` (assinatura, janela, ausencia de segredo),
+  `tests/whatsapp-representante-atribuicao.test.ts` (janela de reatribuicao, canal da atribuicao),
 - `tests/representante-otp.test.ts`, `tests/representante-session.test.ts`,
   `tests/representante-carteira.test.ts`, `tests/representante-comissoes.test.ts`,
   `tests/representante-dashboard.test.ts` (escopo rep A ≠ rep B, ausencia de PII, agregados corretos).
@@ -56,11 +71,15 @@ unico "representantes" (cada arquivo tem um dono so, regra Aurea). Fio condutor:
 
 - **Cadastro/CRUD do rep** → [[painel-admin]] (`lib/admin/representantes.ts`, `/admin/representantes`).
 - **Motor de comissao** (geracao no webhook, config, payout) → [[billing]] (`lib/admin/comissoes.ts`, `configuracoes-comissao`, `/admin/comissoes`).
+- **Link de indicacao** (cookie, cliques, tela "Meu link") → **este modulo**; a rota publica `/r`
+  e os CTAs ficam em [[site-publico]]; a regra de atribuicao/janela no upsert do lead fica em
+  [[whatsapp-bot]].
 - **Portal do rep** (login OTP, dados escopados read-only, telas, conteudo) → **este modulo** [[portal-representante]] (`app/representante/**`, `app/api/representante/**`, `lib/representante/**`).
 
 ## Referencias
 - Backlog: `docs/backlog-whatsapp-bot/fase-representante-portal.md`
-- ADR: [[ADR-0025]] (portal), [[ADR-0019]] (representantes/comissao), [[ADR-0003]] (multi-tenancy)
-- Regras de negocio: `docs/regras-de-negocio.md §18.7`
+- ADR: [[ADR-0025]] (portal), [[ADR-0030]] (link de indicacao), [[ADR-0019]]
+  (representantes/comissao), [[ADR-0003]] (multi-tenancy)
+- Regras de negocio: `docs/regras-de-negocio.md §18.7`, `§18.9` (indicacao), `§18.2` (atribuicao)
 - Runbook: `docs/runbooks/publicar-novidade-representante.md`
 - Convencoes: `.context/conventions.md`

@@ -10,8 +10,16 @@ import { Footer } from "@/components/footer";
 import { FloatingCta } from "@/components/floating-cta";
 import { Transparencia } from "@/components/transparencia";
 import { Beneficios } from "@/components/beneficios";
+import { formatRepSufixo, readIndicacao } from "@/lib/representante/indicacao";
 
-export default function Home() {
+// Dinamica por causa do cookie de indicacao do representante (`qt_ref`): o
+// texto do wa.me muda por visitante.
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const indicacao = await readIndicacao();
+  const repSufixo = indicacao ? formatRepSufixo(indicacao) : null;
+
   return (
     <>
       <Nav />
@@ -27,7 +35,7 @@ export default function Home() {
         <CtaFinal />
       </main>
       <Footer />
-      <FloatingCta />
+      <FloatingCta repSufixo={repSufixo} />
     </>
   );
 }

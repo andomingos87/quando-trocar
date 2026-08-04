@@ -71,18 +71,29 @@ export function detectLeadOrigin(
 // mensagem. Extracao deterministica (sem LLM). O token precisa sair da
 // mensagem antes de detectLeadOrigin (match exato da frase-gatilho) e antes
 // do agente processar o texto.
-const REPRESENTANTE_CODIGO_REGEX = /#\s*REP-([A-Z0-9][A-Z0-9-]{0,29})/i;
+// Link do SITE (/r/<codigo>) acrescenta ".<CLICK_TOKEN>" ao codigo, para ligar
+// o lead ao clique exato (representante_link_cliques.click_token). O ponto e o
+// separador porque "-" e caractere valido dentro do codigo do representante.
+// Link antigo, sem token, continua valendo.
+const REPRESENTANTE_CODIGO_REGEX =
+  /#\s*REP-([A-Z0-9][A-Z0-9-]{0,29})(?:\.([A-Z0-9]{4,16}))?/i;
 
 export function extractRepresentanteCodigo(message: string): {
   codigo: string | null;
+  clickToken: string | null;
   cleaned: string;
 } {
   const match = message.match(REPRESENTANTE_CODIGO_REGEX);
-  if (!match) return { codigo: null, cleaned: message };
+  if (!match) return { codigo: null, clickToken: null, cleaned: message };
 
   const codigo = match[1].toUpperCase().replace(/-+$/, "");
+  const clickToken = match[2] ? match[2].toUpperCase() : null;
   const cleaned = message.replace(REPRESENTANTE_CODIGO_REGEX, " ").replace(/\s+/g, " ").trim();
-  return { codigo: codigo.length >= 2 ? codigo : null, cleaned };
+  return {
+    codigo: codigo.length >= 2 ? codigo : null,
+    clickToken: codigo.length >= 2 ? clickToken : null,
+    cleaned,
+  };
 }
 
 export function isExplicitLossMessage(message: string) {

@@ -89,6 +89,53 @@ export function mergeLeadForInbound(
   };
 }
 
+// Janela de reatribuicao do representante (regras §18.9). Depois de atribuido,
+// o lead e do rep — mas um lead PARADO nao pode travar para sempre no primeiro
+// rep que o tocou. Passados 90 dias sem nenhuma movimentacao, o proximo link
+// clicado reatribui.
+export const REATRIBUICAO_INATIVIDADE_DIAS = 90;
+
+// Status que ja representam avanco real no funil: nunca trocam de dono
+// automaticamente (comissao ja esta em jogo). Reatribuir esses e decisao humana
+// no admin (representante_atribuido_via = 'manual').
+const STATUS_NAO_REATRIBUIVEIS: LeadStatus[] = [
+  "qualificado",
+  "interessado",
+  "teste_aceito",
+  "convertido",
+];
+
+export function podeAtribuirRepresentante(
+  existing:
+    | {
+        representante_id: string | null;
+        representante_atribuido_em: string | null;
+        status: LeadStatus;
+        last_message_at: string | null;
+      }
+    | null
+    | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!existing || !existing.representante_id) return true;
+  if (STATUS_NAO_REATRIBUIVEIS.includes(existing.status)) return false;
+
+  const atribuidoEm = existing.representante_atribuido_em
+    ? Date.parse(existing.representante_atribuido_em)
+    : NaN;
+  // Sem data de atribuicao (lead legado nao coberto pelo backfill): trata como
+  // atribuido e nao mexe — conservador a favor do rep atual.
+  if (!Number.isFinite(atribuidoEm)) return false;
+
+  const ultimaMensagem = existing.last_message_at ? Date.parse(existing.last_message_at) : NaN;
+  const ultimoSinal = Math.max(
+    atribuidoEm,
+    Number.isFinite(ultimaMensagem) ? ultimaMensagem : 0,
+  );
+  const limite = REATRIBUICAO_INATIVIDADE_DIAS * 24 * 60 * 60 * 1000;
+  return now.getTime() - ultimoSinal >= limite;
+}
+
 export class SupabaseWhatsappRepository implements WhatsappRepository {
   private faqCache: { value: FaqVendasRecord[]; loadedAt: number } | null = null;
   private configCache: { value: ConfiguracoesVendedor; loadedAt: number } | null = null;
@@ -514,11 +561,14 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     origem: "landing_page" | "manual_whatsapp";
     status: LeadStatus;
     representanteCodigo?: string | null;
+    representanteClickToken?: string | null;
     referral?: WhatsappReferral | null;
   }) {
     const existingResult = (await this.supabase
       .from("leads_oficina")
-      .select("id,nome,origem,status,metadata,representante_id,ad_attributed_at")
+      .select(
+        "id,nome,origem,status,metadata,representante_id,representante_atribuido_em,last_message_at,ad_attributed_at",
+      )
       .eq("whatsapp", input.whatsapp)
       .maybeSingle()) as SupabaseResult<{
       id: string;
@@ -527,6 +577,8 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       status: LeadStatus;
       metadata: Record<string, unknown>;
       representante_id: string | null;
+      representante_atribuido_em: string | null;
+      last_message_at: string | null;
       ad_attributed_at: string | null;
     }>;
 
@@ -538,10 +590,11 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       status: input.status,
     });
 
-    // ADR-0019: atribui representante apenas se o lead ainda nao tem um e o
-    // codigo resolve para um representante ativo. Codigo invalido e ignorado.
+    // ADR-0019 + §18.9: atribui representante quando o lead esta atribuivel
+    // (sem dono, ou parado ha REATRIBUICAO_INATIVIDADE_DIAS) e o codigo resolve
+    // para um representante ativo. Codigo invalido e ignorado.
     let representanteId: string | null = null;
-    if (input.representanteCodigo && !existingResult.data?.representante_id) {
+    if (input.representanteCodigo && podeAtribuirRepresentante(existingResult.data)) {
       representanteId = await this.resolveRepresentanteIdByCodigo(input.representanteCodigo);
     }
 
@@ -557,7 +610,18 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
           nome: merged.nome,
           origem: merged.origem,
           status: merged.status,
-          ...(representanteId ? { representante_id: representanteId } : {}),
+          ...(representanteId
+            ? {
+                representante_id: representanteId,
+                representante_atribuido_em: new Date().toISOString(),
+                // site_link = veio do cookie de indicacao (/r/<codigo>, que
+                // gera o click_token); wa_prefill = link wa.me direto do rep.
+                representante_atribuido_via: input.representanteClickToken
+                  ? "site_link"
+                  : "wa_prefill",
+                representante_click_token: input.representanteClickToken ?? null,
+              }
+            : {}),
           ...(shouldAttributeAd
             ? {
                 ad_ctwa_clid: input.referral!.ctwaClid,

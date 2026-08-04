@@ -37,6 +37,7 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0027](./0027-extracao-de-cadastro-por-llm.md) | Extração de cadastro por LLM, com guarda de sanidade determinística | accepted | 2026-07-25 |
 | [0028](./0028-volante-de-gatilhos-de-intencao.md) | Volante seguro de gatilhos de intenção de vendas | accepted | 2026-07-25 |
 | [0029](./0029-sinal-de-cadastro-em-vendas.md) | Sinal de cadastro em vendas preserva o rascunho até a conversão | accepted | 2026-07-25 |
+| [0030](./0030-link-de-indicacao-do-representante.md) | Link de indicação do representante (janela de 30 dias) | accepted | 2026-08-03 |
 
 ### Em aberto (drafts)
 

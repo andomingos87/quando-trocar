@@ -9,7 +9,9 @@ import {
   shouldShowFloatingCta,
 } from "@/lib/landing-offer";
 
-export function FloatingCta() {
+// `repSufixo` chega por prop porque o cookie de indicacao e httpOnly: quem le e
+// o server (app/page.tsx), nunca este componente.
+export function FloatingCta({ repSufixo }: { repSufixo?: string | null }) {
   const [visibility, setVisibility] = useState({
     heroCtaVisible: true,
     offerCtaVisible: false,
@@ -42,7 +44,7 @@ export function FloatingCta() {
 
   return (
     <a
-      href={buildLandingWhatsappLink("landing_floating_mobile")}
+      href={buildLandingWhatsappLink("landing_floating_mobile", undefined, repSufixo)}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`${LANDING_OFFER.ctaLabel} no WhatsApp`}

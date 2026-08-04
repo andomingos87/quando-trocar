@@ -88,10 +88,15 @@ describe("whatsapp sales agent — deterministic detectors", () => {
   test("extractRepresentanteCodigo captures #REP token and cleans the message (ADR-0019)", () => {
     expect(
       extractRepresentanteCodigo("Oi quero testar o Quando Trocar #REP-CARLOS"),
-    ).toEqual({ codigo: "CARLOS", cleaned: "Oi quero testar o Quando Trocar" });
+    ).toEqual({
+      codigo: "CARLOS",
+      clickToken: null,
+      cleaned: "Oi quero testar o Quando Trocar",
+    });
     // case-insensitive + normaliza para maiusculas
     expect(extractRepresentanteCodigo("oi #rep-carlos-sp tudo bem")).toEqual({
       codigo: "CARLOS-SP",
+      clickToken: null,
       cleaned: "oi tudo bem",
     });
     // espaco entre # e REP tolerado
@@ -99,12 +104,34 @@ describe("whatsapp sales agent — deterministic detectors", () => {
     // sem token → mensagem intacta
     expect(extractRepresentanteCodigo("Oi quero testar o Quando Trocar")).toEqual({
       codigo: null,
+      clickToken: null,
       cleaned: "Oi quero testar o Quando Trocar",
     });
     // codigo de 1 caractere e invalido
     expect(extractRepresentanteCodigo("oi #REP-X").codigo).toBeNull();
     // hifen final descartado
     expect(extractRepresentanteCodigo("oi #REP-ABC-").codigo).toBe("ABC");
+  });
+
+  test("extractRepresentanteCodigo separa o click_token do link do site (§18.9)", () => {
+    // Link /r/<codigo> gera "#REP-<CODIGO>.<TOKEN>": o token identifica o
+    // clique exato, sem virar parte do codigo.
+    expect(extractRepresentanteCodigo("Oi quero testar o Quando Trocar #REP-CARLOS-SP.K7F2QX")).toEqual({
+      codigo: "CARLOS-SP",
+      clickToken: "K7F2QX",
+      cleaned: "Oi quero testar o Quando Trocar",
+    });
+    // token curto demais nao e token: o sufixo nao entra no codigo
+    expect(extractRepresentanteCodigo("oi #REP-CARLOS.AB").codigo).toBe("CARLOS");
+    expect(extractRepresentanteCodigo("oi #REP-CARLOS.AB").clickToken).toBeNull();
+    // codigo invalido invalida o token junto
+    expect(extractRepresentanteCodigo("oi #REP-X.K7F2QX").clickToken).toBeNull();
+    // a frase-gatilho continua batendo com codigo + token na mensagem
+    expect(
+      detectLeadOrigin(
+        extractRepresentanteCodigo("Oi quero testar o Quando Trocar #REP-CARLOS.K7F2QX").cleaned,
+      ),
+    ).toBe("landing_page");
   });
 
   test("extractRepresentanteCodigo + detectLeadOrigin: codigo nao quebra a frase-gatilho", () => {
