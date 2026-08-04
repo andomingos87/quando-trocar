@@ -17,23 +17,20 @@ describe("WindsorMetaAdsClient.fetchDailyInsights", () => {
     vi.unstubAllGlobals();
   });
 
-  test("extrai resultados de 'conversas por mensagem' do array actions", async () => {
+  test("extrai resultados de 'conversas por mensagem' do campo achatado do Windsor", async () => {
     mockFetchOk([
       {
         date: "2026-08-01",
         ad_id: "ad-1",
-        ad: "Anúncio A",
+        ad_name: "Anúncio A",
         adset_id: "adset-1",
-        adset: "Conjunto A",
+        adset_name: "Conjunto A",
         campaign_id: "camp-1",
         campaign: "Campanha A",
         spend: "26.00",
         impressions: "1200",
         clicks: "40",
-        actions: [
-          { action_type: "onsite_conversion.messaging_conversation_started_7d", value: "7" },
-          { action_type: "link_click", value: "40" },
-        ],
+        actions_onsite_conversion_messaging_conversation_started_7d: "7",
       },
     ]);
 
@@ -62,7 +59,7 @@ describe("WindsorMetaAdsClient.fetchDailyInsights", () => {
     ]);
   });
 
-  test("sem actions de conversa -> results 0 e custoPorResultado null", async () => {
+  test("sem campo de resultado de conversa -> results 0 e custoPorResultado null", async () => {
     mockFetchOk([
       {
         date: "2026-08-01",

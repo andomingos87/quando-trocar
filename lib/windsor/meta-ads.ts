@@ -5,34 +5,30 @@ import "server-only";
 // da Meta diretamente. Requer a conta de anúncios conectada no painel do
 // Windsor (conector "facebook") — ver docs/runbooks/ads-analytics-setup.md.
 //
-// IMPORTANTE: os nomes de campo abaixo (`campaign`, `adset`, `ad`, `actions`
-// etc.) são os documentados publicamente pelo Windsor para o conector
-// "facebook", mas só podem ser confirmados de fato chamando `get_fields` com
-// uma conta já conectada. Se o Windsor retornar erro de campo inválido,
-// rode `get_fields` (MCP) com a conta conectada e ajuste `FIELDS` aqui.
+// Nomes de campo confirmados via `get_fields`/`get_data` (MCP Windsor) com a
+// conta real conectada (2026-08-03). O Windsor NÃO expõe um array `actions`
+// genérico como a Marketing API da Meta — cada tipo de ação vira um campo
+// "achatado" próprio (`actions_<action_type>`). O campo abaixo é o que a Meta
+// reporta pra campanhas de objetivo "Conversas por mensagem"
+// (click-to-WhatsApp/Instagram) — é o "Resultados" que o Ads Manager mostra
+// pra esse tipo de campanha.
 const WINDSOR_BASE_URL = "https://connectors.windsor.ai/facebook";
+
+const MESSAGING_RESULT_FIELD = "actions_onsite_conversion_messaging_conversation_started_7d";
 
 const FIELDS = [
   "date",
   "campaign_id",
   "campaign",
   "adset_id",
-  "adset",
+  "adset_name",
   "ad_id",
-  "ad",
+  "ad_name",
   "spend",
   "impressions",
   "clicks",
-  "actions",
+  MESSAGING_RESULT_FIELD,
 ] as const;
-
-// Ação que a Meta reporta pra campanhas de objetivo "Conversas por mensagem"
-// (click-to-WhatsApp/Instagram) — é o que o Ads Manager mostra como
-// "Resultados" pra esse tipo de campanha (ex.: os "7" do print do usuário).
-const MESSAGING_CONVERSATION_ACTION_TYPES = [
-  "onsite_conversion.messaging_conversation_started_7d",
-  "onsite_conversion.messaging_first_reply",
-];
 
 export type MetaAdInsightRow = {
   date: string;
@@ -50,47 +46,24 @@ export type MetaAdInsightRow = {
   raw: Record<string, unknown>;
 };
 
-type WindsorAction = { action_type?: string; value?: string | number };
-
 type WindsorRawRow = {
   date?: string;
   ad_id?: string;
-  ad?: string;
+  ad_name?: string;
   adset_id?: string;
-  adset?: string;
+  adset_name?: string;
   campaign_id?: string;
   campaign?: string;
   spend?: string | number;
   impressions?: string | number;
   clicks?: string | number;
-  actions?: WindsorAction[] | string;
+  [MESSAGING_RESULT_FIELD]?: string | number;
   [key: string]: unknown;
 };
 
 function toNumber(value: unknown): number {
   const parsed = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function safeParseJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function extractMessagingResults(actions: WindsorRawRow["actions"]): number {
-  if (!actions) return 0;
-  const parsed = typeof actions === "string" ? safeParseJson(actions) : actions;
-  if (!Array.isArray(parsed)) return 0;
-  return parsed
-    .filter(
-      (action): action is WindsorAction =>
-        Boolean(action?.action_type) &&
-        MESSAGING_CONVERSATION_ACTION_TYPES.includes(action.action_type!),
-    )
-    .reduce((sum, action) => sum + toNumber(action.value), 0);
 }
 
 export class WindsorMetaAdsClient {
@@ -119,17 +92,17 @@ export class WindsorMetaAdsClient {
     }
 
     return body.data
-      .filter((row) => row.ad_id || row.ad)
+      .filter((row) => row.ad_id)
       .map((row) => {
         const spend = toNumber(row.spend);
-        const results = extractMessagingResults(row.actions);
+        const results = toNumber(row[MESSAGING_RESULT_FIELD]);
 
         return {
           date: String(row.date ?? input.dateFrom),
-          adId: String(row.ad_id ?? row.ad),
-          adName: row.ad ? String(row.ad) : null,
+          adId: String(row.ad_id),
+          adName: row.ad_name ? String(row.ad_name) : null,
           adsetId: row.adset_id ? String(row.adset_id) : null,
-          adsetName: row.adset ? String(row.adset) : null,
+          adsetName: row.adset_name ? String(row.adset_name) : null,
           campaignId: row.campaign_id ? String(row.campaign_id) : null,
           campaignName: row.campaign ? String(row.campaign) : null,
           spend,

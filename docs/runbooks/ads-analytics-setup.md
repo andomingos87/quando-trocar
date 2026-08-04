@@ -34,14 +34,22 @@ Windsor, se estiver usando Claude Code): conecte o conector **`facebook`**
 account usada nas campanhas do Instagram. **Atenção**: não confundir com o
 conector `instagram` (orgânico) — são conectores diferentes.
 
-### 2. Confirmar os nomes de campo do conector
+### 2. Nomes de campo do conector (já confirmados)
 
-Os nomes de campo em `lib/windsor/meta-ads.ts` (`campaign`, `adset`, `ad`,
-`actions`, etc.) são os documentados publicamente pelo Windsor, mas só dá pra
-confirmar de fato com a conta já conectada. Depois de conectar, rode (via MCP
-Windsor, se disponível) `get_fields` para o conector `facebook` e compare com
-a constante `FIELDS` em `lib/windsor/meta-ads.ts`. Se algum campo não existir,
-ajuste a constante e o parsing de `actions` (`extractMessagingResults`).
+Os nomes em `lib/windsor/meta-ads.ts` (`FIELDS`) foram confirmados via
+`get_fields`/`get_data` (MCP Windsor) com a conta real conectada
+(2026-08-03). Achado importante: o Windsor **não** expõe um array `actions`
+genérico como a Marketing API da Meta — cada tipo de ação vira um campo
+"achatado" próprio. O resultado de campanhas "Conversas por mensagem" vem do
+campo `actions_onsite_conversion_messaging_conversation_started_7d`
+(constante `MESSAGING_RESULT_FIELD`).
+
+Se conectar uma **outra** ad account no futuro e a tela continuar zerada,
+rode `get_data` (MCP Windsor) com esses mesmos campos e `date_preset:
+"last_30d"` pra conferir se a conta conectada é de fato a que roda a
+campanha — no primeiro teste (2026-08-03) a conta conectada só tinha uma
+campanha de rascunho com R$0,01 de spend, diferente da campanha "Conversas
+por mensagem" mostrada no painel do Meta Ads Manager.
 
 ### 3. Pegar a API key do Windsor
 

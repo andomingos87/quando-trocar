@@ -32,8 +32,8 @@ Nova tela `/admin/analytics-ads`: liga gasto/resultado do Meta Ads ao funil real
 ### Operação
 
 - Migrations `ads_analytics` e `ad_insights_sync_cron` aplicadas em produção (único projeto Supabase — teste e prod são o mesmo banco).
-- Pendente do lado do usuário: conectar a conta de Meta Ads no Windsor (conector `facebook` — só `instagram` orgânico estava conectado), configurar `WINDSOR_API_KEY` e registrar `ad_insights_sync_url` no Vault. Ver [runbook](./runbooks/ads-analytics-setup.md).
-- Nomes de campo do conector Windsor (`campaign`, `adset`, `ad`, `actions`) ainda não foram confirmados com `get_fields` numa conta conectada — só documentados publicamente. Ajustar `lib/windsor/meta-ads.ts` se necessário após conectar.
+- Meta Ads conectado no Windsor em 2026-08-03 (conector `facebook`); nomes de campo confirmados via `get_fields`/`get_data` e corrigidos em `lib/windsor/meta-ads.ts` (o Windsor achata `actions` em campos próprios por tipo, ex. `actions_onsite_conversion_messaging_conversation_started_7d`, em vez de expor o array da Marketing API).
+- Pendente: confirmar se a ad account conectada no Windsor é a mesma que roda a campanha "Conversas por mensagem" do usuário — o primeiro `get_data` só retornou uma campanha de rascunho com R$0,01 de spend. Configurar `WINDSOR_API_KEY` e registrar `ad_insights_sync_url` no Vault pro cron rodar sozinho. Ver [runbook](./runbooks/ads-analytics-setup.md).
 
 ---
 
