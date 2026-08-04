@@ -1,0 +1,85 @@
+<!doctype html>
+<!--
+  Fonte da imagem de compartilhamento (public/og.png), 1200x630.
+
+  Como regerar:
+    1. npm run dev
+    2. copie este arquivo para public/_og.html
+    3. abra http://localhost:3000/_og.html num viewport de 1200x630 e tire um screenshot
+    4. salve como public/og.png e apague public/_og.html
+
+  Cores vêm de app/globals.css (--color-ink, --color-brand). Se o token da marca mudar,
+  atualize aqui também — senão a prévia do link fica com um laranja e o site com outro.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden;
+    background: #001E62; /* --color-ink */
+    font-family: "DM Sans", -apple-system, "Helvetica Neue", sans-serif;
+    color: #fff;
+    position: relative;
+  }
+  /* grade blueprint — mesmo grafismo do CTA final */
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+    background-size: 48px 48px;
+    -webkit-mask-image: radial-gradient(ellipse 78% 70% at 50% 42%, #000 35%, transparent 78%);
+            mask-image: radial-gradient(ellipse 78% 70% at 50% 42%, #000 35%, transparent 78%);
+  }
+  .glow {
+    position: absolute; left: 50%; top: -170px; width: 1100px; height: 620px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(225,157,78,.20) 0%, transparent 68%);
+  }
+  .content {
+    position: relative; height: 100%;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 88px;
+  }
+  .logo { width: 430px; height: auto; display: block; }
+  h1 {
+    margin-top: 46px;
+    font-size: 62px; font-weight: 700; line-height: 1.03;
+    letter-spacing: -.022em; max-width: 940px;
+  }
+  h1 .accent { color: #E19D4E; } /* --color-brand */
+  p {
+    margin-top: 26px; font-size: 25px; line-height: 1.45;
+    color: rgba(255,255,255,.72); max-width: 800px; font-weight: 400;
+  }
+  .rule { margin-top: 40px; width: 96px; height: 3px; background: #E19D4E; }
+  /* cantos técnicos — mesmo detalhe do CTA final */
+  .tick { position: absolute; width: 42px; height: 42px; border-color: rgba(255,255,255,.20); }
+  .tl { left: 44px; top: 44px; border-left: 2px solid; border-top: 2px solid; }
+  .tr { right: 44px; top: 44px; border-right: 2px solid; border-top: 2px solid; }
+  .bl { left: 44px; bottom: 44px; border-left: 2px solid; border-bottom: 2px solid; }
+  .br { right: 44px; bottom: 44px; border-right: 2px solid; border-bottom: 2px solid; }
+  .stripe { position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: #E19D4E; }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <span class="tick tl"></span><span class="tick tr"></span>
+  <span class="tick bl"></span><span class="tick br"></span>
+
+  <div class="content">
+    <img class="logo" src="/logo-qt-branco.png" alt="Quando Trocar">
+    <h1>Seu cliente não esquece da troca.<br><span class="accent">Ele esquece de voltar pra você.</span></h1>
+    <p>Lembretes de retorno pelo WhatsApp, com o nome da sua oficina.</p>
+    <div class="rule"></div>
+  </div>
+
+  <div class="stripe"></div>
+</body>
+</html>

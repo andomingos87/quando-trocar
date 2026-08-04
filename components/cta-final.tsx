@@ -61,8 +61,8 @@ export function CtaFinal() {
           </Button>
         </div>
 
-        <p className="mt-8 font-mono text-[11.5px] uppercase tracking-[0.14em] text-white/85">
-          Sem cartão · sem fidelidade · cancele quando quiser
+        <p className="mt-8 font-mono text-[11.5px] uppercase tracking-[0.14em] text-white">
+          {LANDING_OFFER.closingMicrocopy}
         </p>
       </Reveal>
     </section>

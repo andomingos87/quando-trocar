@@ -52,7 +52,7 @@ export const metadata: Metadata = {
       "Registre o serviço pelo WhatsApp e lembre o cliente da próxima troca com o nome da sua oficina.",
     images: ["/og.png"],
   },
-  icons: { icon: "/logo_qt_byperfect.png", apple: "/logo_qt_byperfect.png" },
+  icons: { icon: "/logo-qt.png", apple: "/logo-qt.png" },
   robots: { index: true, follow: true },
 };
 

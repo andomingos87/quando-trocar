@@ -33,6 +33,10 @@ LOGO QUANDO TROCAR.pdf
 # Vercel
 .vercel
 
+# Saida das simulacoes de persona (transcripts + relatorio). `output/` no geral
+# e versionado (material de apresentacao); so esta subpasta e descartavel.
+/output/persona/
+
 # Misc
 .DS_Store
 *.pem

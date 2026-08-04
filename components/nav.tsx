@@ -21,10 +21,10 @@ export function Nav() {
           aria-label="Quando Trocar"
         >
           <Image
-            src="/logo.png"
+            src="/logo-qt.png"
             alt="Quando Trocar"
-            width={374}
-            height={106}
+            width={1441}
+            height={403}
             sizes="180px"
             className="h-10 w-auto sm:h-11"
             priority

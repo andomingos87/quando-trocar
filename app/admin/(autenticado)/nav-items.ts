@@ -33,6 +33,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: "Comercial",
     items: [
       { href: "/admin/leads", label: "Leads" },
+      { href: "/admin/analytics-ads", label: "Analytics de anúncios" },
       { href: "/admin/representantes", label: "Representantes" },
       { href: "/admin/comissoes", label: "Comissões" },
     ],

@@ -11,6 +11,11 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 - `app/api/webhooks/whatsapp/route.ts` — entrada do webhook.
 - `app/api/internal/whatsapp-reminders/consume/route.ts` — worker de lembretes.
 - Prompts em `.codex/prompts/whatsapp-*.md`.
+- `tests/harness/whatsapp/` — harness de teste conversacional (repositorio em memoria, sender
+  fake, decorators que gravam o reply cru, invariantes). E a UNICA implementacao fake do
+  `WhatsappRepository`: teste novo consome daqui em vez de duplicar `vi.fn()`.
+- `scripts/whatsapp/` — CLIs de teste local (`repl`, `eval`, `persona`). Nunca importados por
+  `app/` ou `lib/` (regra `no-restricted-imports` em `eslint.config.mjs`).
 
 **NAO pertence:** UI do painel (modulo [[painel-admin]]), schema/migrations (modulo
 [[database]]), cobranca/pagamento (modulo [[billing]]), site publico (modulo [[site-publico]]).
@@ -63,8 +68,25 @@ operacao, lembrete do cliente final, suporte) e responde. E stateful e auditado.
 
 ## Testes
 - `tests/whatsapp-*.test.ts` (route, router, repository, agentes, media, date-parse...).
-- Evals de agente: `tests/whatsapp-agent-evals/` (`sales.json`, `onboarding.json`, `reminder.json`).
 - Ao mudar parsing, roteamento, transicao de status, escrita no repo ou webhook: atualizar/adicionar teste.
+
+### Teste conversacional local (sem WhatsApp)
+Tres ferramentas sobre o mesmo harness (`tests/harness/whatsapp/`), que roda o webhook REAL
+contra repositorio em memoria e sender fake — sem Meta, sem Supabase e, por padrao, sem OpenAI.
+Sempre pelo `handlers.POST` com request assinado: o texto que o cliente le nao e `reply.body`
+(passa por geracao, validador, split e botoes) e o estado e decidido no webhook (ADR-0001).
+
+- `npm run repl:whatsapp` — conversa no terminal mostrando o trace da decisao (intent, modo,
+  transicao de status, tool calls, handoff). Flags: `--perfil lead|oficina|cliente_final`,
+  `--geracao off|sombra|on`, `--openai off|real`. Comandos: `/estado`, `/raw`, `/audio`, `/botao`.
+- `npm run eval:whatsapp` — roda `tests/whatsapp-agent-evals/` (schema tipado em `schema.ts`).
+  Ver o README de la para `status` (active/quarantine/pending_decision) e replay vs seed.
+- `npm run persona:whatsapp` — personas sinteticas conversam com o bot; invariantes
+  deterministicas (`invariants.ts`) reprovam, LLM-judge so relata.
+
+Os tres ficam FORA do `npm test`: com `--openai real` custam dinheiro e nao sao deterministicos.
+Cobertura do proprio harness: `tests/whatsapp-harness.test.ts` e
+`tests/whatsapp-harness-invariants.test.ts` (teste negativo — prova que cada invariante dispara).
 
 ## Referencias
 - Arquitetura: `docs/architecture/whatsapp-bot-technical-plan.md`

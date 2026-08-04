@@ -1,0 +1,17 @@
+{
+  // Config usada SÓ pelos CLIs de teste local em `scripts/whatsapp/` (tsx).
+  //
+  // O pacote `server-only` não está instalado — o Next resolve internamente no
+  // build. Fora do Next (tsx), `lib/whatsapp/inadimplencia-guard.ts` quebra o
+  // import. O vitest já resolve isso com um alias (vitest.config.ts:8); aqui é
+  // o mesmo stub, num tsconfig separado para NÃO redirecionar `server-only` no
+  // build de produção (o Next respeita `paths`, e apontar o stub lá desligaria
+  // a barreira server/client de verdade).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "server-only": ["./tests/server-only-stub.ts"]
+    }
+  }
+}

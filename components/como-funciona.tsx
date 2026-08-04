@@ -19,7 +19,7 @@ const steps = [
     title: "A gente agenda",
     body: "Calculamos quando o cliente precisa voltar. Você não faz nada.",
     demo: {
-      text: "✓ Anotado. Próxima troca: ~set/2026. Monitorando km.",
+      text: "✓ Anotado. Próxima troca: daqui a ~5 meses. Monitorando km.",
       side: "them" as const,
     },
   },

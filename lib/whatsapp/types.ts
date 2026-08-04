@@ -93,6 +93,16 @@ export type AgentReply = {
   body: string;
   status: LeadStatus;
   toolCalls: ToolCallRecord[];
+  /**
+   * Intent efetivamente aplicado na resposta. Diagnóstico puro: não altera
+   * fluxo nem texto. Antes disso o intent só escapava via `classificationAudit`,
+   * que é preenchido apenas quando o determinístico diverge do LLM — ou seja,
+   * na maioria dos turnos ninguém conseguia saber o que o bot entendeu.
+   * Ausente nos ramos que respondem ANTES da classificação (sinal de cadastro,
+   * captura do nome da oficina): ali não existe intent, e chutar um seria pior
+   * que não informar.
+   */
+  intent?: SalesIntent;
   convertToOficina?: boolean;
   /** Nome da oficina capturado no fluxo de conversão (acompanha convertToOficina). */
   nomeOficina?: string | null;
@@ -343,6 +353,17 @@ export type UnsupportedInboundMediaType =
 
 export type TranscriptionStatus = "success" | "failed" | "empty" | "timeout";
 
+// Atribuição de anúncio (referral.* do Meta) presente na 1ª mensagem de quem
+// clicou em "Enviar mensagem" num anúncio/post do Instagram/Facebook. Base do
+// funil de ads-analytics — ver migration ads_analytics.
+export type WhatsappReferral = {
+  ctwaClid: string | null;
+  sourceId: string | null;
+  sourceType: string | null;
+  sourceUrl: string | null;
+  headline: string | null;
+};
+
 export type InboundWhatsappMessage = {
   providerEventId: string;
   whatsappMessageId: string;
@@ -364,6 +385,7 @@ export type InboundWhatsappMessage = {
   transcriptionStatus?: TranscriptionStatus | null;
   transcriptionError?: string | null;
   audioDurationMs?: number | null;
+  referral?: WhatsappReferral | null;
 };
 
 export type WhatsappStatusEvent = {
@@ -416,6 +438,7 @@ export type WhatsappRepository = {
     origem: LeadOrigin;
     status: LeadStatus;
     representanteCodigo?: string | null;
+    referral?: WhatsappReferral | null;
   }): Promise<SavedLead>;
   upsertConversation(input: {
     leadId: string | null;

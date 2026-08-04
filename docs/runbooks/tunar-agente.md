@@ -94,17 +94,29 @@ Se algum teste antigo passou a falhar:
 - **Era um teste que cobria comportamento que mudou intencionalmente?** Atualize o expected do teste e registre no `docs/CONTEXT_CHANGELOG.md` que a frase canônica X agora é Y.
 - **Era teste que cobria comportamento que deveria continuar valendo?** Você quebrou regressão — volte e ajuste sem quebrar.
 
-### 6. Rode o eval set (se existir)
-
-Se `tests/whatsapp-agent-evals/` estiver implementado:
+### 6. Rode o eval set
 
 ```bash
-npm run eval:whatsapp   # ou conforme estiver configurado
+npm run eval:whatsapp                     # determinístico, sem custo
+npm run eval:whatsapp -- --openai real    # com LLM, antes de fechar a tarefa
 ```
 
-O eval set roda casos canônicos contra o agente real (com OpenAI). Falha aceitável: < 5% de regressão. Falha bloqueante: regressão em caso marcado `critical: true` no fixture.
+O eval set roda os casos canônicos pelo caminho real do webhook. Falha bloqueante: regressão em caso `critical: true` com `status: "active"`. Casos `quarantine` / `pending_decision` são reportados sem bloquear — e se um deles **passar**, o runner falha com `STALE_QUARANTINE` para você promovê-lo a `active`.
 
-Se ainda não existe runner: **adicione seu caso ao fixture JSON** em `tests/whatsapp-agent-evals/<agente>.json` mesmo assim — ele será exercitado quando o runner ficar pronto.
+Adicione seu caso novo ao fixture em `tests/whatsapp-agent-evals/<agente>.json` (schema em [`schema.ts`](../../tests/whatsapp-agent-evals/schema.ts); regras no [README do eval set](../../tests/whatsapp-agent-evals/README.md)).
+
+### 6b. Ciclo completo de teste conversacional local
+
+Nenhum destes precisa de WhatsApp, Supabase ou (por padrão) OpenAI:
+
+```bash
+npm run repl:whatsapp                     # 1. reproduza o caso à mão e veja a decisão
+npm run eval:whatsapp                     # 2. trave o comportamento como caso canônico
+npm run persona:whatsapp                  # 3. procure o caso que você não pensou
+```
+
+- **REPL** — conversa no terminal mostrando intent aplicado, modo resolvido, transição de status, tool calls e handoff. É o jeito mais rápido de capturar o passo 1 deste runbook. Flags úteis: `--perfil oficina`, `--geracao on`, `--openai real`, `/audio <texto>` para simular transcrição.
+- **Simulador de persona** — personas sintéticas (cético de preço, apressado, cadastro confuso por áudio, hostil, cliente final) conversam com o bot. Invariantes determinísticas reprovam (ADR-0001, ADR-0009, ADR-0017, vazamento de prompt, loop, opt-out); o LLM-judge só relata. Violação encontrada aqui deve virar caso no eval set.
 
 ### 7. Lint + build
 

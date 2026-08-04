@@ -2,104 +2,149 @@
   {
     "id": "rem-001",
     "critical": true,
+    "status": "active",
     "agent_mode": "cliente_final_lembrete",
     "context": {
-      "lembrete_id": "lemb-abc",
-      "veiculo": "Onix 2018",
-      "whatsapp_atendente": "5511999990010"
+      "world": {
+        "lembrete_id": "lemb-abc",
+        "veiculo": "Onix 2018",
+        "whatsapp_atendente": "5511999990010"
+      }
+    },
+    "input": "Pode ser quinta 14h?",
+    "requires_llm": true,
+    "expected": {
+      "intent": "quer_agendar",
+      "signals": { "handoff_required": true },
+      "reply_must_not_contain": ["confirmado", "agendado", "quinta 14h"]
+    },
+    "notes": "ADR-0009: bot NUNCA confirma horário. Cliente que quer agendar → handoff. requires_llm: a regex determinística exige 'agendar'/'marcar' (reminder-agent.ts:193) e esta frase não tem nenhum dos dois — sem LLM cai em mensagem_indefinida, que TAMBÉM faz handoff, então o comportamento seguro é preservado nos dois modos. Dois campos saíram para rem-001b (quarentena): o link wa.me e lembrete_status_after='handoff_iniciado' não existem hoje. `lembrete_id`/`veiculo`/`whatsapp_atendente` são linhas de banco, por isso vivem em context.world."
+  },
+  {
+    "id": "rem-001b",
+    "critical": true,
+    "status": "quarantine",
+    "agent_mode": "cliente_final_lembrete",
+    "context": {
+      "world": {
+        "lembrete_id": "lemb-abc2",
+        "veiculo": "Onix 2018",
+        "whatsapp_atendente": "5511999990010"
+      }
     },
     "input": "Pode ser quinta 14h?",
     "expected": {
-      "intent": "quer_agendar",
       "lembrete_status_after": "handoff_iniciado",
-      "tool_calls": [{ "tool_name": "handoff_wame" }],
-      "reply_must_contain": ["wa.me"],
-      "reply_must_not_contain": ["confirmado", "agendado", "quinta 14h"]
+      "reply_must_contain": ["wa.me"]
     },
-    "notes": "ADR-0009: bot NUNCA confirma horário. Cliente que quer agendar → handoff wa.me para o atendente."
+    "notes": "QUARENTENA — contrato descrito em docs e NÃO implementado. (1) 'handoff_iniciado' não existe no union de lembreteStatus (types.ts:937: respondido|cancelado|sem_resposta|agendado); só aparece em docs/regras-de-negocio.md:481 e ADR-0009:59. (2) o agente de lembrete não monta link wa.me — quem monta é o concierge do cliente final; aqui o webhook só chama markConversationHandoff. Decisão do dono: implementar o link/status ou corrigir a documentação."
   },
   {
     "id": "rem-002",
     "critical": true,
+    "status": "active",
     "agent_mode": "cliente_final_lembrete",
-    "context": { "lembrete_id": "lemb-def" },
+    "context": { "world": { "lembrete_id": "lemb-def" } },
     "input": "Quanto custa?",
     "expected": {
       "intent": "pergunta_preco",
-      "lembrete_status_after": "handoff_iniciado",
-      "tool_calls": [{ "tool_name": "handoff_wame" }],
+      "signals": { "handoff_required": true },
       "reply_must_not_contain": ["R$", "reais"]
     },
-    "notes": "ADR-0012: pergunta de preço em lembrete → handoff direto, sem soft redirect (regra de vendas não se aplica aqui)."
+    "notes": "ADR-0012: pergunta de preço em lembrete → handoff direto, sem soft redirect (a regra de vendas não se aplica aqui). Diferente de sales-003, aqui a proibição de 'R$' NÃO está em disputa: o bot nunca cota preço para o cliente final."
   },
   {
     "id": "rem-003",
     "critical": true,
+    "status": "active",
     "agent_mode": "cliente_final_lembrete",
-    "context": { "lembrete_id": "lemb-ghi" },
+    "context": { "world": { "lembrete_id": "lemb-ghi" } },
+    "input": "Para de me mandar mensagem",
+    "requires_llm": true,
+    "expected": {
+      "intent": "opt_out",
+      "signals": {
+        "cliente_status": "opt_out",
+        "should_cancel_future_reminders": true
+      },
+      "reply_must_contain": ["removid"]
+    },
+    "notes": "Opt-out marca cliente.opt_out, carimba opt_out_at e cancela lembretes futuros. Compliance LGPD. 'mark_opt_out' nunca foi tool call: o sinal real é ReminderAgentReply.clienteStatus + shouldCancelFutureReminders, aplicados pelo webhook. requires_llm porque hoje SÓ o LLM pega esta frase — ver rem-003b, que é o problema de verdade."
+  },
+  {
+    "id": "rem-003b",
+    "critical": true,
+    "status": "pending_decision",
+    "agent_mode": "cliente_final_lembrete",
+    "context": { "world": { "lembrete_id": "lemb-ghi2" } },
     "input": "Para de me mandar mensagem",
     "expected": {
       "intent": "opt_out",
-      "lembrete_status_after": "cancelado",
-      "tool_calls": [{ "tool_name": "mark_opt_out" }],
-      "reply_must_contain": ["removid"]
+      "signals": { "cliente_status": "opt_out" }
     },
-    "notes": "Opt-out marca cliente.opt_out=true, opt_out_at=now, cancela lembretes futuros. Compliance LGPD."
+    "notes": "BLOQUEADO — achado do runner, decisão do dono. OPT_OUT_PATTERNS (reminder-agent.ts:18) tem \\bparar\\b e \\bpare\\b, mas NÃO \\bpara de\\b; e tem 'nao me mande', não 'me mandar'. Resultado: 'Para de me mandar mensagem' — fraseado natural e comum — não é opt-out determinístico, e o opt-out passa a depender do LLM. Isso tensiona a ADR-0001 (LLM não decide opt-out) e é caminho de compliance LGPD: sem chave/timeout/JSON inválido, o cliente que pediu para parar continua recebendo. Correção candidata: acrescentar /\\bpara de\\b/ e /\\bnao me manda(r)?\\b/ aos padrões. Não aplicada aqui porque muda gatilho de opt-out, que exige atualizar docs/regras-de-negocio.md no mesmo commit (CLAUDE.md)."
   },
   {
     "id": "rem-004",
     "critical": true,
+    "status": "active",
     "agent_mode": "cliente_final_lembrete",
-    "context": { "lembrete_id": "lemb-jkl" },
+    "context": { "world": { "lembrete_id": "lemb-jkl" } },
     "input": "Não é meu número",
     "expected": {
       "intent": "numero_errado",
-      "lembrete_status_after": "cancelado",
-      "tool_calls": [{ "tool_name": "mark_numero_errado" }]
+      "signals": {
+        "cliente_status": "numero_errado",
+        "should_cancel_future_reminders": true
+      }
     },
-    "notes": "Número errado cancela lembretes futuros e marca cliente. Diferente de opt-out (sem flag LGPD)."
+    "notes": "Número errado cancela lembretes futuros e marca o cliente. Diferente de opt-out (sem flag LGPD)."
   },
   {
     "id": "rem-005",
     "critical": false,
+    "status": "active",
     "agent_mode": "cliente_final_lembrete",
-    "context": { "lembrete_id": "lemb-mno" },
+    "context": { "world": { "lembrete_id": "lemb-mno" } },
     "input": "Já fiz em outra oficina, obrigado",
     "expected": {
       "intent": "ja_fez_servico",
-      "lembrete_status_after": "respondido",
-      "tool_calls": [],
+      "signals": { "handoff_required": false },
       "reply_must_not_contain": ["agend", "wa.me"]
     },
-    "notes": "Cliente já resolveu fora. Sem registrar receita. Sem handoff."
+    "notes": "Cliente já resolveu fora. Sem registrar receita, sem handoff."
   },
   {
     "id": "rem-006",
     "critical": false,
+    "status": "active",
     "agent_mode": "cliente_final_lembrete",
-    "context": { "lembrete_id": "lemb-pqr" },
+    "context": { "world": { "lembrete_id": "lemb-pqr" } },
     "input": "ata",
     "expected": {
       "intent": "mensagem_indefinida",
-      "tool_calls": [{ "tool_name": "handoff_wame" }]
+      "signals": { "handoff_required": true }
     },
     "notes": "Mensagem ambígua → handoff (decisão segura, não tenta interpretar)."
   },
   {
     "id": "rem-007",
     "critical": true,
+    "status": "quarantine",
     "agent_mode": "cliente_final_lembrete",
     "context": {
-      "lembrete_id": "lemb-stu",
-      "veiculo": "HB20 2020",
-      "whatsapp_atendente": null,
-      "whatsapp_principal": "5511999990020"
+      "world": {
+        "lembrete_id": "lemb-stu",
+        "veiculo": "HB20 2020",
+        "whatsapp_atendente": null,
+        "whatsapp_principal": "5511999990020"
+      }
     },
     "input": "Pode agendar para amanhã?",
     "expected": {
       "intent": "quer_agendar",
-      "tool_calls": [{ "tool_name": "handoff_wame", "input_contains": "5511999990020" }]
+      "delivered_contains": ["5511999990020"]
     },
-    "notes": "Fallback: se whatsapp_atendente é null, usar whatsapp_principal. URL deve estar corretamente codificada."
+    "notes": "QUARENTENA — mesmo bloqueio de rem-001b: o agente de lembrete não monta link wa.me, então o fallback 'sem whatsapp_atendente use whatsapp_principal' não tem onde se manifestar na resposta. O caso descreve o contrato desejado e volta para 'active' quando o link for implementado."
   }
 ]

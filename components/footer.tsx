@@ -16,11 +16,11 @@ export function Footer() {
             aria-label="Quando Trocar"
           >
             <Image
-              src="/logo_qt_byperfect_white.png"
+              src="/logo-qt-branco.png"
               alt="Quando Trocar"
-              width={1810}
-              height={697}
-              sizes="160px"
+              width={1441}
+              height={403}
+              sizes="140px"
               className="h-9 w-auto"
             />
           </Link>

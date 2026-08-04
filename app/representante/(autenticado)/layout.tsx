@@ -21,10 +21,11 @@ export default async function RepresentanteAuthenticatedLayout({
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-ink-deep text-paper md:flex">
         <div className="flex items-center gap-3 px-5 py-6">
           <Image
-            src="/logo_qt_byperfect_white.png"
+            src="/logo-qt-branco.png"
             alt="Quando Trocar"
-            width={140}
-            height={32}
+            width={1441}
+            height={403}
+            sizes="140px"
             priority
             className="h-8 w-auto"
           />
@@ -40,10 +41,11 @@ export default async function RepresentanteAuthenticatedLayout({
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-white/95 px-4 py-2.5 backdrop-blur sm:px-6">
           <div className="flex items-center gap-2 md:hidden">
             <Image
-              src="/logo_qt_byperfect.png"
+              src="/logo-qt.png"
               alt="Quando Trocar"
-              width={120}
-              height={28}
+              width={1441}
+              height={403}
+              sizes="120px"
               className="h-7 w-auto"
             />
           </div>
@@ -52,7 +54,9 @@ export default async function RepresentanteAuthenticatedLayout({
           </span>
           <RepUserMenu nome={rep.nome} codigo={rep.codigo} />
         </header>
-        <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 sm:py-8 md:pb-8">{children}</main>
+        <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 sm:py-8 md:pb-8">
+          {children}
+        </main>
       </div>
       <RepBottomNav />
     </div>

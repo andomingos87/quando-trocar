@@ -1161,6 +1161,7 @@ export function createWhatsappWebhookHandlers(deps: HandlerDeps) {
           body: inbound.body,
           contextWhatsappMessageId: inbound.contextWhatsappMessageId,
           landingPhrases: salesConfig?.frasesLanding,
+          referral: inbound.referral,
         });
 
         // ADR-0019: o router ja extraiu/atribuiu o codigo do representante.

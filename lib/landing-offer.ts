@@ -15,8 +15,11 @@ export const LANDING_OFFER = {
   trialDays: 14,
   monthlyPrice: 59,
   monthlyPriceLabel: "R$ 59/mês",
+  /** Preço do teste. A âncora exibida é o mensal; o teste é o modificador. */
+  trialPriceLabel: "R$ 0",
   ctaLabel: "Começar meus 14 dias grátis",
   microcopy: "Sem cartão · depois, R$ 59/mês · cancele quando quiser",
+  closingMicrocopy: "Sem cartão · sem fidelidade · cancele quando quiser",
   benefits: [
     "14 dias grátis",
     "Sem cartão no teste",

@@ -56,9 +56,12 @@ REP_OTP_DEV_BYPASS_CODE=            # só dev; deixe vazio em prod
 # Mercado Pago (Admin-6) — placeholder até integrar
 MERCADO_PAGO_ACCESS_TOKEN=...
 MERCADO_PAGO_WEBHOOK_SECRET=...
+
+# Analytics de anúncios (Meta Ads via Windsor.ai) — ver ads-analytics-setup.md
+WINDSOR_API_KEY=...
 ```
 
-Regra inviolável: `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `INTERNAL_JOB_SECRET`, `ADMIN_SESSION_SECRET`, `REP_SESSION_SECRET`, `MERCADO_PAGO_ACCESS_TOKEN`, `MERCADO_PAGO_WEBHOOK_SECRET` **nunca** podem ser `NEXT_PUBLIC_*`. Se aparecerem no bundle do browser, troque imediatamente (já vazaram).
+Regra inviolável: `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `INTERNAL_JOB_SECRET`, `ADMIN_SESSION_SECRET`, `REP_SESSION_SECRET`, `MERCADO_PAGO_ACCESS_TOKEN`, `MERCADO_PAGO_WEBHOOK_SECRET`, `WINDSOR_API_KEY` **nunca** podem ser `NEXT_PUBLIC_*`. Se aparecerem no bundle do browser, troque imediatamente (já vazaram).
 
 ## Setup local (`.env.local`)
 

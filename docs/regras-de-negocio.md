@@ -112,6 +112,12 @@ O bot fala "qualquer peça ou serviço automotivo com retorno previsível" — �
 - Qualquer outra primeira mensagem → `origem = manual_whatsapp`.
 - Fonte: [PRD §6](./product/PRD-whatsapp-bot.md), `detectLeadOrigin()` em `lib/whatsapp/sales-agent.ts`, `/admin/configuracoes`.
 
+### 1.1-bis Atribuição de anúncio (Meta Ads)
+- Distinta do campo `origem` acima (que só distingue landing vs. mensagem direta). Quando o lead clica em "Enviar mensagem" num anúncio/post do Instagram ou Facebook (click-to-WhatsApp), a Meta manda um objeto `referral` na primeira mensagem — capturado em `lib/whatsapp/payload.ts` e persistido em `leads_oficina.ad_id` / `ad_ctwa_clid` / `ad_source_type` / `ad_headline` / `ad_attributed_at`.
+- **First-touch**: gravado uma única vez por lead (quando `ad_attributed_at` ainda é `null`) e **nunca sobrescrito** por mensagens posteriores, mesmo que o mesmo número clique em outro anúncio depois.
+- Alimenta a tela `/admin/analytics-ads`, que junta essa atribuição ao gasto/resultado do anúncio (sincronizado do Meta Ads via Windsor.ai em `ad_insights_daily`) para calcular custo por lead/qualificado e CAC real por campanha.
+- Fonte: migration `ads_analytics`, `lib/whatsapp/payload.ts` (`extractReferral`), `lib/whatsapp/repository.ts` (`upsertLead`), [runbook de setup](./runbooks/ads-analytics-setup.md).
+
 ### 1.2 Estados do lead
 Enum em `leads_oficina.status`:
 

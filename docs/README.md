@@ -16,9 +16,17 @@ Especificações funcionais e visuais. Tudo em português.
 - [PRD — Bot WhatsApp (implementação real)](./product/PRD-whatsapp-bot.md) — **canônico**. Spec completo do produto real: personas, fluxos, modelo de dados, requisitos do agente, compliance.
 - [PRD — Painel Admin](./product/PRD-painel-admin.md) — **canônico**. Painel interno (`/admin`) para devs/fundadores/donos gerirem oficinas, planos, preços, cobrança e auditoria.
 - [PRD — Landing prototype](./product/PRD-landing-prototype.md) — spec do protótipo de validação comercial (frontend-only, mockado). Histórico, mas ainda válido como referência da demo.
+- [PRD — Captura por comentário no Instagram (Comment → DM)](./product/PRD-instagram-comment-to-dm.md) — **proposto**. Webhook Meta + Private Reply: comentário com keyword → DM com link WhatsApp + atribuição de origem. Fase 1 autorizada; depende de ADR novo (API própria vs. ManyChat).
 - [Telas web](./product/telas-web.md) — proposta de painel operacional para a oficina.
 - [Copy](./product/copy.md) — microcopy da landing page (gitignored, material de referência).
 - [Design system](./product/design-system.md) — identidade visual do "Quando Trocar" para a landing (gitignored, material de referência).
+
+## Marketing e conteúdo
+
+- [Instagram — estratégia e cronograma](./marketing/instagram/estrategia.md) — objetivo do perfil, público, tom de voz, guardrails de comunicação (ancorados em `regras-de-negocio.md`), pilares, cadência e o sistema visual (prompt curto + referências anexadas; arte completa no GPT Image 2 — cena, texto e logo; Canva opcional para retoque). Versão diagramada: [PDF](./marketing/instagram/pdf/estrategia.pdf).
+- [Instagram — mês 1, 12 posts](./marketing/instagram/mes-1-posts.md) — posts prontos: prompt (`MARCA` + `CENA` + `TEXTO`) + legenda + hashtags. Versão diagramada: [PDF](./marketing/instagram/pdf/mes-1-posts.pdf).
+
+> Os PDFs são gerados a partir dos markdowns acima (fonte da verdade). Editou o markdown, regere com `scripts/marketing/instagram-pdf/build.py` — veja o cabeçalho do script.
 
 ## Arquitetura e decisões
 
@@ -52,6 +60,7 @@ Procedimentos passo a passo para tarefas operacionais.
 - [Migrations do Supabase](./runbooks/supabase-migrations.md) — fluxo de criar, revisar e aplicar migrations.
 - [Deploy na Vercel](./runbooks/deploy-vercel.md) — preview vs produção, env vars, smoke tests.
 - [Tunar o agente de IA](./runbooks/tunar-agente.md) — passo a passo para ajustar prompt/resposta do bot sem regressão.
+- [Analytics de anúncios (Meta Ads via Windsor.ai)](./runbooks/ads-analytics-setup.md) — conectar Meta Ads no Windsor e ativar a tela `/admin/analytics-ads`.
 
 ## Prompts para agentes
 

@@ -1,6 +1,6 @@
 import { normalizeWhatsappPhone } from "./sales-agent";
 import { resolveButtonReplyId } from "./sales-buttons";
-import type { InboundWhatsappMessage, WhatsappStatusEvent } from "./types";
+import type { InboundWhatsappMessage, WhatsappReferral, WhatsappStatusEvent } from "./types";
 
 type MetaMediaAttachment = {
   id?: string;
@@ -9,6 +9,19 @@ type MetaMediaAttachment = {
   caption?: string;
   filename?: string;
   voice?: boolean;
+};
+
+// Enviado pela Meta na primeira mensagem de quem clicou em "Enviar mensagem"
+// num anúncio/post do Instagram ou Facebook (click-to-WhatsApp). Base da
+// atribuição de campanha em ads-analytics — ver migration ads_analytics.
+type MetaReferral = {
+  source_id?: string;
+  source_type?: string;
+  source_url?: string;
+  headline?: string;
+  body?: string;
+  media_type?: string;
+  ctwa_clid?: string;
 };
 
 type MetaMessage = {
@@ -25,6 +38,7 @@ type MetaMessage = {
   video?: MetaMediaAttachment;
   location?: Record<string, unknown>;
   contacts?: unknown[];
+  referral?: MetaReferral;
   // Resposta de botão de template (quick-reply): o texto do botão é a mensagem.
   button?: { text?: string; payload?: string };
   // Resposta interativa (button_reply / list_reply): o título escolhido é a mensagem.
@@ -94,6 +108,20 @@ export function extractWhatsappMessageId(payload: unknown) {
   return value?.messages?.[0]?.id ?? value?.statuses?.[0]?.id ?? null;
 }
 
+function extractReferral(referral: MetaReferral | undefined): WhatsappReferral | null {
+  if (!referral || (!referral.ctwa_clid && !referral.source_id)) {
+    return null;
+  }
+
+  return {
+    ctwaClid: referral.ctwa_clid ?? null,
+    sourceId: referral.source_id ?? null,
+    sourceType: referral.source_type ?? null,
+    sourceUrl: referral.source_url ?? null,
+    headline: referral.headline ?? null,
+  };
+}
+
 export function extractInboundMessages(payload: unknown): InboundWhatsappMessage[] {
   const typed = payload as MetaPayload;
   const messages: InboundWhatsappMessage[] = [];
@@ -123,6 +151,7 @@ export function extractInboundMessages(payload: unknown): InboundWhatsappMessage
           contactName: contact?.profile?.name ?? null,
           timestamp: normalizedTimestamp,
           rawMessage: message as Record<string, unknown>,
+          referral: extractReferral(message.referral),
         };
 
         if (message.type === "text" && message.text?.body) {

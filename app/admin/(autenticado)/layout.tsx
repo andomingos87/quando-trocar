@@ -26,10 +26,11 @@ export default async function AdminAuthenticatedLayout({
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-ink-deep text-paper md:flex">
         <div className="flex items-center gap-3 px-5 py-6">
           <Image
-            src="/logo_qt_byperfect_white.png"
+            src="/logo-qt-branco.png"
             alt="Quando Trocar"
-            width={140}
-            height={32}
+            width={1441}
+            height={403}
+            sizes="140px"
             priority
             className="h-8 w-auto"
           />

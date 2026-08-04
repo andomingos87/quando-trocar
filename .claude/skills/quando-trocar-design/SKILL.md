@@ -16,6 +16,7 @@ Guia obrigatório quando você for tocar qualquer pedaço de UI deste projeto. A
 2. `docs/product/design-system.md` — fundamento da marca (paleta, tipografia, grafismos, regras de logo). Ler integralmente se a tarefa for criar **uma seção nova de landing** ou um **componente reutilizável de alto nível**.
 3. `docs/product/telas-web.md` — telas web mapeadas (consultar se a tarefa for sobre uma tela existente).
 4. `docs/product/copy.md` — copy oficial. Não inventar headline/CTA sem checar.
+5. **Arte do feed Instagram** → `.claude/skills/instagram-posts/SKILL.md` (fluxo GPT Image 2; não misturar com tokens de landing).
 
 ## Desvio importante: laranja é o CTA primário, não o vermelho
 
@@ -53,8 +54,9 @@ Utilitários custom já prontos (todos em `app/globals.css` — verifique antes 
 
 ## Logos
 
-- `/public/logo.png` — wordmark "Quando Trocar" colorido (fundos claros)
-- _(pendente)_ versão **branca** do wordmark para fundos escuros (navy, ink-deep, brand)
+- `/public/logo-qt.png` — wordmark colorido (fundos claros)
+- `/public/logo-qt-branco.png` — wordmark branco (fundos escuros, navy, feed Instagram)
+- `/public/logo.png` — legado; preferir `logo-qt*`
 
 > Os assets `logo_qt_byperfect*.png` estão **descontinuados** (traziam "by Perfect Automotive" embutido na imagem).
 

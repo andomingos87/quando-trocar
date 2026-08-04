@@ -72,10 +72,10 @@ export function DemoShell() {
         <div className="mx-auto flex max-w-[1180px] items-center gap-3 px-4 py-3 sm:px-6">
           <Link href="/" aria-label="Quando Trocar" className="flex items-center">
             <Image
-              src="/logo.png"
+              src="/logo-qt.png"
               alt="Quando Trocar"
-              width={220}
-              height={98}
+              width={1441}
+              height={403}
               sizes="96px"
               className="h-8 w-auto"
               priority

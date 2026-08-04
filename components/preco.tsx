@@ -46,13 +46,19 @@ export function Preco() {
               </div>
             </div>
 
-            <div className="flex items-baseline gap-3 py-6">
-              <span className="font-display text-[clamp(3rem,8vw,4.5rem)] font-bold leading-none tracking-tighter text-brand">
-                R$ 0
-              </span>
-              <span className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
-                / primeiros<br />{LANDING_OFFER.trialDays} dias
-              </span>
+            <div className="py-6">
+              <div className="flex items-baseline gap-3">
+                <span className="font-display text-[clamp(3rem,8vw,4.5rem)] font-bold leading-none tracking-tighter text-brand">
+                  R$ {LANDING_OFFER.monthlyPrice}
+                </span>
+                <span className="font-mono text-xs uppercase tracking-[0.12em] text-muted">
+                  / por mês<br />após o teste
+                </span>
+              </div>
+              <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-soft px-3.5 py-1.5 text-[13px] font-semibold text-brand-deep">
+                {LANDING_OFFER.trialPriceLabel} nos primeiros{" "}
+                {LANDING_OFFER.trialDays} dias
+              </p>
             </div>
 
             <RevealStagger

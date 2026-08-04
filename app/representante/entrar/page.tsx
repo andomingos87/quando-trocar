@@ -17,10 +17,11 @@ export default async function RepresentanteEntrarPage() {
       <div className="w-full max-w-md rounded-2xl border border-line bg-white p-6 shadow-sm sm:p-8">
         <header className="mb-6">
           <Image
-            src="/logo_qt_byperfect.png"
+            src="/logo-qt.png"
             alt="Quando Trocar"
-            width={160}
-            height={40}
+            width={1441}
+            height={403}
+            sizes="180px"
             priority
             className="h-10 w-auto"
           />
@@ -29,7 +30,8 @@ export default async function RepresentanteEntrarPage() {
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-ink">Entrar</h1>
           <p className="mt-2 text-sm text-muted">
-            Acesso do representante comercial. Enviaremos um codigo via WhatsApp para confirmar.
+            Acesso do representante comercial. Enviaremos um codigo via WhatsApp
+            para confirmar.
           </p>
         </header>
         <RepresentanteEntrarForm />

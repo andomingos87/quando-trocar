@@ -1,0 +1,4 @@
+# artefatos de build — o PDF versionado fica em docs/marketing/instagram/pdf/
+.venv/
+fonts.css
+*.html

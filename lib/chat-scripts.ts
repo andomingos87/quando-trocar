@@ -61,7 +61,7 @@ export const scripts: Record<ChatPerspective, ChatStep[]> = {
           ["Carro", "Gol 2014 · PJT-5F29"],
           ["KM hoje", "47.000"],
           ["Óleo", "20W50 Ipiranga"],
-          ["Próxima", "~52.000 km · set/2026"],
+          ["Próxima", "~52.000 km · em ~5 meses"],
         ],
         actions: [
           { label: "Tá certo", ok: true },
@@ -80,7 +80,7 @@ export const scripts: Record<ChatPerspective, ChatStep[]> = {
     },
     {
       who: "them",
-      text: "Cadastro concluído ✓ Próxima troca prevista para set/2026. O lembrete ficou agendado.",
+      text: "Cadastro concluído ✓ Próxima troca prevista para daqui a ~5 meses. O lembrete ficou agendado.",
       t: "14:04",
       pauseBefore: 600,
       typing: 700,

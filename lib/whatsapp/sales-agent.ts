@@ -1199,6 +1199,7 @@ export class WhatsappSalesAgent {
         };
         return {
           ...reply,
+          intent: classification.intent,
           body: withPainPrefix.body,
           toolCalls: [
             {
@@ -1216,10 +1217,18 @@ export class WhatsappSalesAgent {
         { intent: "fora_escopo", confidence: 0.5 },
         { message: input.message, leadStatus: input.leadStatus, memory, salesConfig },
       );
-      return classificationAudit ? { ...fallbackReply, classificationAudit } : fallbackReply;
+      return {
+        ...fallbackReply,
+        intent: "fora_escopo",
+        ...(classificationAudit ? { classificationAudit } : {}),
+      };
     }
 
-    return classificationAudit ? { ...reply, classificationAudit } : reply;
+    return {
+      ...reply,
+      intent: classification.intent,
+      ...(classificationAudit ? { classificationAudit } : {}),
+    };
   }
 
   private async classifyWithOpenAI(message: string): Promise<SalesClassification | null> {

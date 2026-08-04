@@ -4,7 +4,7 @@ import { LANDING_OFFER } from "@/lib/landing-offer";
 const assurances = [
   { icon: CreditCard, label: "Sem cobrança automática" },
   { icon: Tag, label: "Preço claro desde o início" },
-  { icon: CirclePause, label: "Sem continuar, o serviço pausa" },
+  { icon: CirclePause, label: "Se não continuar, o serviço é pausado" },
   { icon: Headphones, label: "Atendimento próximo no WhatsApp" },
 ];
 

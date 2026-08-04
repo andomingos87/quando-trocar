@@ -81,10 +81,11 @@ export function MobileMenu() {
           <aside className="admin-drawer relative flex h-full w-72 max-w-[85vw] flex-col bg-ink-deep text-paper shadow-2xl">
             <div className="flex items-center justify-between px-5 py-5">
               <Image
-                src="/logo_qt_byperfect_white.png"
+                src="/logo-qt-branco.png"
                 alt="Quando Trocar"
-                width={140}
-                height={32}
+                width={1441}
+                height={403}
+                sizes="140px"
                 className="h-8 w-auto"
               />
               <button

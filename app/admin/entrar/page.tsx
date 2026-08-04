@@ -17,10 +17,11 @@ export default async function EntrarPage() {
       <div className="w-full max-w-md rounded-2xl border border-line bg-white p-6 shadow-sm sm:p-8">
         <header className="mb-6">
           <Image
-            src="/logo_qt_byperfect.png"
+            src="/logo-qt.png"
             alt="Quando Trocar"
-            width={160}
-            height={40}
+            width={1441}
+            height={403}
+            sizes="180px"
             priority
             className="h-10 w-auto"
           />

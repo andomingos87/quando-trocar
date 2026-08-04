@@ -19,6 +19,24 @@ Não registrar:
 
 ---
 
+## 2026-08-03 — Analytics de anúncios (Meta Ads via Windsor.ai)
+
+Nova tela `/admin/analytics-ads`: liga gasto/resultado do Meta Ads ao funil real do CRM (lead → qualificado → convertido), respondendo "esse anúncio gerou venda de verdade?".
+
+### Decidido
+
+- Atribuição de anúncio (`referral`/`ctwa_clid` do Meta) é capturada no webhook e persistida em `leads_oficina` como **first-touch**, nunca sobrescrita — distinto do campo `origem` existente (landing vs. manual).
+- Gasto/resultado do Meta Ads é sincronizado 1×/dia via **Windsor.ai** (não Meta Graph API direto) para `ad_insights_daily`, escolhido por já estar configurado como MCP no projeto e cobrir futuras fontes (Google Ads etc.) com uma única integração.
+- Agregação roda em RPC SQL (`get_ads_analytics`, `SECURITY DEFINER`), mesmo padrão de `get_conversational_metrics`.
+
+### Operação
+
+- Migrations `ads_analytics` e `ad_insights_sync_cron` aplicadas em produção (único projeto Supabase — teste e prod são o mesmo banco).
+- Pendente do lado do usuário: conectar a conta de Meta Ads no Windsor (conector `facebook` — só `instagram` orgânico estava conectado), configurar `WINDSOR_API_KEY` e registrar `ad_insights_sync_url` no Vault. Ver [runbook](./runbooks/ads-analytics-setup.md).
+- Nomes de campo do conector Windsor (`campaign`, `adset`, `ad`, `actions`) ainda não foram confirmados com `get_fields` numa conta conectada — só documentados publicamente. Ajustar `lib/windsor/meta-ads.ts` se necessário após conectar.
+
+---
+
 ## 2026-07-25 — Dado, card e auditoria (QTR-35 P2)
 
 Implementa os itens 9–12 da [QTR-35](https://linear.app/biapps/issue/QTR-35/qualidade-do-bot-extracao-por-llm-agendamento-correto-texto-sujo-no), conforme [`qtr-35-p2-dado-card-auditoria.md`](./backlog-whatsapp-bot/qtr-35-p2-dado-card-auditoria.md).

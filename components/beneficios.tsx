@@ -1,4 +1,4 @@
-import { BellRing, CalendarCheck, Clock3, MessageCircle, Store } from "lucide-react";
+import { CalendarCheck, CirclePause, Clock3, MessageCircle, Store } from "lucide-react";
 import { Eyebrow, Section, SectionLead, SectionTitle } from "./section";
 import { Reveal, RevealItem, RevealStagger } from "./reveal";
 
@@ -7,7 +7,7 @@ const benefits = [
   { icon: Clock3, text: "Não dependa da memória da equipe." },
   { icon: CalendarCheck, text: "Lembre o cliente no momento adequado." },
   { icon: Store, text: "Mantenha o nome da oficina presente." },
-  { icon: BellRing, text: "Pare sem custo se não quiser continuar." },
+  { icon: CirclePause, text: "Pare sem custo se não quiser continuar." },
 ];
 
 export function Beneficios() {

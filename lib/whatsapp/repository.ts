@@ -21,6 +21,7 @@ import type {
   SavedConversation,
   TipoServico,
   UpcomingReminder,
+  WhatsappReferral,
   WhatsappRepository,
 } from "./types";
 
@@ -513,10 +514,11 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
     origem: "landing_page" | "manual_whatsapp";
     status: LeadStatus;
     representanteCodigo?: string | null;
+    referral?: WhatsappReferral | null;
   }) {
     const existingResult = (await this.supabase
       .from("leads_oficina")
-      .select("id,nome,origem,status,metadata,representante_id")
+      .select("id,nome,origem,status,metadata,representante_id,ad_attributed_at")
       .eq("whatsapp", input.whatsapp)
       .maybeSingle()) as SupabaseResult<{
       id: string;
@@ -525,6 +527,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       status: LeadStatus;
       metadata: Record<string, unknown>;
       representante_id: string | null;
+      ad_attributed_at: string | null;
     }>;
 
     throwIfError(existingResult);
@@ -542,6 +545,10 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       representanteId = await this.resolveRepresentanteIdByCodigo(input.representanteCodigo);
     }
 
+    // Atribuição de anúncio é first-touch: só grava se o lead ainda não tem
+    // uma (nunca sobrescreve o anúncio que originou a conversa).
+    const shouldAttributeAd = Boolean(input.referral) && !existingResult.data?.ad_attributed_at;
+
     const result = (await this.supabase
       .from("leads_oficina")
       .upsert(
@@ -551,6 +558,16 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
           origem: merged.origem,
           status: merged.status,
           ...(representanteId ? { representante_id: representanteId } : {}),
+          ...(shouldAttributeAd
+            ? {
+                ad_ctwa_clid: input.referral!.ctwaClid,
+                ad_id: input.referral!.sourceId,
+                ad_source_type: input.referral!.sourceType,
+                ad_source_url: input.referral!.sourceUrl,
+                ad_headline: input.referral!.headline,
+                ad_attributed_at: new Date().toISOString(),
+              }
+            : {}),
           last_message_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },

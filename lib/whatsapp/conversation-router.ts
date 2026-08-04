@@ -5,6 +5,7 @@ import type {
   LeadStatus,
   ParticipantType,
   SavedConversation,
+  WhatsappReferral,
   WhatsappRepository,
 } from "./types";
 
@@ -70,6 +71,7 @@ export async function resolveWhatsappConversation(input: {
   body: string;
   contextWhatsappMessageId?: string | null;
   landingPhrases?: string[];
+  referral?: WhatsappReferral | null;
 }): Promise<ResolvedWhatsappConversation> {
   const landingPhrases = input.landingPhrases;
   // ADR-0019: "#REP-<codigo>" sai da mensagem antes do match exato da
@@ -82,6 +84,7 @@ export async function resolveWhatsappConversation(input: {
       origem: detectLeadOrigin(representante.cleaned, landingPhrases),
       status: "em_conversa",
       representanteCodigo: representante.codigo,
+      referral: input.referral,
     });
     const conversation = await input.repository.upsertConversation({
       leadId: lead.id,
@@ -234,6 +237,7 @@ export async function resolveWhatsappConversation(input: {
     origem: detectLeadOrigin(representante.cleaned, landingPhrases),
     status: "em_conversa",
     representanteCodigo: representante.codigo,
+    referral: input.referral,
   });
   const conversation = await input.repository.upsertSalesLeadConversation({
     leadId: lead.id,
