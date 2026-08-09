@@ -21,9 +21,9 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0011](./0011-visibilidade-de-representante.md) | Não rastrear representante no MVP | superseded (ADR-0019) | 2026-05-17 |
 | [0012](./0012-politica-de-preco.md) | Plano único com preço configurável por oficina via painel admin | accepted | 2026-05-17 |
 | [0013](./0013-painel-admin-escopo-billing-auditoria.md) | Painel admin — escopo, billing mensal recorrente e auditoria | accepted | 2026-05-17 |
-| [0014](./0014-cadencia-e-template-por-tipo-de-servico.md) | Cadência e template Meta por tipo de serviço | accepted | 2026-05-22 |
+| [0014](./0014-cadencia-e-template-por-tipo-de-servico.md) | Cadência e template Meta por tipo de serviço | superseded (ADR-0031) | 2026-05-22 |
 | [0015](./0015-suporte-audio-whisper.md) | Suporte a áudio via transcrição Whisper | accepted | 2026-05-21 |
-| [0016](./0016-suporte-imagem-pdf-sem-storage.md) | Suporte a imagem (vision) e documento PDF, sem Supabase Storage | accepted | 2026-05-21 |
+| [0016](./0016-suporte-imagem-pdf-sem-storage.md) | Suporte a imagem (vision) e documento PDF, sem Supabase Storage | accepted (revisada ADR-0032) | 2026-05-21 |
 | [0017](./0017-confirmacao-antes-de-registrar-troca.md) | Confirmação da oficina antes de registrar a troca | accepted | 2026-06-02 |
 | [0018](./0018-cliente-final-concierge-pre-lembrete.md) | Concierge do cliente final antes do primeiro lembrete | accepted | 2026-06-14 |
 | [0019](./0019-representantes-e-comissao.md) | Representantes comerciais com atribuição e comissão configurável | accepted | 2026-07-09 |
@@ -38,6 +38,9 @@ ADRs documentam decisões arquiteturais com contexto, alternativas consideradas 
 | [0028](./0028-volante-de-gatilhos-de-intencao.md) | Volante seguro de gatilhos de intenção de vendas | accepted | 2026-07-25 |
 | [0029](./0029-sinal-de-cadastro-em-vendas.md) | Sinal de cadastro em vendas preserva o rascunho até a conversão | accepted | 2026-07-25 |
 | [0030](./0030-link-de-indicacao-do-representante.md) | Link de indicação do representante (janela de 30 dias) | accepted | 2026-08-03 |
+| [0031](./0031-catalogo-aberto-servicos-produtos.md) | Catálogo aberto de serviços e produtos, canonizado por agente | accepted | 2026-08-08 |
+| [0032](./0032-storage-fotos-servico.md) | Fotos de serviço no Supabase Storage, retenção 24 meses (revisão da ADR-0016) | accepted | 2026-08-08 |
+| [0033](./0033-cadencia-por-km.md) | Cadência por quilometragem convertida em data estimada | accepted | 2026-08-08 |
 
 ### Em aberto (drafts)
 

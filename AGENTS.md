@@ -30,7 +30,7 @@ Important project docs:
 
 This repo uses the Aurea context layer under `.context/`:
 
-- `.context/modules/<module>/AGENTS.md` — per-module doc (purpose, boundaries, key files, invariants, tests). Modules: `whatsapp-bot`, `painel-admin`, `billing`, `site-publico`, `database`.
+- `.context/modules/<module>/AGENTS.md` — per-module doc (purpose, boundaries, key files, invariants, tests). Modules: `whatsapp-bot`, `painel-admin`, `billing`, `site-publico`, `database`, `portal-representante`, `prospeccao`.
 - `.context/conventions.md` — detected and confirmed stack conventions (layering, error handling, auth, commit style, "never do" list).
 - `.context/decisions/` — Aurea slot for ADRs; the canonical ADRs currently live in `docs/adr/`.
 - `.context/lessons/` — recorded project pitfalls.

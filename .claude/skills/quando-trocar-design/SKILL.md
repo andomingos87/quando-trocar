@@ -3,54 +3,33 @@ name: quando-trocar-design
 description: "Use when implementing, ajustando ou revisando qualquer UI/frontend deste projeto — landing, painel admin, componentes, CSS, telas web. Triggers: editando arquivos em app/, components/, app/globals.css, app/admin/, app/demo/, tailwind config, qualquer .tsx/.css; tarefas como 'criar página', 'nova seção', 'novo componente', 'ajustar layout', 'melhorar UI', 'aplicar identidade visual', 'aplicar marca', 'design da landing', 'tela do admin', 'mexer no hero', 'mudar cor', 'aplicar tema', 'criar dashboard'."
 metadata:
   scope: project
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # Quando Trocar — Design Skill
 
-Guia obrigatório quando você for tocar qualquer pedaço de UI deste projeto. A identidade visual do **Quando Trocar** — não é genérica, e tem desvios deliberados em relação ao manual de marca herdado.
+Roteador de design deste projeto. **Esta skill não carrega tokens** — ela diz onde a verdade mora, o que é inegociável e quem ganha quando duas fontes discordam.
 
-## Fontes de verdade (nessa ordem)
+## Precedência (quem ganha)
 
-1. `app/globals.css` — **tokens reais usados em produção** (Tailwind v4 `@theme`). Esta é a fonte canônica para cores, fontes e utilitários custom. Se o que você precisa já existe aqui, **reuse**; nunca crie tokens inline em componentes.
-2. `docs/product/design-system.md` — fundamento da marca (paleta, tipografia, grafismos, regras de logo). Ler integralmente se a tarefa for criar **uma seção nova de landing** ou um **componente reutilizável de alto nível**.
-3. `docs/product/telas-web.md` — telas web mapeadas (consultar se a tarefa for sobre uma tela existente).
-4. `docs/product/copy.md` — copy oficial. Não inventar headline/CTA sem checar.
-5. **Arte do feed Instagram** → `.claude/skills/instagram-posts/SKILL.md` (fluxo GPT Image 2; não misturar com tokens de landing).
+1. **`app/globals.css`** (`@theme`) — tokens executáveis. Token que não está aqui **não existe**. Nunca crie valor de cor inline em componente.
+2. **`docs/DESIGN.md`** — sistema de design normativo: paleta com nomes e papéis, hierarquia tipográfica, doutrina de profundidade, componentes, regras nomeadas, do's & don'ts. Segue a [spec DESIGN.md](https://github.com/google-labs-code/design.md); o `.impeccable/design.json` é o sidecar com sombras, motion, breakpoints e snippets de componente.
+3. **`docs/product/design-system.md`** — memória de marca: o manual herdado da Perfect Automotive e o porquê dos desvios. Não normativo.
+4. **Skill `impeccable`** (genérica, de terceiro) — orientação de craft. **Perde para 1–3 sempre.** Onde ela sugerir algo que contrarie o `DESIGN.md`, o `DESIGN.md` vence; o próprio SKILL.md dela manda respeitar o brief do projeto.
 
-## Desvio importante: laranja é o CTA primário, não o vermelho
+Outras fontes por tipo de tarefa:
 
-O manual de marca herdado descrevia vermelho `#EE2737` como CTA primário. **No Quando Trocar isso mudou:**
+- `docs/product/telas-web.md` — telas web mapeadas (consultar se a tarefa for sobre uma tela existente).
+- `docs/product/copy.md` — copy oficial. Não inventar headline/CTA sem checar.
+- Arte do feed Instagram → `.claude/skills/instagram-posts/SKILL.md` (fluxo GPT Image 2; não misturar com tokens de landing).
 
-- **Laranja `#E19D4E`** (cor do "CAR" no logo Quando Trocar) → **CTA primário**, ações principais, foco.
-- **Vermelho `#EE2737`** → **urgência / destaque pontual** (alertas, badges de atenção). **NÃO usar como botão primário.**
-- **Navy `#001E62`** → texto principal sobre fundo claro, fundos institucionais.
-- **Ink-deep `#041C2C`** → fundos mais escuros, footer.
-- **Ciano `#71C5E8`** e **laranja vivo `#FFA300`** → acentos pontuais (badges, tags, decoração), não estruturais.
+## A regra que mais se erra
 
-Se um designer/usuário pedir "botão vermelho" pensando no manual antigo, pergunte se ele quer CTA (laranja `bg-brand`) ou alerta de urgência (`bg-red`).
+**Laranja `#E19D4E` é o CTA primário. Vermelho `#EE2737` é urgência, nunca ação.**
 
-## Tokens disponíveis (já no globals.css → classes Tailwind)
+Esse é o desvio deliberado frente ao manual herdado, que descrevia o vermelho como CTA. Um botão vermelho neste produto significa que algo deu errado, não que algo pode ser feito. Se um designer ou usuário pedir "botão vermelho" pensando no manual antigo, pergunte se ele quer CTA (`bg-brand`) ou alerta de urgência (`bg-red`).
 
-Cores principais (use as classes Tailwind: `bg-*`, `text-*`, `border-*`):
-
-| Token | Hex | Uso |
-|-------|-----|-----|
-| `brand` / `brand-dark` / `brand-deep` / `brand-soft` | `#E19D4E` família | CTA primário, foco, links de marca |
-| `ink` / `ink-soft` / `ink-deep` | navy `#001E62` → `#041C2C` | Texto principal, fundos institucionais, footer |
-| `paper` / `paper-soft` | `#fff` / `#f5f7fb` | Fundos claros |
-| `line` / `line-soft` | `#dde3ee` / `#eef2f8` | Bordas, divisores |
-| `muted` | `#5b6478` | Corpo de texto secundário |
-| `red` / `red-soft` | `#EE2737` / `#fde2e4` | **Urgência apenas**, não CTA |
-| `cyan` / `cyan-soft` | `#71C5E8` / `#e0f3fb` | Acento secundário, links, badges |
-| `orange` / `orange-soft` | `#FFA300` / `#fff1d1` | Acento terciário, badges |
-| `navy` / `dark` | aliases | Sinônimos legados de `ink` / `ink-deep` — preferir `ink*` |
-| `wa-*` | tons WhatsApp | Bolhas/chats demonstrativos — não usar fora de mockups WA |
-
-Tipografia: `font-sans` = **DM Sans** (fallback de Graphik por spec). Pesos: 400 corpo, 500 labels/nav, 600 títulos/CTAs. Use `.font-display` para títulos grandes (tracking apertado + ligaturas).
-
-Utilitários custom já prontos (todos em `app/globals.css` — verifique antes de criar similar):
-`bg-grain`, `bg-blueprint`, `bg-blueprint-fade`, `bg-dots`, `chat-dots`, `glow-brand`, `glow-border`, `bg-stripes-soft`, `underline-brand`, `underline-brand-dark`, `hairline`, `hairline-dark`, `animate-pulse-dot`, `animate-typing-bounce`, `animate-glow-pulse`, `reveal` + `reveal-stagger` (scroll reveal via IntersectionObserver).
+As demais regras nomeadas — do Carimbo, do Tracking Negativo, da Mono Reservada, Sombra é Affordance — estão no `docs/DESIGN.md`.
 
 ## Logos
 
@@ -60,46 +39,25 @@ Utilitários custom já prontos (todos em `app/globals.css` — verifique antes 
 
 > Os assets `logo_qt_byperfect*.png` estão **descontinuados** (traziam "by Perfect Automotive" embutido na imagem).
 
-Regras do manual que **continuam valendo**: nunca distorcer, sem opacity, sem sombra/outline/glow, sem rotação, sem cor alterada. Área de proteção = largura da letra "E". Tamanho mínimo: manter o wordmark "Quando Trocar" legível (não reduzir abaixo de ~12px de altura de texto).
+Nunca distorcer, sem opacity, sem sombra/outline/glow, sem rotação, sem cor alterada. Área de proteção = largura da letra "E". Tamanho mínimo: manter o wordmark "Quando Trocar" legível (não reduzir abaixo de ~12px de altura de texto).
 
-## Princípios de layout
+## Workflow
 
-- **Alinhamento à esquerda** sempre em blocos de texto. Nunca centralizar parágrafos.
-- **Assimetria intencional** — evite layouts perfeitamente espelhados.
-- **Grafismos diagonais** quando precisar de energia: `clip-path` em ângulo, `transform: skewY(-2deg)`, paralelogramos ~15–20°. Usar com parcimônia.
-- **Espaço negativo generoso** em seções institucionais.
-- Hierarquia tipográfica clara: hero (clamp 3rem→6rem, weight 600, tracking -0.02em) → seção (2rem→3.5rem) → subtítulo (1.125rem→1.5rem) → corpo (1rem, line-height 1.6) → label (0.75rem, uppercase, letter-spacing 0.1em).
-
-## Iconografia
-
-Flat, monocromático, geométrico, espessura única. Ângulo coincide com o ângulo do símbolo do logo. Se introduzir biblioteca de ícones nova, justifique — preferir manter consistência com o que já existe no projeto (lucide-react se for o padrão atual; checar antes).
-
-## Don'ts (não fazer)
-
-- Não criar valores de cor hardcoded em componentes (`#xxxxxx`, `rgb(...)`). Sempre usar token via classe Tailwind ou `var(--color-*)`.
-- Não usar gradientes roxos, neon, glassmorphism genérico ou aesthetic "AI generic". Não é a marca.
-- Não usar Inter, Roboto ou Arial como display. `font-sans` (DM Sans) já é o fallback oficial de Graphik.
-- Não centralizar blocos de texto longos.
-- Não usar **vermelho** como CTA primário — esse é o desvio do projeto. CTA = `bg-brand` (laranja).
-- Não aplicar efeitos no logo (sombra, glow, opacity, rotate, outline).
-- Não introduzir emojis decorativos em UI (só quando o usuário pedir explicitamente).
-- Não duplicar utilitários que já existem em `globals.css`. Cheque primeiro com grep.
-- Não inflar `globals.css` com one-offs — se for usado em **uma** tela, deixe inline com Tailwind utility classes.
-
-## Workflow recomendado
-
-1. Antes de codar UI nova, abra `app/globals.css` e veja quais tokens/utilitários já existem.
-2. Se a tarefa pedir uma **seção ou componente sem precedente claro no codebase**, leia `docs/product/design-system.md` § relevante (cores, tipografia, layout, componentes sugeridos).
+1. Antes de codar UI nova, abra `app/globals.css` e veja quais tokens e utilitários já existem. Há uma família grande de utilitários prontos (grafismos, glows, hairlines, reveal por scroll) — **cheque com grep antes de criar similar**.
+2. Se a tarefa pedir seção ou componente **sem precedente claro no codebase**, leia o `docs/DESIGN.md` inteiro.
 3. Se a tarefa for sobre uma tela já existente, abra-a primeiro (`app/page.tsx`, `app/admin/*`, etc.) e siga as convenções daquela tela.
-4. Verifique no browser com preview tools quando a mudança for visual e o dev server estiver rodando.
-5. Se descobrir que um token novo é genuinamente necessário (e reusável), adicione em `app/globals.css` `@theme` — não em arquivo separado.
+4. Verifique no browser com as preview tools quando a mudança for visual e o dev server estiver rodando.
+5. Se um token novo for genuinamente necessário e reusável, adicione em `app/globals.css` `@theme` — não em arquivo separado — e reflita no `docs/DESIGN.md`.
 
 ## Quando atualizar a documentação
 
-Se você fizer uma decisão de design que vale para o projeto inteiro (ex.: trocou cor de marca, mudou família de fonte, adicionou família nova de utilitários), atualize:
+Decisão de design que vale para o projeto inteiro (trocou cor de marca, mudou família de fonte, adicionou família nova de utilitários, mudou a doutrina de profundidade):
 
-1. `app/globals.css` — tokens
-2. `docs/product/design-system.md` — explicar o desvio (não apagar o original, anotar a adaptação Quando Trocar)
-3. Esta skill — se a regra/desvio muda comportamento futuro
+1. `app/globals.css` — o token
+2. `docs/DESIGN.md` — frontmatter + a seção correspondente (e `.impeccable/design.json` se envolver sombra, motion, breakpoint ou snippet de componente)
+3. `docs/product/design-system.md` — **só** se o desvio precisar de justificativa histórica registrada
+4. Esta skill — só se a **precedência** ou a regra do vermelho mudar
 
-Não atualize docs para mudanças pontuais de uma única tela.
+Mudança pontual de uma única tela não atualiza documentação nenhuma.
+
+`/impeccable doctor` reporta deriva entre `globals.css`, `docs/DESIGN.md` e o sidecar.

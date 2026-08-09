@@ -1,6 +1,6 @@
 # ADR 0014: Cadência e template Meta por tipo de serviço
 
-- **Status**: accepted
+- **Status**: superseded by [ADR-0031](./0031-catalogo-aberto-servicos-produtos.md) (catálogo aberto de serviços e produtos)
 - **Data**: 2026-05-22
 - **Decisores**: Anderson Domingos
 - **Fonte**: `docs/regras-de-negocio.md §3.2, §4.1, §4.4`; plano "3 níveis de produto" (Fases 1-2)

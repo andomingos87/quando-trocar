@@ -327,6 +327,20 @@ export type RegisteredService = {
   scheduledAt: string | null;
   /** Cadência efetiva aplicada pelo RPC, em dias. */
   diasLembrete: number;
+  /**
+   * Item de `servicos_catalogo` que resolveu a cadência (ADR-0031). Hoje o RPC
+   * resolve pela família (`tipo_servico`) — item da oficina > item global; a F2
+   * passa a enviar o item escolhido pelo agente de canonização. `null` só se a
+   * cadência tiver vindo de um fallback legado (`tipos_servico_default` ou
+   * `oficinas.dias_lembrete_padrao`).
+   *
+   * Opcional no port: o repositório real sempre preenche, mas a implementação
+   * em memória do harness não modela catálogo (mesma convenção de
+   * `templateName?`/`tipoServico?` na fila de lembretes).
+   */
+  catalogoId?: string | null;
+  /** Produto canônico usado no serviço. Hoje só o legado de `marca_peca`. */
+  produtoId?: string | null;
 };
 
 export type InboundMediaType =
@@ -700,6 +714,10 @@ export type WhatsappRepository = {
       templateName?: string | null;
       templateLanguage?: string | null;
       tipoServico?: TipoServico | null;
+      // `produto_label` do item de catálogo do serviço (ADR-0031 §5) — o {{4}}
+      // do template genérico. `null` quando o item não define label; o fallback
+      // por família continua sendo um só, em `PRODUCT_LABEL_BY_TIPO`.
+      produtoLabel?: string | null;
     }>
   >;
   archiveReminderQueueMessage?(input: { queueMessageId: number }): Promise<boolean>;

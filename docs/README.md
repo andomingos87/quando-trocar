@@ -17,6 +17,7 @@ Especificações funcionais e visuais. Tudo em português.
 - [PRD — Painel Admin](./product/PRD-painel-admin.md) — **canônico**. Painel interno (`/admin`) para devs/fundadores/donos gerirem oficinas, planos, preços, cobrança e auditoria.
 - [PRD — Landing prototype](./product/PRD-landing-prototype.md) — spec do protótipo de validação comercial (frontend-only, mockado). Histórico, mas ainda válido como referência da demo.
 - [PRD — Captura por comentário no Instagram (Comment → DM)](./product/PRD-instagram-comment-to-dm.md) — **proposto**. Webhook Meta + Private Reply: comentário com keyword → DM com link WhatsApp + atribuição de origem. Fase 1 autorizada; depende de ADR novo (API própria vs. ManyChat).
+- [Pivot — catálogo de serviços](./product/pivot-catalogo-de-servicos.md) — **aprovado (v2)**. Pivot de "óleo e amortecedor" (enum fechado de 4 tipos) para catálogo aberto, canonizado por um agente especialista (sem duplicar), com cadência por tempo **ou km**, base de produtos/marcas e painel da oficina. Decisões formalizadas nas ADRs [0031](./adr/0031-catalogo-aberto-servicos-produtos.md)/[0032](./adr/0032-storage-fotos-servico.md)/[0033](./adr/0033-cadencia-por-km.md); execução em [`backlog-catalogo-servicos/`](./backlog-catalogo-servicos/README.md).
 - [Telas web](./product/telas-web.md) — proposta de painel operacional para a oficina.
 - [Copy](./product/copy.md) — microcopy da landing page (gitignored, material de referência).
 - [Design system](./product/design-system.md) — identidade visual do "Quando Trocar" para a landing (gitignored, material de referência).
@@ -31,6 +32,7 @@ Especificações funcionais e visuais. Tudo em português.
 ## Arquitetura e decisões
 
 - [Plano técnico do bot WhatsApp](./architecture/whatsapp-bot-technical-plan.md) — recomendação técnica de stack, fluxos e componentes.
+- [Prospecção de oficinas ICP](./architecture/prospeccao-icp-oficinas.md) — descoberta geográfica e ingestão de oficinas candidatas por Cidade/UF. Base persistente vem do CNPJ da Receita Federal (CNAE = ICP em formato de dado); Google Places entra só como descoberta e sinal, com cache que expira. Piloto: Guarulhos/SP.
 - [ADRs — Architecture Decision Records](./adr/README.md) — decisões arquiteturais documentadas. Veja o índice para a lista completa (decisões aceitas + perguntas em aberto).
 
 ## Backlog e execução
@@ -41,6 +43,13 @@ Especificações funcionais e visuais. Tudo em português.
   - [Fase 3 — Lembretes reais](./backlog-whatsapp-bot/fase-3-lembretes-reais.md)
   - [Fase 4 — Retorno e dashboard](./backlog-whatsapp-bot/fase-4-retorno-dashboard.md)
   - [Resumo consolidado Fases 1–3](./backlog-whatsapp-bot/fases-1-2-e-3-resumo-implementacao.md)
+- [Backlog da prospecção](./backlog-prospeccao/README.md) — sub-fases Prospec-1 a Prospec-5. P1/P2 entregues (Guarulhos ingerida); a partir daqui: score ICP, painel admin, canal de e-mail, Google Places, classificador LLM.
+  - [Prospec-1 — Score ICP](./backlog-prospeccao/prospec-1-score-icp.md)
+  - [Prospec-2 — Painel e promoção a lead](./backlog-prospeccao/prospec-2-admin-promocao.md)
+  - [Prospec-3 — Canal de e-mail](./backlog-prospeccao/prospec-3-canal-email.md)
+  - [Prospec-4 — Google Places](./backlog-prospeccao/prospec-4-google-places.md)
+  - [Prospec-5 — Classificador LLM e recalibração](./backlog-prospeccao/prospec-5-classificador-llm.md)
+- [Backlog do pivot catálogo de serviços](./backlog-catalogo-servicos/README.md) — fases F0 a F4 do pivot (ADRs 0031/0032/0033): catálogo no banco, agente de canonização, produto/foto/km, painel da oficina.
 - [Backlog do painel admin](./backlog-painel-admin/README.md) — sub-fases Admin-0 a Admin-6.
   - [Admin-0 — Modelo de dados](./backlog-painel-admin/admin-0-modelo-dados.md)
   - [Admin-1 — Auth via OTP WhatsApp](./backlog-painel-admin/admin-1-auth.md)

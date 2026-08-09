@@ -1310,6 +1310,8 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       lembrete_id: string | null;
       scheduled_at: string | null;
       dias_lembrete: number;
+      catalogo_id: string | null;
+      produto_id: string | null;
     }>;
 
     throwIfError(result);
@@ -1321,6 +1323,8 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       lembreteId: result.data!.lembrete_id,
       scheduledAt: result.data!.scheduled_at ?? null,
       diasLembrete: result.data!.dias_lembrete,
+      catalogoId: result.data!.catalogo_id ?? null,
+      produtoId: result.data!.produto_id ?? null,
     };
   }
 
@@ -1783,6 +1787,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
         template_name?: string | null;
         template_language?: string | null;
         tipo_servico?: string | null;
+        produto_label?: string | null;
       }>
     >;
 
@@ -1803,6 +1808,7 @@ export class SupabaseWhatsappRepository implements WhatsappRepository {
       templateName: row.template_name ?? null,
       templateLanguage: row.template_language ?? null,
       tipoServico: (row.tipo_servico as TipoServico | undefined) ?? null,
+      produtoLabel: row.produto_label ?? null,
     }));
   }
 

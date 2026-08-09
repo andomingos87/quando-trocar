@@ -19,6 +19,68 @@ Não registrar:
 
 ---
 
+## 2026-08-08 — F1 do pivot: catálogo no banco, comportamento idêntico
+
+Primeira fase do pivot entregue ([backlog F1](./backlog-catalogo-servicos/README.md#f1--catálogo-no-banco-comportamento-idêntico)). O catálogo passa a ser a autoridade de cadência e template — sem que nada mude para quem usa o produto.
+
+### Entregue
+
+- Migrations `catalogo_base` (tabelas `servicos_catalogo` e `produtos_catalogo`, seed dos 4 itens globais, backfill de `servicos.catalogo_id`/`produto_id`) e `catalogo_rpcs` (`register_service_with_reminder` e `enqueue_due_whatsapp_reminders` resolvendo pelo catálogo, com todos os fallbacks antigos preservados; `match_servicos_catalogo` criada para a F2 usar).
+- **O seed é um espelho de `tipos_servico_default`** — é isso que torna a mudança invisível. O invariante é frágil (duas fontes que precisam concordar) e por isso virou teste: `tests/catalogo-servicos.test.ts` compara as duas migrations.
+- `tipos_servico_default` continua viva como penúltimo degrau da cascata de cadência; será desativada formalmente depois da F2.
+
+### Aprendido
+
+- A ponte `família → item` precisou de uma flag nova (`padrao_familia`, única por família em cada escopo). Sem ela a cascata "item da oficina > item global" fica ambígua no dia em que a F2 permitir vários itens por família — e a cadência cairia no fallback legado em silêncio, que é o pior tipo de erro nesse fluxo (só aparece meses depois, na data errada do lembrete).
+
+---
+
+## 2026-08-08 — Pivot: catálogo aberto de serviços e produtos (ADRs 0031/0032/0033)
+
+O produto deixa de ser "lembrete de troca de óleo e amortecedor" (enum fechado de 4 tipos, cadência global do admin) e vira **infraestrutura de retorno**: a própria oficina cadastra qualquer serviço do nicho automotivo pelo WhatsApp, com intervalo em **km ou tempo**, canonizado por um agente especialista que não duplica e pergunta quando tem dúvida. Mapeamento completo em [pivot-catalogo-de-servicos.md](./product/pivot-catalogo-de-servicos.md) (6 decisões do dono fechadas em 2026-08-08).
+
+### Decidido
+
+- **[ADR-0031](./adr/0031-catalogo-aberto-servicos-produtos.md)** (supersede a ADR-0014): catálogo em duas tabelas — `servicos_catalogo` (o que foi feito → cadência; global + por oficina) e `produtos_catalogo` (o que foi usado → nome, marca, modelo, especificação; global). Dedupe em cascata (slug → pg_trgm → embedding → LLM); criação de item sempre com confirmação da oficina (ADR-0001/0017 intactas). `tipo_servico` sobrevive como `familia` derivada (preserva BI/cohort Perfect e fallback de copy). **Guardrail P0-2 revisado**: parâmetro de template pode vir de `produto_label` do catálogo (texto curado por agente + confirmado); sanitização de formato permanece. Template Meta genérico `lembrete_servico` (4 params). Espaçamento mínimo de 7 dias entre lembretes do mesmo cliente (anti-fadiga), agrupamento adiado até haver dado real.
+- **[ADR-0032](./adr/0032-storage-fotos-servico.md)** (revisa a ADR-0016): fotos de serviço passam a ser armazenadas — bucket privado `fotos-servicos`, RLS por oficina, retenção 24 meses, upload best-effort. Política de privacidade atualizada é pré-condição de ativação.
+- **[ADR-0033](./adr/0033-cadencia-por-km.md)**: cadência por km convertida em data estimada (fila continua temporal); `km_medio_mes` auto-aprendido por veículo com piso/teto; km novo recalcula lembretes pendentes; `base='ambos'` agenda pelo que vencer primeiro.
+
+### Planejado
+
+- Execução em 5 fases (F0–F4) em [backlog-catalogo-servicos/](./backlog-catalogo-servicos/README.md), com testes e gates por fase. Caminho crítico: aprovação do template `lembrete_servico` na Meta (F0, pendente de submissão). F1 (catálogo no banco, comportamento idêntico) pode começar em paralelo. F2 entra atrás de flag `catalogo_livre_modo` (off/sombra/on, padrão ADR-0020). F4 entrega o primeiro painel da oficina (catálogo, clientes, lembretes — revisita a ADR-0010).
+
+---
+
+## 2026-08-08 — Prospecção de oficinas ICP (módulo novo, P1+P2)
+
+Novo módulo `prospeccao`: base própria de oficinas candidatas ao ICP, segmentada por Cidade/UF, com deduplicação contra o funil existente e aprovação humana antes de virar lead. Piloto em Guarulhos/SP.
+
+### Decidido
+
+- **A base persistente vem da Receita Federal, não do Google.** Os Termos do Maps Platform permitem guardar `place_id` indefinidamente e lat/lng por até 30 dias — nome, telefone e endereço do Places não podem ser persistidos. Montar cadastro próprio a partir do Places violaria o ToS. O CNAE da RFB, além de legal, é melhor dado: `4520-0/01` (mecânica) e `4520-0/05` (lubrificação) *são* a definição do ICP.
+- O Google Places entra em P3 só como descoberta e sinal de vitalidade, com o que vier dele vivendo em `places_cache` e expirando pelo cron `prospeccao-expirar-cache-places`.
+- **Nada vira lead automaticamente** — promoção é ato humano auditado (mesma lógica da [ADR-0001](./adr/0001-llm-como-conselheiro-nao-decisor.md)).
+- Abordagem dos leads prospectados: representante humano, público de anúncios (Click-to-WhatsApp) e/ou número separado. **Nunca pelo número de produção** — derrubar o quality rating da Meta ali derruba junto os lembretes das oficinas ativas.
+
+### Entregue
+
+- Migration `20260808180000_prospeccao_base.sql`: `prospeccao_areas`, `prospeccao_execucoes`, `prospeccao_estabelecimentos`, função de expiração do cache + cron diário. RLS habilitada sem policy (só service role).
+- `lib/prospeccao/` — catálogo de CNAEs do ICP, parser dos arquivos da RFB (latin-1, CSV com `;` dentro de aspas), normalização de telefone/endereço/nome, dedupe em cascata, repositório.
+- `scripts/prospeccao/baixar-rfb.sh`, `baixar-rfb-empresas.sh` + `npm run prospeccao:ingerir`.
+- **Guarulhos/SP ingerida** (competência 2026-07): 5.435 estabelecimentos ativos do ICP, 98% com telefone, 37,6% com móvel, 95% com e-mail, 100% com nome, zero telefones duplicados.
+- Plano técnico completo: [prospeccao-icp-oficinas.md](./architecture/prospeccao-icp-oficinas.md).
+- Backlog executável das próximas fases: [backlog-prospeccao/](./backlog-prospeccao/README.md) — Prospec-1 (score) a Prospec-5 (classificador LLM). Score e painel vêm antes do Google Places, porque a base já está no banco e o que falta é conseguir abri-la. **O e-mail virou fase própria** (Prospec-3): 95% de cobertura contra 37,6% de celular, 2,5× mais alcance que o WhatsApp e sem risco ao número de produção — com domínio de envio separado, warm-up e CTA levando ao WhatsApp, onde o lead inicia a conversa e o `agent_mode = vendas` já existente assume.
+
+### Aprendido com o dado real
+
+Três correções que só apareceram ao rodar contra o arquivo de verdade, todas registradas como lição:
+
+- **A RFB não tem o nono dígito** ([lição 0004](../.context/lessons/0004-rfb-nao-tem-o-nono-digito.md)) — zero dos 3.038 telefones da primeira medição tinha 9 dígitos; 36% eram móveis legados de 8. Sem restaurar, o número gravado não existe mais.
+- **`grep -F -f` trava no macOS** ([lição 0005](../.context/lessons/0005-bsd-grep-trava-com-muitos-padroes.md)) — o BSD grep não tem Aho-Corasick; 5.428 padrões contra 66M linhas passaram de 1h30 sem terminar, contra 57s em `awk`.
+- **MEI não tem razão social** — a RFB cola a raiz do CNPJ no nome da pessoa; 93% da base de Guarulhos precisava da limpeza.
+
+---
+
 ## 2026-08-03 — Link de indicação do representante (janela de 30 dias)
 
 O representante passa a compartilhar link do **site** (`/r/<CODIGO>`), não só o `wa.me`. Cookie assinado `qt_ref` de 30 dias, first-touch sticky: dentro da janela, o lead continua do primeiro rep mesmo que abra o link de outro. Os CTAs da landing injetam `#REP-<CODIGO>.<CLICK_TOKEN>` no `wa.me`, reaproveitando o motor de atribuição existente (nenhum motor novo).

@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-08T00:00:00.000Z",
+  "title": "Design System: Quando Trocar",
+  "extensions": {
+    "colorMeta": {
+      "brand": {
+        "role": "primary",
+        "displayName": "Laranja Ordem de Serviço",
+        "canonical": "#E19D4E",
+        "tonalRamp": ["#fdf0dc", "#E19D4E", "#c87f30", "#8e5a1f"]
+      },
+      "ink": {
+        "role": "secondary",
+        "displayName": "Navy Prancheta",
+        "canonical": "#001E62",
+        "tonalRamp": ["#0a2a7a", "#001E62", "#041C2C"]
+      },
+      "cyan": {
+        "role": "tertiary",
+        "displayName": "Ciano Diagrama",
+        "canonical": "#71C5E8",
+        "tonalRamp": ["#e0f3fb", "#71C5E8"]
+      },
+      "orange": {
+        "role": "tertiary",
+        "displayName": "Âmbar Sinal",
+        "canonical": "#FFA300",
+        "tonalRamp": ["#fff1d1", "#FFA300"]
+      },
+      "red": {
+        "role": "tertiary",
+        "displayName": "Vermelho Alerta",
+        "canonical": "#EE2737",
+        "tonalRamp": ["#fde2e4", "#EE2737"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Papel",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#ffffff", "#f5f7fb", "#eef2f8", "#dde3ee"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Cinza Corpo",
+        "canonical": "#5b6478",
+        "tonalRamp": ["#5b6478"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Apenas hero. Aplicado via .font-display, que liga ss01/ss02 e aperta o tracking." },
+      "headline": { "displayName": "Headline", "purpose": "Título de seção." },
+      "title": { "displayName": "Title", "purpose": "Subtítulo e título de card." },
+      "lead": { "displayName": "Lead", "purpose": "Parágrafo de abertura de seção. O tamanho mais reutilizado do sistema." },
+      "body": { "displayName": "Body", "purpose": "Corpo de texto. Limitar a 65ch." },
+      "label": { "displayName": "Label", "purpose": "Eyebrow e rótulo. Mono, caixa alta, sempre com o traço de 24x1px à esquerda." }
+    },
+    "shadows": [
+      { "name": "button-rest", "value": "0 6px 0 #c87f30", "purpose": "Espessura sólida sem blur sob o botão primário. É volume, não sombra." },
+      { "name": "button-hover", "value": "0 8px 0 #c87f30", "purpose": "O botão sobe 2px e a espessura cresce." },
+      { "name": "button-active", "value": "0 2px 0 #c87f30", "purpose": "O botão afunda 2px. A espessura encurta." },
+      { "name": "button-on-dark", "value": "0 6px 0 rgba(0,0,0,0.2)", "purpose": "Variante branca sobre fundo brand ou ink." },
+      { "name": "floating-layer", "value": "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)", "purpose": "Modal e CTA flutuante — o que está literalmente acima da página." },
+      { "name": "popover", "value": "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)", "purpose": "Menu de usuário e dropdown, sempre com ring-1 de ink/5." },
+      { "name": "card-hairline", "value": "0 1px 1px rgba(0,0,0,0.08)", "purpose": "Quase imperceptível. Só para descolar card de fundo paper-soft." }
+    ],
+    "motion": [
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Padrão do sistema: reveal por scroll, gaveta do admin. Desacelera longo." },
+      { "name": "button-press", "value": "150ms", "purpose": "Duração da transição de transform, background e box-shadow no botão." },
+      { "name": "reveal", "value": "550ms", "purpose": "Entrada por scroll de item escalonado." },
+      { "name": "reveal-stagger", "value": "0.1s", "purpose": "Atraso incremental entre filhos de .reveal-stagger, até 9 itens." },
+      { "name": "drawer", "value": "180ms", "purpose": "Gaveta mobile do admin (translateX de -100% a 0)." },
+      { "name": "pulse-dot", "value": "2s ease-in-out infinite", "purpose": "Ponto de status pulsante (opacidade 1 → 0.35)." },
+      { "name": "glow-pulse", "value": "4s ease-in-out infinite", "purpose": "Brilho de marca muito sutil (opacidade 0.35 → 0.6)." },
+      { "name": "border-spin", "value": "6s linear infinite", "purpose": "Borda cônica rotativa do .glow-border, em card de destaque sobre fundo escuro." },
+      { "name": "reduced-motion", "value": "prefers-reduced-motion: reduce", "purpose": "Desliga reveal e reveal-item por completo — opacity 1, transform none, transition none." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "container-content", "value": "1080px" },
+      { "name": "container-nav", "value": "1200px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão Primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Única ação principal da tela. Sombra sólida que afunda ao clique.",
+      "html": "<button class=\"ds-btn-primary\">Quero testar grátis</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.625rem; background: #E19D4E; color: #fff; border: none; border-radius: 1rem; padding: 1rem 1.5rem; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 0 #c87f30; transition: transform 150ms, background 150ms, box-shadow 150ms; } .ds-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #c87f30; } .ds-btn-primary:active { transform: translateY(2px); box-shadow: 0 2px 0 #c87f30; }"
+    },
+    {
+      "name": "Botão Ghost",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Ação secundária. Borda de 2px porque não tem preenchimento; inverte no hover.",
+      "html": "<button class=\"ds-btn-ghost\">Ver como funciona</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 0.625rem; background: transparent; color: #001E62; border: 2px solid #001E62; border-radius: 1rem; padding: 1rem 1.5rem; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1rem; font-weight: 800; cursor: pointer; transition: background 150ms, color 150ms; } .ds-btn-ghost:hover { background: #001E62; color: #fff; }"
+    },
+    {
+      "name": "Eyebrow",
+      "kind": "custom",
+      "refersTo": "eyebrow",
+      "description": "Rótulo de abertura de seção. Traço de 24x1px + mono caixa alta. É a assinatura do sistema.",
+      "html": "<span class=\"ds-eyebrow\"><span class=\"ds-eyebrow-rule\"></span>Como funciona</span>",
+      "css": ".ds-eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 11px; line-height: 1; text-transform: uppercase; letter-spacing: 0.18em; color: #E19D4E; } .ds-eyebrow-rule { display: block; height: 1px; width: 24px; background: #E19D4E; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Superfície no fluxo da página. Sem sombra — borda hairline e contraste tonal fazem a separação.",
+      "html": "<div class=\"ds-card\"><h3>Lembrete automático</h3><p>O cliente recebe no WhatsApp quando a troca vence.</p></div>",
+      "css": ".ds-card { background: #fff; color: #001E62; border: 1px solid #dde3ee; border-radius: 1rem; padding: 1.25rem; } .ds-card h3 { font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-size: clamp(1.5rem, 2.6vw, 2.125rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 0.5rem; } .ds-card p { font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-size: 1rem; line-height: 1.625; color: #5b6478; margin: 0; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de formulário do admin. Foco troca a borda para laranja — sem glow, sem ring colorido.",
+      "html": "<input class=\"ds-input\" placeholder=\"Placa do veículo\" />",
+      "css": ".ds-input { background: #fff; color: #001E62; border: 1px solid #dde3ee; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif; font-size: 0.875rem; outline: none; transition: border-color 150ms; } .ds-input:focus { border-color: #E19D4E; } .ds-input:disabled { opacity: 0.5; } .ds-input[aria-invalid=\"true\"] { border-color: rgba(238,39,55,0.3); background: #fde2e4; color: #EE2737; }"
+    },
+    {
+      "name": "Hairline",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Divisor interno de seção. Gradiente que some nas pontas — nunca uma régua sólida de ponta a ponta.",
+      "html": "<div class=\"ds-hairline\"></div>",
+      "css": ".ds-hairline { height: 1px; background: linear-gradient(to right, transparent, #dde3ee, transparent); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Ordem de Serviço",
+    "overview": "O sistema visual do Quando Trocar é o documento técnico da oficina, não o site de SaaS. Papel com grão de jornal, grid de desenho técnico ao fundo, carimbo laranja de aprovado, navy institucional que segura o conjunto. A referência não é o dashboard de startup — é a folha que o mecânico preenche, prende na prancheta e entrega ao cliente: legível a um metro de distância, sem ornamento, com a informação importante marcada em cor forte.\n\nIsso tem consequência prática. A textura (bg-grain, bg-blueprint) existe para dar superfície ao papel, não para 'dar profundidade'. O eyebrow monoespaçado em caixa alta com tracking de 0.18em é rótulo de campo de formulário, não decoração tipográfica. E o botão primário tem sombra sólida de 6px que afunda ao clique porque, neste mundo, o que é acionável é fisicamente acionável.\n\nA densidade muda com a superfície, o vocabulário não: a landing (Persuade) respira, o painel admin (Operate) comprime. Ambos usam os mesmos tokens, a mesma família, a mesma doutrina de profundidade.",
+    "keyCharacteristics": [
+      "Laranja de carimbo sobre navy institucional — nunca o inverso",
+      "Texturas técnicas (grão, blueprint, hairline) em vez de sombra difusa",
+      "Tipografia única (DM Sans) carregando toda a hierarquia por peso e tamanho, com monoespaçada só em rótulo",
+      "Componentes táteis: o que clica, afunda",
+      "Alinhamento à esquerda como padrão inegociável"
+    ],
+    "rules": [
+      { "name": "A Regra do Carimbo", "body": "O laranja brand ocupa no máximo ~10% de qualquer tela. Ele é o carimbo na ordem de serviço: uma marca por documento. Uma tela com três blocos laranja não tem hierarquia, tem ruído.", "section": "colors" },
+      { "name": "A Regra do Vermelho Reservado", "body": "#EE2737 é urgência, nunca ação. É o desvio deliberado do manual de marca herdado, que descrevia o vermelho como CTA primário. Aqui: CTA é brand; vermelho é alerta, erro, atraso, badge de atenção. Um botão vermelho neste produto significa que algo deu errado, não que algo pode ser feito.", "section": "colors" },
+      { "name": "A Regra do Tracking Negativo", "body": "Todo título grande fecha o espacejamento (-0.02em a -0.035em). DM Sans em corpo grande com tracking padrão lê como slide de apresentação. O aperto é o que faz o título parecer desenhado.", "section": "typography" },
+      { "name": "A Regra da Mono Reservada", "body": "A monoespaçada só aparece em caixa alta, no máximo 12px, com tracking de pelo menos 0.14em. Nunca em corpo de texto, nunca em título. Ela é etiqueta, não voz.", "section": "typography" },
+      { "name": "A Regra Sombra é Affordance", "body": "Sombra difusa em superfície que não flutua é proibida. Se um card precisa se destacar, ele ganha borda line, fundo paper sobre paper-soft, ou hairline — não shadow-md. Exceções conhecidas no código: hover:shadow-xl em components/preco.tsx e components/como-funciona.tsx.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar bg-brand (#E19D4E) como CTA primário — é o desvio deliberado deste projeto frente ao manual herdado.",
+      "Do consultar app/globals.css antes de criar qualquer token ou utilitário.",
+      "Do alinhar todo bloco de texto à esquerda.",
+      "Do abrir seção com o componente Eyebrow.",
+      "Do apertar o tracking em título grande (-0.02em a -0.035em).",
+      "Do separar seções por alternância de fundo (paper ↔ paper-soft ↔ ink), não por régua.",
+      "Do manter o laranja em no máximo 10% da tela."
+    ],
+    "donts": [
+      "Don't usar vermelho #EE2737 como botão primário — ele é urgência, nunca ação.",
+      "Don't escrever cor literal (#xxxxxx, rgb(...)) em componente. Use a classe do token ou var(--color-*).",
+      "Don't aplicar sombra difusa (shadow-md, shadow-lg) em superfície que não flutua sobre a página.",
+      "Don't usar gradiente roxo→azul, neon, glassmorphism ou qualquer estética genérica de IA.",
+      "Don't usar Inter, Roboto ou Arial como display — font-sans (DM Sans) já é o fallback oficial de Graphik.",
+      "Don't centralizar parágrafo longo.",
+      "Don't usar a monoespaçada fora de rótulo em caixa alta de no máximo 12px.",
+      "Don't aplicar efeito no logotipo: sem sombra, glow, opacidade, rotação, outline ou alteração de cor.",
+      "Don't usar os tokens wa-* fora de mockup de conversa de WhatsApp.",
+      "Don't introduzir emoji decorativo em UI sem pedido explícito.",
+      "Don't inflar o globals.css com one-off: se vale para uma tela só, resolva com utility class inline."
+    ]
+  }
+}

@@ -46,3 +46,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# dados brutos da Receita Federal (prospeccao) — grandes, nao versionar
+.data/
+
+# Impeccable (skill de design de terceiro) — ~3,2 MB por harness, reinstalavel
+# com `npx impeccable install`. Os hooks sao guardados por `[ ! -f ... ] ||`,
+# entao a ausencia da pasta vira no-op em vez de erro.
+# O contexto do projeto (docs/DESIGN.md, docs/PRODUCT.md) É versionado.
+.claude/skills/impeccable/
+.cursor/skills/impeccable/
+.agents/skills/impeccable/
+.cursor/agents/impeccable-*.md
+.impeccable/live/
+.impeccable/tmp/

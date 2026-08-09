@@ -1,6 +1,6 @@
 # ADR 0016: Suporte a imagem (vision) e documento PDF, sem Supabase Storage
 
-- **Status**: accepted
+- **Status**: accepted (ponto 2 — "sem Supabase Storage" — revisado pela [ADR-0032](./0032-storage-fotos-servico.md): fotos de serviço passam a ser armazenadas)
 - **Data**: 2026-05-21
 - **Decisores**: Anderson Domingos
 - **Estende**: [ADR-0015](./0015-suporte-audio-whisper.md) (transcrição de áudio Whisper)

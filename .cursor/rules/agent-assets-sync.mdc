@@ -1,0 +1,37 @@
+---
+description: Keep Cursor, Claude Code and Codex agent assets mirrored across .cursor, .claude, .codex and .agents
+alwaysApply: true
+---
+
+# Agent assets sync (Cursor + Claude + Codex)
+
+This repo mirrors agent-facing assets in three tool-specific trees. They must stay identical.
+
+## Layout
+
+| Asset | Cursor (canonical for skills) | Claude Code | Codex | Cursor Agents legacy |
+| --- | --- | --- | --- | --- |
+| Skills | `.cursor/skills/<name>/SKILL.md` | `.claude/skills/<name>/SKILL.md` | — | `.agents/skills/<name>/SKILL.md` |
+| Prompt briefs | `.cursor/prompts/*.md` | — | `.codex/prompts/*.md` | — |
+
+Do **not** sync `.claude/settings.local.json`, `.claude/launch.json` or `.codex/config.toml` (local/tool-specific).
+
+## When editing
+
+1. Edit the file in **any** mirrored path for that asset type.
+2. Run `npm run sync:agent-assets` if you need an immediate full reconcile.
+3. The Cursor hook auto-propagates edits under those paths after each file write.
+
+## Agent behavior
+
+- Prefer `.cursor/skills/` and `.cursor/prompts/` when creating or updating assets in Cursor.
+- After manual edits to mirrored files, run `npm run sync:agent-assets` before finishing the task.
+- Never leave `.claude/skills`, `.agents/skills`, `.codex/prompts` or `.cursor/*` out of sync.
+- Prompt briefs in `.cursor/prompts/` / `.codex/prompts/` are dev guidance; production runtime lives in `lib/whatsapp/*-agent.ts`.
+
+## Quick commands
+
+```bash
+npm run sync:agent-assets
+node scripts/sync-agent-assets.mjs --from .cursor/skills/whatsapp-agent/SKILL.md
+```

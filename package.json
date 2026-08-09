@@ -10,7 +10,9 @@
     "test": "vitest run",
     "repl:whatsapp": "tsx --tsconfig tsconfig.scripts.json scripts/whatsapp/repl.ts",
     "eval:whatsapp": "tsx --tsconfig tsconfig.scripts.json scripts/whatsapp/eval.ts",
-    "persona:whatsapp": "tsx --tsconfig tsconfig.scripts.json scripts/whatsapp/persona.ts"
+    "persona:whatsapp": "tsx --tsconfig tsconfig.scripts.json scripts/whatsapp/persona.ts",
+    "prospeccao:ingerir": "tsx --env-file-if-exists=.env --tsconfig tsconfig.scripts.json scripts/prospeccao/ingerir-rfb.ts",
+    "sync:agent-assets": "node scripts/sync-agent-assets.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.11",

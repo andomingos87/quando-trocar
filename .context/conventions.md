@@ -23,7 +23,8 @@
 ## Entrega [confirmado]
 - CI/CD: **sem GitHub Actions**. Deploy git-integrado na Vercel (`installCommand: npm ci`, `buildCommand: next build`). Testes e lint sao rodados localmente antes do merge.
 - Deploy: Vercel (framework nextjs, `vercel.json` na raiz)
-- MCP local (`.mcp.json`): sim — somente Supabase. **`.mcp.json` e gitignored (contem token de acesso) — nunca commitar.**
+- MCP local (`.mcp.json`): sim — Supabase, Linear e Windsor (HTTP). **`.mcp.json` e gitignored (contem token de acesso) — nunca commitar.**
+- Agent assets (skills + prompt briefs): espelhados entre `.cursor/`, `.claude/`, `.codex/` e `.agents/`. Sync automatico via hook em `.cursor/hooks.json` e comando `npm run sync:agent-assets`. Regra: `.cursor/rules/agent-assets-sync.mdc`.
 
 ## Qualidade [confirmado]
 - Testes: Vitest (`npm test`), suites em `tests/*.test.ts` + evals de agente em `tests/whatsapp-agent-evals/`

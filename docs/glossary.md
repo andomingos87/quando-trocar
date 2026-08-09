@@ -42,6 +42,21 @@ Mensagem automática agendada para um `cliente_final` no momento em que se aprox
 ### retorno
 Evento de cliente final voltando à oficina e gerando receita. Fecha o ciclo de valor do produto. Tabela: `retornos`. Pode ser registrado via WhatsApp pela oficina ou via painel.
 
+### catálogo de serviços
+Lista canônica do que uma oficina faz, e a fonte da cadência e do template de cada lembrete ([ADR-0031](./adr/0031-catalogo-aberto-servicos-produtos.md)). Tabela: `servicos_catalogo`. Escopo duplo: `oficina_id is null` é **item global** (curado por nós, disponível para toda oficina desde o primeiro dia); `oficina_id` preenchido é item daquela oficina. Cada registro em `servicos` aponta para o item que gerou sua cadência (`servicos.catalogo_id`). Substitui o enum fechado de 4 tipos da [ADR-0014](./adr/0014-cadencia-e-template-por-tipo-de-servico.md).
+
+### família
+Classificação obrigatória de todo item do catálogo: `troca_oleo · amortecedor · revisao · outro` — os mesmos 4 valores do antigo `tipo_servico`, que sobrevivem como agrupador **derivado** e nunca mais são informados diretamente ([ADR-0031 §2](./adr/0031-catalogo-aberto-servicos-produtos.md)). É o que mantém os cards de `/admin/inteligencia-mercado` comparáveis entre oficinas e o que dá um fallback seguro de copy quando o item não tem `produto_label` utilizável.
+
+### item padrão da família
+Item do catálogo marcado com `padrao_familia` — no máximo um por família dentro de cada escopo (global ou de uma oficina). É a ponte determinística `família → item` usada enquanto o cadastro ainda envia `tipo_servico` em vez do item escolhido pelo agente. O item da oficina vence o global.
+
+### produto canônico
+O que foi *usado* no serviço (peça, óleo, fluido), consolidado globalmente em `produtos_catalogo` com nome, marca, modelo e especificação. Global de propósito: "Perfect" é Perfect para toda oficina, e é essa consolidação que vira dado de mercado. Ligado ao serviço por `servicos.produto_id`. O campo legado `servicos.marca_peca` é a versão anterior, restrita a 4 marcas de amortecedor.
+
+### produto_label
+Substantivo curto e curado (`óleo`, `amortecedor`, `revisão`) guardado em `servicos_catalogo.produto_label`. É a **única** origem permitida para o texto de serviço num parâmetro de template Meta ([ADR-0031 §5](./adr/0031-catalogo-aberto-servicos-produtos.md), revisão da regra P0-2): nunca vem da fala crua da oficina. Sem label válido, cai no fallback por família (`PRODUCT_LABEL_BY_TIPO`, em `lib/whatsapp/service-confirmation.ts`).
+
 ### consentimento_whatsapp
 Flag explícita em `clientes_finais.consentimento_whatsapp` indicando que a oficina obteve autorização para enviar lembretes via WhatsApp. Sem consentimento, nenhum lembrete é enviado. Campos relacionados: `origem_consentimento`, `data_consentimento`.
 
