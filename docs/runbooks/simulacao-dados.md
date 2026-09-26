@@ -57,9 +57,9 @@ em BRT; é o "agora" da simulação), `--forcar`, `--dry`.
 
 ## Preview público (Vercel)
 
-O projeto Vercel `quando-trocar-simulacao` é um deploy **de arquivos locais** (não ligado ao GitHub):
-para atualizar, rode `vercel --prod` numa cópia limpa do repositório linkada a esse projeto (ver
-histórico no `CONTEXT_CHANGELOG`). Envs lá: `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` da simulação,
+O projeto Vercel `quando-trocar-simulacao` é um deploy **de arquivos locais** (não ligado ao GitHub).
+Para subir ou atualizar: `scripts/db/simulacao/deploy-vercel.sh <scope>` (cria o projeto e as envs
+na primeira vez, depois só redeploya o HEAD). Envs lá: `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` da simulação,
 `ADMIN_SESSION_SECRET`, `REP_SESSION_SECRET`, `ADMIN_OTP_DEV_BYPASS_CODE`, `REP_OTP_DEV_BYPASS_CODE`,
 `NEXT_PUBLIC_*`. **Sem** token Meta, OpenAI, ASAAS ou `INTERNAL_JOB_SECRET`. O login funciona porque
 o bypass de OTP é liberado quando o banco é o projeto de simulação (`lib/supabase/simulacao.ts`,
