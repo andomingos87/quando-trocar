@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { isSupabaseSimulacao } from "@/lib/supabase/simulacao";
 
 // OTP do representante (ADR-0025). Reaproveita os helpers PUROS do admin
 // (geracao, expiracao, tentativas — independentes de secret) e adiciona o hash
@@ -22,7 +23,7 @@ export function hashRepOtpCode(code: string): string {
 
 export function isRepDevBypassEnabled(): boolean {
   return (
-    process.env.NODE_ENV !== "production" &&
+    (process.env.NODE_ENV !== "production" || isSupabaseSimulacao()) &&
     !!process.env.REP_OTP_DEV_BYPASS_CODE
   );
 }

@@ -42,7 +42,8 @@ export async function getOficinasCounts(
     supabase
       .from("oficinas")
       .select("id", { count: "exact", head: true })
-      .eq("plano", "teste"),
+      .eq("plano", "teste")
+      .eq("status", "ativa"),
     supabase
       .from("oficinas")
       .select("id", { count: "exact", head: true })

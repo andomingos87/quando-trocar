@@ -51,6 +51,21 @@ Invariantes que nao podem quebrar:
 - `match_servicos_catalogo` e `security definer`: search_path fixo e `revoke` nominal de
   anon/authenticated (licao 0001).
 
+## Simulacao de dados (scripts/db/simulacao)
+
+Gerador deterministico (`npm run sim:gerar|sim:verificar|sim:purgar`) que popula o projeto Supabase
+**de simulacao** (`fplkasckmvvccnkrkszr`) com 197 oficinas pagantes e 6 meses de historia. Le a
+config do banco (planos, catalogo global, FAQ, admin) e escreve as tabelas transacionais na ordem
+das FKs. Runbook: `docs/runbooks/simulacao-dados.md`; premissas: `docs/simulacao/`.
+
+Invariantes:
+- Recusa qualquer ref que nao seja o de simulacao (producao esta em lista negra no codigo).
+- Telefones sempre `+5500/+5501/+5502` (DDDs inexistentes) — chave de purge e garantia de que
+  nada alcanca gente real.
+- Nunca deixa `lembretes.pendente` no passado nem outbox pendente antigo.
+- O copy do bot vive espelhado em `scripts/db/simulacao/lib/copy.ts`: mudou o texto em
+  `lib/whatsapp/*`, atualiza la (e' dado de teste, nao regra de produto).
+
 ## Fluxo de trabalho
 - Migrations seguem as fases (ver prefixos `phase_*` no nome). Ao criar tabela/coluna nova, checar
   se precisa de indice de FK e de RLS antes de aplicar.

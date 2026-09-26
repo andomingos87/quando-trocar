@@ -778,6 +778,7 @@ Quando `oficinas.status != 'ativa'`, o scheduler **não enfileira** lembretes de
 - Sessão admin via cookie separado da sessão de oficina.
 - Auth: OTP WhatsApp resolvido contra `admin_users` (não `oficinas`).
 - WhatsApp não cadastrado → não recebe OTP, mensagem genérica.
+- **Bypass de OTP** (`ADMIN_OTP_DEV_BYPASS_CODE` / `REP_OTP_DEV_BYPASS_CODE`) só vale fora de `production` **ou** quando `SUPABASE_URL` é o projeto de **simulação** (ref fixo em `lib/supabase/simulacao.ts`, dados fictícios com números `+5500…` que não recebem WhatsApp). Em produção real o bypass é inerte mesmo com a variável definida.
 - OTP de **uso único**: o consumo marca `used_at` via UPDATE condicional (`used_at is null`) e só emite sessão para o request que efetivamente virou a linha. Duas requisições simultâneas com o mesmo código correto emitem **uma única** sessão; a perdedora recebe a mensagem genérica. Mesma garantia do fluxo do representante.
 
 - Fonte: [ADR-0010](./adr/0010-painel-web-no-mvp.md), [ADR-0013](./adr/0013-painel-admin-escopo-billing-auditoria.md).
@@ -793,6 +794,8 @@ Quando `oficinas.status != 'ativa'`, o scheduler **não enfileira** lembretes de
 ### 11.3 MRR em tempo real
 - Tela `/admin` calcula MRR somando `COALESCE(preco_negociado, planos.preco_base)` onde `status = 'ativa'`.
 - Sem snapshot, sem cache. Revisitar acima de ~500 oficinas ativas.
+- Card "Oficinas em teste" conta `plano = 'teste'` **e** `status = 'ativa'`: teste que expirou e foi cancelado não é "em teste" (corrigido em 2026-09-26; antes contava qualquer `plano = 'teste'`).
+- Fonte: `getOficinasCounts` em `lib/admin/metrics.ts`.
 
 ### 11.4 Ações admin sobre lead
 Admin pode, no detalhe de um lead, via painel:

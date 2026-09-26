@@ -4,9 +4,24 @@
     {
       "name": "Next.js dev (Turbopack)",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "Admin (simulacao)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--env-file=./.env.simulacao",
+        "./node_modules/next/dist/bin/next",
+        "dev",
+        "--port",
+        "3100"
+      ],
+      "port": 3100
     }
   ]
 }

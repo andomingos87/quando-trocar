@@ -60,3 +60,6 @@ yarn-error.log*
 .cursor/agents/impeccable-*.md
 .impeccable/live/
 .impeccable/tmp/
+
+# Credenciais do projeto Supabase de simulacao (docs/runbooks/simulacao-dados.md)
+.env.simulacao

@@ -1,4 +1,5 @@
 import { createHmac, randomInt } from "node:crypto";
+import { isSupabaseSimulacao } from "@/lib/supabase/simulacao";
 
 const OTP_LENGTH = 6;
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -31,9 +32,11 @@ export function hasAttemptsLeft(attempts: number): boolean {
   return attempts < MAX_ATTEMPTS;
 }
 
+// Bypass do OTP: só em desenvolvimento — ou quando o banco é o projeto de SIMULAÇÃO (dados
+// fictícios, números +5500 que não recebem WhatsApp). O ref da simulação é fixo no código.
 export function isDevBypassEnabled(): boolean {
   return (
-    process.env.NODE_ENV !== "production" &&
+    (process.env.NODE_ENV !== "production" || isSupabaseSimulacao()) &&
     !!process.env.ADMIN_OTP_DEV_BYPASS_CODE
   );
 }
